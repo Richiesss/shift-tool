@@ -2,10 +2,15 @@ import sys
 import sqlite3
 from pathlib import Path
 
-# EXE（PyInstaller frozen）実行時: EXEと同じフォルダの shift_tool.db を使用
+# EXE/app（PyInstaller frozen）実行時: 実行ファイルの隣の shift_tool.db を使用
 # 開発時: ~/.shift_tool/shift_tool.db を使用
 if getattr(sys, "frozen", False):
-    DB_PATH = Path(sys.executable).parent / "shift_tool.db"
+    exe = Path(sys.executable)
+    # macOS .app バンドル内: Contents/MacOS/SDU-Shift → .app の親フォルダを使用
+    if sys.platform == "darwin" and exe.parent.name == "MacOS":
+        DB_PATH = exe.parent.parent.parent.parent / "shift_tool.db"
+    else:
+        DB_PATH = exe.parent / "shift_tool.db"
 else:
     DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 

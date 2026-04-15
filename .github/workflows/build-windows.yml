@@ -1,4 +1,4 @@
-name: Windows EXE ビルド
+name: ビルド & リリース
 
 on:
   push:
@@ -6,30 +6,26 @@ on:
   workflow_dispatch:         # GitHub 画面から手動実行も可能
 
 jobs:
-  build:
-    runs-on: windows-latest  # GitHub の Windows サーバーで実行
+  # ── Windows ビルド ──────────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
 
     steps:
-      # 1. ソースコードを取得
       - name: ソースコードをチェックアウト
         uses: actions/checkout@v4
 
-      # 2. Python のセットアップ
       - name: Python 3.11 をセットアップ
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # 3. 依存パッケージをインストール
       - name: 依存パッケージをインストール
         run: pip install -r requirements.txt
 
-      # 4. PyInstaller でEXEをビルド
       - name: EXE をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm
 
-      # 5. テストデータ入りDBを生成してdistフォルダに配置
       - name: テストデータDBを生成
         env:
           PYTHONIOENCODING: utf-8
@@ -38,7 +34,6 @@ jobs:
           copy "$env:USERPROFILE\.shift_tool\shift_tool.db" "dist\shift_tool.db"
         shell: pwsh
 
-      # 6. ビルド結果を確認
       - name: ビルド結果を確認
         run: |
           dir dist
@@ -46,7 +41,6 @@ jobs:
           (Get-Item "dist\SDU-Shift.exe").Length / 1MB
         shell: pwsh
 
-      # 7. EXEとDBをアーティファクトとしてアップロード
       - name: EXE と DB をアップロード
         uses: actions/upload-artifact@v4
         with:
@@ -54,42 +48,114 @@ jobs:
           path: |
             dist/SDU-Shift.exe
             dist/shift_tool.db
-          retention-days: 30    # 30日間保持
+          retention-days: 30
 
-  # mainへのプッシュ時はリリースも自動作成
+  # ── macOS ビルド ────────────────────────────────────────────────────────
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: ソースコードをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt Pillow
+
+      - name: icon.icns を生成
+        run: |
+          # icon.jpg → icon.png → iconset → icon.icns
+          sips -s format png icon.jpg --out /tmp/icon.png
+          mkdir -p /tmp/SDU-Shift.iconset
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size /tmp/icon.png \
+              --out /tmp/SDU-Shift.iconset/icon_${size}x${size}.png
+            double=$((size * 2))
+            sips -z $double $double /tmp/icon.png \
+              --out /tmp/SDU-Shift.iconset/icon_${size}x${size}@2x.png
+          done
+          iconutil -c icns /tmp/SDU-Shift.iconset -o assets/icon.icns
+          echo "icon.icns 生成完了"
+
+      - name: .app をビルド
+        run: pyinstaller shift_tool.spec --clean --noconfirm
+
+      - name: テストデータDBを生成
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python scripts/seed_test_data.py --reset
+          cp ~/.shift_tool/shift_tool.db shift_tool.db
+
+      - name: .app と DB を zip に圧縮
+        run: |
+          # shift_tool.db は .app の隣に置く（起動時に同フォルダを参照）
+          cp shift_tool.db dist/shift_tool.db
+          cd dist
+          zip -r ../SDU-Shift-mac.zip SDU-Shift.app shift_tool.db
+          echo "zipサイズ: $(du -sh ../SDU-Shift-mac.zip | cut -f1)"
+
+      - name: mac zip をアップロード
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDU-Shift-macOS
+          path: SDU-Shift-mac.zip
+          retention-days: 30
+
+  # ── リリース作成 ────────────────────────────────────────────────────────
   release:
-    needs: build
+    needs: [build-windows, build-mac]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
 
     steps:
-      - name: アーティファクトをダウンロード
+      - name: Windows アーティファクトをダウンロード
         uses: actions/download-artifact@v4
         with:
           name: SDU-Shift-Windows
+          path: release/
 
-      - name: リリースを作成してEXEをアップロード
+      - name: macOS アーティファクトをダウンロード
+        uses: actions/download-artifact@v4
+        with:
+          name: SDU-Shift-macOS
+          path: release/
+
+      - name: リリースを作成してファイルをアップロード
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: "SDU-Shift (Build ${{ github.run_number }})"
           body: |
             ## ダウンロード
+
+            ### Windows
             `SDU-Shift.exe` と `shift_tool.db` を**同じフォルダ**に置いて実行してください。
 
             | ファイル | 説明 |
             |---|---|
-            | `SDU-Shift.exe` | アプリ本体 |
-            | `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日, 38名） |
+            | `SDU-Shift.exe` | アプリ本体（Windows 10/11 64bit） |
+            | `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日・38名） |
 
-            **動作環境**: Windows 10 / 11 (64bit)
+            ### macOS
+            `SDU-Shift-mac.zip` を解凍すると `SDU-Shift.app` と `shift_tool.db` が入っています。
+            **同じフォルダに置いた状態**で `SDU-Shift.app` をダブルクリックして起動してください。
+
+            > 初回起動時に「開発元を確認できない」と表示された場合は、
+            > Finder で右クリック →「開く」→「開く」を選択してください。
 
             ## 変更内容
             ${{ github.event.head_commit.message }}
           files: |
-            SDU-Shift.exe
-            shift_tool.db
+            release/SDU-Shift.exe
+            release/shift_tool.db
+            release/SDU-Shift-mac.zip
           draft: false
           prerelease: false

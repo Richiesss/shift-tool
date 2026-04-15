@@ -1,10 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for シフト表構築ツール
-Windows EXE / Linux バイナリ共用ビルド設定
-
-ビルド方法（Windows）:
-  build_windows.bat を実行
+PyInstaller spec file for SDU-Shift
+Windows EXE / macOS .app 共用ビルド設定
 
 ビルド方法（手動）:
   pip install -r requirements.txt
@@ -25,6 +22,10 @@ REPORTLAB_DIR = Path(reportlab.__file__).parent
 OPENPYXL_DIR  = Path(openpyxl.__file__).parent
 
 IS_WINDOWS = sys.platform == "win32"
+IS_MAC     = sys.platform == "darwin"
+
+ICON_WIN = "assets/icon.ico"  if os.path.exists("assets/icon.ico")  else None
+ICON_MAC = "assets/icon.icns" if os.path.exists("assets/icon.icns") else None
 
 block_cipher = None
 
@@ -113,8 +114,23 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="assets/icon.ico",
+    icon=ICON_MAC if IS_MAC else ICON_WIN,
 
     # Windows バージョン情報
     version=None,            # version_info.txt を用意した場合に指定
 )
+
+# ── macOS: .app バンドルを生成 ────────────────────────────────────────────
+if IS_MAC:
+    app = BUNDLE(
+        exe,
+        name="SDU-Shift.app",
+        icon=ICON_MAC,
+        bundle_identifier="com.sdu.shift",
+        info_plist={
+            "CFBundleShortVersionString": "1.0",
+            "CFBundleName": "SDU-Shift",
+            "NSHighResolutionCapable": True,
+            "NSRequiresAquaSystemAppearance": False,  # ダークモード対応
+        },
+    )
