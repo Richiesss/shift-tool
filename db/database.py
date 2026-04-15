@@ -76,5 +76,16 @@ def initialize_db():
         );
     """)
 
+    # shift_requests テーブルにパターン関連カラムを追加（マイグレーション）
+    for col, definition in [
+        ("pattern_id",   "TEXT"),
+        ("custom_start", "TEXT"),
+        ("custom_end",   "TEXT"),
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE shift_requests ADD COLUMN {col} {definition}")
+        except Exception:
+            pass  # 既に存在する場合は無視
+
     conn.commit()
     conn.close()

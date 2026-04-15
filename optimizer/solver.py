@@ -149,19 +149,41 @@ def solve(
                 model.add(worked_b + worked_d <= 1).only_enforce_if(dv.negated())
                 double_vars[(emp.id, ds)] = dv
 
+    # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
+    # (emp_id, date_str, slot_value) -> 実勤務時間(float)
+    req_hours: dict[tuple[int, str, str], float] = {}
+    for r in requests:
+        from utils.shift_patterns import PATTERN_MAP, ShiftPattern
+        if r.pattern_id and r.pattern_id != "custom":
+            p = PATTERN_MAP.get(r.pattern_id)
+            dur = p.duration_hours() if p else 5.0
+        elif r.pattern_id == "custom" and r.custom_start and r.custom_end:
+            sp = ShiftPattern("_c", "c", r.custom_start, r.custom_end)
+            dur = sp.duration_hours()
+        else:
+            dur = 5.0  # フォールバック
+        if r.breakfast:
+            req_hours[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = dur
+        if r.dinner:
+            req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
+
     # ── ソフト制約（ペナルティ最小化） ──────────────────────────────────
 
     penalty_terms = []
 
-    # P1: 人件費最小化 = 総シフト時間を最小化
-    SLOT_HOURS = {TimeSlot.BREAKFAST: 5, TimeSlot.DINNER: 6}
+    # P1: 人件費最小化 = 実勤務時間を最小化（パターン別の時間を使用）
+    DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                hours = SLOT_HOURS[slot]
                 for pos in positions:
                     var = assign[emp.id][ds][slot.value][pos.value]
-                    penalty_terms.append(1000 * hours * var)
+                    hours = req_hours.get(
+                        (emp.id, ds, slot.value),
+                        DEFAULT_SLOT_HOURS[slot]
+                    )
+                    # CP-SATは整数のみ → 時間×10で精度を保ちつつ整数化
+                    penalty_terms.append(int(1000 * hours * 10) * var)
 
     # P2: 正社員の両時間帯掛け持ちにペナルティ
     for dv in double_vars.values():

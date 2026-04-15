@@ -151,22 +151,52 @@ def get_shift_requests(period_id: int) -> list[ShiftRequest]:
         (period_id,)
     ).fetchall()
     conn.close()
-    return [
-        ShiftRequest(employee_id=r["employee_id"], date=r["date"],
-                     breakfast=bool(r["breakfast"]), dinner=bool(r["dinner"]), note=r["note"] or "")
-        for r in rows
-    ]
+    result = []
+    for r in rows:
+        keys = r.keys()
+        # pattern_id カラムが存在する場合は新形式、なければ旧breakfast/dinnerから推定
+        if "pattern_id" in keys and r["pattern_id"]:
+            result.append(ShiftRequest(
+                employee_id=r["employee_id"],
+                date=r["date"],
+                pattern_id=r["pattern_id"],
+                custom_start=r["custom_start"] if "custom_start" in keys else None,
+                custom_end=r["custom_end"] if "custom_end" in keys else None,
+                note=r["note"] or "",
+            ))
+        else:
+            # 旧データ（breakfast/dinner boolean）からパターンを推定
+            from utils.shift_patterns import default_pattern_from_fixed
+            b = bool(r["breakfast"]) if "breakfast" in keys else False
+            d = bool(r["dinner"]) if "dinner" in keys else False
+            result.append(ShiftRequest(
+                employee_id=r["employee_id"],
+                date=r["date"],
+                pattern_id=default_pattern_from_fixed(b, d),
+                note=r["note"] or "",
+            ))
+    return result
 
 
 def save_shift_requests(period_id: int, requests: list[ShiftRequest]):
     conn = get_connection()
     for req in requests:
         conn.execute(
-            """INSERT INTO shift_requests (period_id, employee_id, date, breakfast, dinner, note)
-               VALUES (?,?,?,?,?,?)
+            """INSERT INTO shift_requests
+                   (period_id, employee_id, date, breakfast, dinner, pattern_id, custom_start, custom_end, note)
+               VALUES (?,?,?,?,?,?,?,?,?)
                ON CONFLICT(period_id, employee_id, date)
-               DO UPDATE SET breakfast=excluded.breakfast, dinner=excluded.dinner, note=excluded.note""",
-            (period_id, req.employee_id, req.date, int(req.breakfast), int(req.dinner), req.note)
+               DO UPDATE SET
+                   breakfast=excluded.breakfast,
+                   dinner=excluded.dinner,
+                   pattern_id=excluded.pattern_id,
+                   custom_start=excluded.custom_start,
+                   custom_end=excluded.custom_end,
+                   note=excluded.note""",
+            (period_id, req.employee_id, req.date,
+             int(req.breakfast), int(req.dinner),
+             req.pattern_id, req.custom_start, req.custom_end,
+             req.note)
         )
     conn.commit()
     conn.close()

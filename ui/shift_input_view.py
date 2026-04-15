@@ -1,17 +1,93 @@
-"""希望シフト入力画面"""
+"""希望シフト入力画面（シフトパターン選択版）"""
 from __future__ import annotations
-from datetime import date, timedelta
+from datetime import date
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QDateEdit, QTableWidget, QTableWidgetItem,
-    QHeaderView, QCheckBox, QMessageBox, QFrame, QGroupBox,
-    QScrollArea, QLineEdit, QSizePolicy
+    QComboBox, QDateEdit, QTableWidget, QHeaderView,
+    QCheckBox, QMessageBox, QGroupBox, QLineEdit, QSizePolicy,
+    QFrame
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor, QBrush
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.constants import DAY_OF_WEEK_LABELS
+from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP, default_pattern_from_fixed
+
+
+# ドロップダウンに表示するパターン（カスタム含む）
+_COMBO_ITEMS: list[tuple[str, str | None]] = [
+    ("（休み）", None),
+]
+for _p in ALL_PATTERNS:
+    _COMBO_ITEMS.append((_p.label, _p.id))
+
+
+def _make_pattern_combo() -> QComboBox:
+    """シフトパターン選択用 QComboBox を生成"""
+    combo = QComboBox()
+    combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    for label, pid in _COMBO_ITEMS:
+        combo.addItem(label, pid)
+    return combo
+
+
+class _PatternCellWidget(QWidget):
+    """1行分のパターン選択ウィジェット（コンボ＋カスタム時刻入力）"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(4)
+
+        self.combo = _make_pattern_combo()
+        self.combo.currentIndexChanged.connect(self._on_combo_changed)
+        layout.addWidget(self.combo, stretch=1)
+
+        self.custom_edit = QLineEdit()
+        self.custom_edit.setPlaceholderText("例: 10:00〜15:00")
+        self.custom_edit.setFixedWidth(130)
+        self.custom_edit.setVisible(False)
+        layout.addWidget(self.custom_edit)
+
+    def _on_combo_changed(self):
+        pid = self.combo.currentData()
+        self.custom_edit.setVisible(pid == "custom")
+
+    def set_pattern(self, pattern_id: str | None, custom_start: str | None = None,
+                    custom_end: str | None = None):
+        for i in range(self.combo.count()):
+            if self.combo.itemData(i) == pattern_id:
+                self.combo.setCurrentIndex(i)
+                break
+        if pattern_id == "custom":
+            parts = []
+            if custom_start:
+                parts.append(custom_start)
+            if custom_end:
+                parts.append(custom_end)
+            self.custom_edit.setText("〜".join(parts))
+            self.custom_edit.setVisible(True)
+
+    def get_pattern_id(self) -> str | None:
+        return self.combo.currentData()
+
+    def get_custom_times(self) -> tuple[str | None, str | None]:
+        """カスタム時刻の (start, end) を返す。"HH:MM〜HH:MM" 形式を解析"""
+        text = self.custom_edit.text().strip()
+        if not text:
+            return None, None
+        # 区切り文字を統一
+        text = text.replace("〜", "~").replace("～", "~").replace("-", "~").replace("―", "~")
+        parts = [p.strip() for p in text.split("~") if p.strip()]
+        start = parts[0] if len(parts) >= 1 else None
+        end = parts[1] if len(parts) >= 2 else None
+        return start, end
+
+    def set_enabled(self, enabled: bool):
+        self.combo.setEnabled(enabled)
+        self.custom_edit.setEnabled(enabled)
 
 
 class ShiftInputView(QWidget):
@@ -21,6 +97,10 @@ class ShiftInputView(QWidget):
         self._employees = []
         self._current_idx = 0
         self._requests: dict[tuple[int, str], ShiftRequest] = {}
+        # date_str -> _PatternCellWidget
+        self._pattern_cells: dict[str, _PatternCellWidget] = {}
+        # date_str -> QLineEdit (備考)
+        self._note_edits: dict[str, QLineEdit] = {}
         self._build_ui()
         self._load_periods()
 
@@ -43,7 +123,6 @@ class ShiftInputView(QWidget):
         self.period_combo.currentIndexChanged.connect(self._on_period_changed)
         period_layout.addWidget(QLabel("既存期間:"))
         period_layout.addWidget(self.period_combo)
-
         period_layout.addWidget(QLabel("  または新規:"))
 
         self.start_date_edit = QDateEdit()
@@ -63,30 +142,36 @@ class ShiftInputView(QWidget):
 
         btn_set = QPushButton("期間確定")
         btn_set.setFixedHeight(32)
-        btn_set.setStyleSheet("QPushButton { background:#2563eb; color:white; border-radius:5px; padding:0 12px; } QPushButton:hover { background:#1d4ed8; }")
+        btn_set.setStyleSheet(
+            "QPushButton { background:#2563eb; color:white; border-radius:5px; padding:0 12px; }"
+            " QPushButton:hover { background:#1d4ed8; }"
+        )
         btn_set.clicked.connect(self._on_set_period)
         period_layout.addWidget(btn_set)
         period_layout.addStretch()
         layout.addWidget(period_group)
 
-        # 進捗バー
+        # 進捗
         self.progress_label = QLabel("")
         self.progress_label.setStyleSheet("color:#6b7280;")
         layout.addWidget(self.progress_label)
 
-        # 従業員選択
+        # 従業員ナビ
         emp_nav = QHBoxLayout()
         self.emp_combo = QComboBox()
         self.emp_combo.setMinimumWidth(180)
         self.emp_combo.currentIndexChanged.connect(self._on_employee_changed)
 
         btn_prev = QPushButton("◀ 前の従業員")
-        btn_prev.clicked.connect(self._on_prev_employee)
         btn_next = QPushButton("次の従業員 ▶")
+        btn_prev.clicked.connect(self._on_prev_employee)
         btn_next.clicked.connect(self._on_next_employee)
         for b in [btn_prev, btn_next]:
             b.setFixedHeight(32)
-            b.setStyleSheet("QPushButton { border:1px solid #d1d5db; border-radius:5px; padding:0 12px; } QPushButton:hover { background:#f3f4f6; }")
+            b.setStyleSheet(
+                "QPushButton { border:1px solid #d1d5db; border-radius:5px; padding:0 12px; }"
+                " QPushButton:hover { background:#f3f4f6; }"
+            )
 
         emp_nav.addWidget(QLabel("従業員:"))
         emp_nav.addWidget(self.emp_combo)
@@ -95,17 +180,31 @@ class ShiftInputView(QWidget):
         emp_nav.addWidget(btn_next)
         layout.addLayout(emp_nav)
 
-        # 入力テーブル
+        # パターン凡例
+        legend = QHBoxLayout()
+        legend.addWidget(QLabel("パターン例:"))
+        for label, color in [
+            ("朝食系", "#dbeafe"), ("ディナー系", "#fce7f3"),
+            ("通し/両対応", "#d1fae5"), ("カバーなし", "#f3f4f6"),
+        ]:
+            lbl = QLabel(label)
+            lbl.setStyleSheet(
+                f"background:{color}; border-radius:3px; padding:1px 6px; font-size:11px;"
+            )
+            legend.addWidget(lbl)
+        legend.addStretch()
+        layout.addLayout(legend)
+
+        # テーブル
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["日付", "朝食 (6:00-11:00)", "ディナー (17:00-23:00)", "備考"])
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["日付", "シフトパターン", "備考"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.table.setColumnWidth(1, 160)
         self.table.setColumnWidth(2, 160)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.DoubleClicked
+                                   | QTableWidget.EditTrigger.SelectedClicked)
         self.table.verticalHeader().setVisible(False)
         layout.addWidget(self.table)
 
@@ -114,10 +213,15 @@ class ShiftInputView(QWidget):
         btn_row.addStretch()
         self.btn_save = QPushButton("この従業員の希望を保存")
         self.btn_save.setFixedHeight(36)
-        self.btn_save.setStyleSheet("QPushButton { background:#16a34a; color:white; border-radius:6px; padding:0 20px; font-weight:bold; } QPushButton:hover { background:#15803d; }")
+        self.btn_save.setStyleSheet(
+            "QPushButton { background:#16a34a; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }"
+            " QPushButton:hover { background:#15803d; }"
+        )
         self.btn_save.clicked.connect(self._on_save)
         btn_row.addWidget(self.btn_save)
         layout.addLayout(btn_row)
+
+    # ── 期間 ──────────────────────────────────────────────────────────────
 
     def _load_periods(self):
         periods = repo.get_all_periods()
@@ -144,7 +248,6 @@ class ShiftInputView(QWidget):
         period = repo.save_period(period)
         self._period = period
         self._load_periods()
-        # 新しく作った期間を選択
         for i in range(self.period_combo.count()):
             p = self.period_combo.itemData(i)
             if p and p.id == period.id:
@@ -152,19 +255,19 @@ class ShiftInputView(QWidget):
                 break
         self._load_employees()
 
+    # ── 従業員 ────────────────────────────────────────────────────────────
+
     def _load_employees(self):
         if not self._period:
             return
         self._employees = repo.get_all_employees()
         existing = repo.get_shift_requests(self._period.id)
         self._requests = {(r.employee_id, r.date): r for r in existing}
-
         self.emp_combo.blockSignals(True)
         self.emp_combo.clear()
         for emp in self._employees:
             self.emp_combo.addItem(emp.name, emp)
         self.emp_combo.blockSignals(False)
-
         self._current_idx = 0
         self._update_progress()
         self._render_table()
@@ -173,7 +276,9 @@ class ShiftInputView(QWidget):
         if not self._period or not self._employees:
             self.progress_label.setText("")
             return
-        filled = set(r.employee_id for r in self._requests.values() if r.breakfast or r.dinner)
+        filled = set(
+            r.employee_id for r in self._requests.values() if r.has_shift
+        )
         total = len(self._employees)
         self.progress_label.setText(f"入力済: {len(filled)} / {total} 名")
 
@@ -191,6 +296,8 @@ class ShiftInputView(QWidget):
             self._current_idx += 1
             self.emp_combo.setCurrentIndex(self._current_idx)
 
+    # ── テーブル描画 ──────────────────────────────────────────────────────
+
     def _render_table(self):
         if not self._period or not self._employees:
             self.table.setRowCount(0)
@@ -199,8 +306,8 @@ class ShiftInputView(QWidget):
         emp = self._employees[self._current_idx]
         dates = self._period.date_range()
         self.table.setRowCount(len(dates))
+        self._pattern_cells = {}
         self._note_edits = {}
-        self._checkboxes = {}
 
         for row, d in enumerate(dates):
             date_str = d.isoformat()
@@ -208,76 +315,87 @@ class ShiftInputView(QWidget):
             dow_label = DAY_OF_WEEK_LABELS[dow]
             date_display = f"{d.month}/{d.day}({dow_label})"
 
-            # 日付セル（土日は色付け）
+            # ── 日付セル ──
+            from PyQt6.QtWidgets import QTableWidgetItem
             date_item = QTableWidgetItem(date_display)
             date_item.setData(Qt.ItemDataRole.UserRole, date_str)
+            date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             if dow == 5:
                 date_item.setForeground(QBrush(QColor("#2563eb")))
             elif dow == 6:
                 date_item.setForeground(QBrush(QColor("#dc2626")))
             self.table.setItem(row, 0, date_item)
 
+            # ── パターン選択セル ──
+            is_unavail = date_str in emp.fixed_unavailable_dates
             req = self._requests.get((emp.id, date_str))
 
-            # 不可日かどうか
-            is_unavail = date_str in emp.fixed_unavailable_dates
-
-            # チェックボックス（朝食）
-            cb_b_widget = QWidget()
-            cb_b_layout = QHBoxLayout(cb_b_widget)
-            cb_b_layout.setContentsMargins(0, 0, 0, 0)
-            cb_b_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            cb_b = QCheckBox("可")
-            cb_b.setEnabled(not is_unavail)
-
-            # アルバイトの固定パターンを自動反映
-            if emp.has_fixed_pattern():
-                p = emp.get_pattern(dow)
-                auto_b = p.breakfast if p else False
-                cb_b.setChecked(auto_b if req is None else req.breakfast)
-            else:
-                cb_b.setChecked(req.breakfast if req else False)
+            cell = _PatternCellWidget()
+            cell.set_enabled(not is_unavail)
 
             if is_unavail:
-                cb_b.setChecked(False)
-                cb_b.setToolTip("固定不可日")
-            cb_b_layout.addWidget(cb_b)
-            self.table.setCellWidget(row, 1, cb_b_widget)
+                # 固定不可日: 休みのまま
+                cell.set_pattern(None)
+                cell.combo.setToolTip("固定不可日")
+            elif req is not None:
+                # 保存済みデータを復元
+                cell.set_pattern(req.pattern_id, req.custom_start, req.custom_end)
+            elif emp.has_fixed_pattern():
+                # 固定パターンからデフォルトを設定
+                fp = emp.get_pattern(dow)
+                if fp:
+                    default_pid = default_pattern_from_fixed(fp.breakfast, fp.dinner)
+                    cell.set_pattern(default_pid)
 
-            # チェックボックス（ディナー）
-            cb_d_widget = QWidget()
-            cb_d_layout = QHBoxLayout(cb_d_widget)
-            cb_d_layout.setContentsMargins(0, 0, 0, 0)
-            cb_d_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            cb_d = QCheckBox("可")
-            cb_d.setEnabled(not is_unavail)
+            self.table.setCellWidget(row, 1, cell)
+            self._pattern_cells[date_str] = cell
 
-            if emp.has_fixed_pattern():
-                p = emp.get_pattern(dow)
-                auto_d = p.dinner if p else False
-                cb_d.setChecked(auto_d if req is None else req.dinner)
-            else:
-                cb_d.setChecked(req.dinner if req else False)
-
-            if is_unavail:
-                cb_d.setChecked(False)
-            cb_d_layout.addWidget(cb_d)
-            self.table.setCellWidget(row, 2, cb_d_widget)
-
-            # 備考テキスト
+            # ── 備考セル ──
             note_item = QTableWidgetItem(req.note if req else "")
             note_item.setFlags(note_item.flags() | Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 3, note_item)
+            self.table.setItem(row, 2, note_item)
 
-            # グレーアウト（不可日）
+            # 不可日はグレーアウト
             if is_unavail:
-                for col in range(4):
-                    item = self.table.item(row, col)
-                    if item:
-                        item.setBackground(QBrush(QColor("#f3f4f6")))
+                date_item.setBackground(QBrush(QColor("#f3f4f6")))
+                note_item.setBackground(QBrush(QColor("#f3f4f6")))
 
-            self.table.setRowHeight(row, 36)
-            self._checkboxes[date_str] = (cb_b, cb_d)
+            # 行の背景色でパターン種別を視覚化
+            self._apply_row_color(row, date_str, is_unavail)
+
+            self.table.setRowHeight(row, 38)
+
+    def _apply_row_color(self, row: int, date_str: str, is_unavail: bool):
+        """選択パターンに応じて行背景を更新（変更時にも呼べるよう分離）"""
+        if is_unavail:
+            return
+        cell = self._pattern_cells.get(date_str)
+        if not cell:
+            return
+        pid = cell.get_pattern_id()
+        if pid is None:
+            return  # 休み: 色なし
+        p = PATTERN_MAP.get(pid)
+        if not p:
+            return
+        cb = p.covers_breakfast() if pid != "custom" else False
+        cd = p.covers_dinner() if pid != "custom" else False
+
+        if cb and cd:
+            color = "#d1fae5"   # 両カバー: 緑
+        elif cb:
+            color = "#dbeafe"   # 朝食: 青
+        elif cd:
+            color = "#fce7f3"   # ディナー: ピンク
+        else:
+            color = "#f9fafb"   # カバーなし: 薄灰
+
+        from PyQt6.QtWidgets import QTableWidgetItem
+        item = self.table.item(row, 0)
+        if item:
+            item.setBackground(QBrush(QColor(color)))
+
+    # ── 保存 ──────────────────────────────────────────────────────────────
 
     def _on_save(self):
         if not self._period or not self._employees:
@@ -285,21 +403,25 @@ class ShiftInputView(QWidget):
         emp = self._employees[self._current_idx]
         dates = self._period.date_range()
         requests = []
-        for d in dates:
+        for row, d in enumerate(dates):
             date_str = d.isoformat()
-            cbs = self._checkboxes.get(date_str)
-            note_item = self.table.item(dates.index(d), 3)
+            cell = self._pattern_cells.get(date_str)
+            note_item = self.table.item(row, 2)
             note = note_item.text() if note_item else ""
-            if cbs:
-                cb_b, cb_d = cbs
-                requests.append(ShiftRequest(
+
+            if cell:
+                pid = cell.get_pattern_id()
+                custom_start, custom_end = cell.get_custom_times() if pid == "custom" else (None, None)
+                req = ShiftRequest(
                     employee_id=emp.id,
                     date=date_str,
-                    breakfast=cb_b.isChecked(),
-                    dinner=cb_d.isChecked(),
-                    note=note
-                ))
-                self._requests[(emp.id, date_str)] = requests[-1]
+                    pattern_id=pid,
+                    custom_start=custom_start,
+                    custom_end=custom_end,
+                    note=note,
+                )
+                requests.append(req)
+                self._requests[(emp.id, date_str)] = req
 
         repo.save_shift_requests(self._period.id, requests)
         self._update_progress()
