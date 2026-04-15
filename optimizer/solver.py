@@ -31,7 +31,8 @@ def solve(
     優先順位（ソフト制約のペナルティ重み）:
       1. 人件費最小化（総時間削減）         weight=1000
       2. 残業・深夜の特定人物集中回避       weight=500
-      3. 希望を通す                        weight=100
+      3a. 正社員希望を必ず通す             weight=200000（P1コストを上回り常に充当）
+      3b. アルバイト希望を通す             weight=100
       4. 人員バランス均等化                 weight=10
     """
     import time
@@ -207,7 +208,14 @@ def solve(
                 penalty_terms.append(500 * v)  # ディナー1回ごとにペナルティ
 
     # P3: 希望を通す = 希望があるのに入れない場合ペナルティ
+    # 正社員優先充当ルール: 正社員の未充当は最高優先でペナルティを課す
+    # → 正社員が希望した枠には必ず入れ、余りをアルバイトで補完する
+    FT_NOT_WORKED_PENALTY = 200_000  # 正社員: P1コスト（最大〜100000）を上回る重み
+    PT_NOT_WORKED_PENALTY = 100      # アルバイト: 従来通り
     for emp in active_employees:
+        penalty = (FT_NOT_WORKED_PENALTY
+                   if emp.employment_type == EmploymentType.FULL_TIME
+                   else PT_NOT_WORKED_PENALTY)
         for ds in date_strs:
             for slot in slots:
                 if req_map.get((emp.id, ds, slot.value)):
@@ -215,7 +223,7 @@ def solve(
                     not_worked = model.new_bool_var(f"nw_{emp.id}_{ds}_{slot.value}")
                     model.add(worked == 0).only_enforce_if(not_worked)
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
-                    penalty_terms.append(100 * not_worked)
+                    penalty_terms.append(penalty * not_worked)
 
     # P4: 人員バランス = ポジション毎の総シフト数の偏差を最小化
     # 各日の各（スロット×ポジション）の担当人数を均等にするため、
