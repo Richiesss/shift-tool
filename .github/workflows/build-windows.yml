@@ -29,7 +29,14 @@ jobs:
       - name: EXE をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm
 
-      # 5. ビルド結果を確認
+      # 5. テストデータ入りDBを生成してdistフォルダに配置
+      - name: テストデータDBを生成
+        run: |
+          python scripts/seed_test_data.py --reset
+          copy "$env:USERPROFILE\.shift_tool\shift_tool.db" "dist\shift_tool.db"
+        shell: pwsh
+
+      # 6. ビルド結果を確認
       - name: ビルド結果を確認
         run: |
           dir dist
@@ -37,12 +44,14 @@ jobs:
           (Get-Item "dist\シフト表構築ツール.exe").Length / 1MB
         shell: pwsh
 
-      # 6. EXEをアーティファクトとしてアップロード（ダウンロード可能にする）
-      - name: EXE をアップロード
+      # 7. EXEとDBをアーティファクトとしてアップロード
+      - name: EXE と DB をアップロード
         uses: actions/upload-artifact@v4
         with:
           name: シフト表構築ツール-Windows
-          path: dist/シフト表構築ツール.exe
+          path: |
+            dist/シフト表構築ツール.exe
+            dist/shift_tool.db
           retention-days: 30    # 30日間保持
 
   # mainへのプッシュ時はリリースも自動作成
@@ -66,12 +75,19 @@ jobs:
           name: "シフト表構築ツール (Build ${{ github.run_number }})"
           body: |
             ## ダウンロード
-            `シフト表構築ツール.exe` をダウンロードして実行してください。
+            `シフト表構築ツール.exe` と `shift_tool.db` を**同じフォルダ**に置いて実行してください。
+
+            | ファイル | 説明 |
+            |---|---|
+            | `シフト表構築ツール.exe` | アプリ本体 |
+            | `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日, 38名） |
 
             **動作環境**: Windows 10 / 11 (64bit)
 
             ## 変更内容
             ${{ github.event.head_commit.message }}
-          files: シフト表構築ツール.exe
+          files: |
+            シフト表構築ツール.exe
+            shift_tool.db
           draft: false
           prerelease: false

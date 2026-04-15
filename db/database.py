@@ -1,7 +1,13 @@
+import sys
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
+# EXE（PyInstaller frozen）実行時: EXEと同じフォルダの shift_tool.db を使用
+# 開発時: ~/.shift_tool/shift_tool.db を使用
+if getattr(sys, "frozen", False):
+    DB_PATH = Path(sys.executable).parent / "shift_tool.db"
+else:
+    DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 
 
 def get_connection() -> sqlite3.Connection:
