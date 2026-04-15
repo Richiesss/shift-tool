@@ -43,16 +43,16 @@ jobs:
         run: |
           dir dist
           echo "EXEサイズ:"
-          (Get-Item "dist\シフト表構築ツール.exe").Length / 1MB
+          (Get-Item "dist\SDU-Shift.exe").Length / 1MB
         shell: pwsh
 
       # 7. EXEとDBをアーティファクトとしてアップロード
       - name: EXE と DB をアップロード
         uses: actions/upload-artifact@v4
         with:
-          name: シフト表構築ツール-Windows
+          name: SDU-Shift-Windows
           path: |
-            dist/シフト表構築ツール.exe
+            dist/SDU-Shift.exe
             dist/shift_tool.db
           retention-days: 30    # 30日間保持
 
@@ -68,20 +68,20 @@ jobs:
       - name: アーティファクトをダウンロード
         uses: actions/download-artifact@v4
         with:
-          name: シフト表構築ツール-Windows
+          name: SDU-Shift-Windows
 
       - name: リリースを作成してEXEをアップロード
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: "シフト表構築ツール (Build ${{ github.run_number }})"
+          name: "SDU-Shift (Build ${{ github.run_number }})"
           body: |
             ## ダウンロード
-            `シフト表構築ツール.exe` と `shift_tool.db` を**同じフォルダ**に置いて実行してください。
+            `SDU-Shift.exe` と `shift_tool.db` を**同じフォルダ**に置いて実行してください。
 
             | ファイル | 説明 |
             |---|---|
-            | `シフト表構築ツール.exe` | アプリ本体 |
+            | `SDU-Shift.exe` | アプリ本体 |
             | `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日, 38名） |
 
             **動作環境**: Windows 10 / 11 (64bit)
@@ -89,7 +89,7 @@ jobs:
             ## 変更内容
             ${{ github.event.head_commit.message }}
           files: |
-            シフト表構築ツール.exe
+            SDU-Shift.exe
             shift_tool.db
           draft: false
           prerelease: false

@@ -94,7 +94,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="シフト表構築ツール",
+    name="SDU-Shift",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -113,8 +113,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Windows アイコン（assets/icon.ico を用意した場合にコメントを外す）
-    # icon="assets/icon.ico",
+    icon="assets/icon.ico",
 
     # Windows バージョン情報
     version=None,            # version_info.txt を用意した場合に指定
