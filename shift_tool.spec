@@ -36,6 +36,11 @@ added_datas = [
     (str(OPENPYXL_DIR),  "openpyxl"),
 ]
 
+# macOS: Qt6 フレームワーク・プラグインを明示的に含める
+# （PyInstallerのフックだけでは cocoa プラグイン等が欠落することがある）
+if IS_MAC and QT6_DIR.exists():
+    added_datas.append((str(QT6_DIR), "PyQt6/Qt6"))
+
 # ── 非表示インポート ───────────────────────────────────────────────────
 hidden_imports = [
     "ortools.sat.python.cp_model",
@@ -59,6 +64,8 @@ hidden_imports = [
     "reportlab.lib.enums",
     "PIL",
     "PIL.Image",
+    "PyQt6.QtPrintSupport",
+    "PyQt6.QtNetwork",
 ]
 
 a = Analysis(
