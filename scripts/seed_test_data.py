@@ -66,9 +66,9 @@ EMPLOYEE_MASTER = [
     ("藤畑",        "part_time",  "beginner","beginner", "hall"),
     # ── アルバイト（朝食キッチン系） ───────────────────────────────────
     ("田中",        "part_time",  "beginner","general",  "kitchen"),
-    ("島野",        "part_time",  "beginner","general",  "kitchen"),
-    ("チャー",      "part_time",  "beginner","general",  "kitchen"),
-    ("坂田",        "part_time",  "general", "general",  "kitchen"),
+    ("島野",        "part_time",  "beginner","veteran",  "kitchen"),  # 朝食キッチン最多担当
+    ("チャー",      "part_time",  "beginner","veteran",  "kitchen"),  # 朝食キッチン常連
+    ("坂田",        "part_time",  "general", "veteran",  "kitchen"),  # 朝食キッチン常連
     ("北",          "part_time",  "beginner","beginner", "kitchen"),
     # ── アルバイト（ディナーホール系） ─────────────────────────────────
     ("南愛菜",      "part_time",  "general", "beginner", "hall"),

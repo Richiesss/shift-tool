@@ -52,10 +52,10 @@ class Position(str, Enum):
 
 # シフト制約定数
 SHIFT_CONSTRAINTS = {
-    (TimeSlot.BREAKFAST, Position.HALL): {"min": 3, "max": 4, "min_skilled": 2},
-    (TimeSlot.BREAKFAST, Position.KITCHEN): {"min": 3, "max": 3, "min_skilled": 1},
-    (TimeSlot.DINNER, Position.HALL): {"min": 3, "max": 3, "min_skilled": 1},
-    (TimeSlot.DINNER, Position.KITCHEN): {"min": 3, "max": 3, "min_skilled": 1},
+    (TimeSlot.BREAKFAST, Position.HALL):    {"min": 1, "max": 8, "min_skilled": 0},
+    (TimeSlot.BREAKFAST, Position.KITCHEN): {"min": 0, "max": 4, "min_skilled": 0},
+    (TimeSlot.DINNER, Position.HALL):       {"min": 2, "max": 8, "min_skilled": 0},
+    (TimeSlot.DINNER, Position.KITCHEN):    {"min": 1, "max": 5, "min_skilled": 0},
 }
 
 # 法令関連定数
