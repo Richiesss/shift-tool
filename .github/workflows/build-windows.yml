@@ -1,0 +1,77 @@
+name: Windows EXE ビルド
+
+on:
+  push:
+    branches: [ main ]      # main にプッシュするたびに自動ビルド
+  workflow_dispatch:         # GitHub 画面から手動実行も可能
+
+jobs:
+  build:
+    runs-on: windows-latest  # GitHub の Windows サーバーで実行
+
+    steps:
+      # 1. ソースコードを取得
+      - name: ソースコードをチェックアウト
+        uses: actions/checkout@v4
+
+      # 2. Python のセットアップ
+      - name: Python 3.11 をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # 3. 依存パッケージをインストール
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      # 4. PyInstaller でEXEをビルド
+      - name: EXE をビルド
+        run: pyinstaller shift_tool.spec --clean --noconfirm
+
+      # 5. ビルド結果を確認
+      - name: ビルド結果を確認
+        run: |
+          dir dist
+          echo "EXEサイズ:"
+          (Get-Item "dist\シフト表構築ツール.exe").Length / 1MB
+        shell: pwsh
+
+      # 6. EXEをアーティファクトとしてアップロード（ダウンロード可能にする）
+      - name: EXE をアップロード
+        uses: actions/upload-artifact@v4
+        with:
+          name: シフト表構築ツール-Windows
+          path: dist/シフト表構築ツール.exe
+          retention-days: 30    # 30日間保持
+
+  # mainへのプッシュ時はリリースも自動作成
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: アーティファクトをダウンロード
+        uses: actions/download-artifact@v4
+        with:
+          name: シフト表構築ツール-Windows
+
+      - name: リリースを作成してEXEをアップロード
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "シフト表構築ツール (Build ${{ github.run_number }})"
+          body: |
+            ## ダウンロード
+            `シフト表構築ツール.exe` をダウンロードして実行してください。
+
+            **動作環境**: Windows 10 / 11 (64bit)
+
+            ## 変更内容
+            ${{ github.event.head_commit.message }}
+          files: シフト表構築ツール.exe
+          draft: false
+          prerelease: false
