@@ -1,0 +1,5 @@
+PyQt6>=6.5.0
+ortools>=9.7.0
+openpyxl>=3.1.0
+reportlab>=4.0.0
+PyInstaller>=6.0.0
