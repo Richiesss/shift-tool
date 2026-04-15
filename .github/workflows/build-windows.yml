@@ -69,18 +69,29 @@ jobs:
 
       - name: icon.icns を生成
         run: |
-          # icon.jpg → icon.png → iconset → icon.icns
-          sips -s format png icon.jpg --out /tmp/icon.png
-          mkdir -p /tmp/SDU-Shift.iconset
-          for size in 16 32 64 128 256 512; do
-            sips -z $size $size /tmp/icon.png \
-              --out /tmp/SDU-Shift.iconset/icon_${size}x${size}.png
-            double=$((size * 2))
-            sips -z $double $double /tmp/icon.png \
-              --out /tmp/SDU-Shift.iconset/icon_${size}x${size}@2x.png
-          done
-          iconutil -c icns /tmp/SDU-Shift.iconset -o assets/icon.icns
-          echo "icon.icns 生成完了"
+          python - <<'EOF'
+          from PIL import Image
+          from pathlib import Path
+          import subprocess, os
+
+          # icon.jpg → iconset の各サイズ PNG を生成
+          src = Image.open("icon.jpg").convert("RGBA")
+          iconset = Path("/tmp/SDU-Shift.iconset")
+          iconset.mkdir(parents=True, exist_ok=True)
+
+          for size in [16, 32, 64, 128, 256, 512]:
+              src.resize((size, size), Image.LANCZOS).save(
+                  iconset / f"icon_{size}x{size}.png")
+              src.resize((size*2, size*2), Image.LANCZOS).save(
+                  iconset / f"icon_{size}x{size}@2x.png")
+
+          # iconutil で .icns に変換
+          Path("assets").mkdir(exist_ok=True)
+          subprocess.run(
+              ["iconutil", "-c", "icns", str(iconset), "-o", "assets/icon.icns"],
+              check=True)
+          print(f"icon.icns 生成完了: {os.path.getsize('assets/icon.icns'):,} bytes")
+          EOF
 
       - name: .app をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm
