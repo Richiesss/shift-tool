@@ -90,22 +90,23 @@ jobs:
           print(f'icon.icns 生成完了: {os.path.getsize(\"assets/icon.icns\"):,} bytes')
           "
 
-      - name: .app をビルド
-        run: pyinstaller shift_tool.spec --clean --noconfirm
-
-      - name: テストデータDBを生成
+      - name: テストデータDBを生成してバンドル用に配置
         env:
           PYTHONIOENCODING: utf-8
         run: |
           python scripts/seed_test_data.py --reset
-          cp ~/.shift_tool/shift_tool.db shift_tool.db
+          # spec の added_datas で取り込めるよう assets/ に置く
+          cp ~/.shift_tool/shift_tool.db assets/shift_tool_seed.db
+          echo "シードDB生成完了: $(du -sh assets/shift_tool_seed.db | cut -f1)"
 
-      - name: .app と DB を zip に圧縮
+      - name: .app をビルド
+        run: pyinstaller shift_tool.spec --clean --noconfirm
+
+      - name: .app を zip に圧縮
         run: |
-          # shift_tool.db は .app の隣に置く（起動時に同フォルダを参照）
-          cp shift_tool.db dist/shift_tool.db
+          # DB は .app バンドル内に同梱済み → zip は .app のみ
           cd dist
-          zip -r ../SDU-Shift-mac.zip SDU-Shift.app shift_tool.db
+          zip -r ../SDU-Shift-mac.zip SDU-Shift.app
           echo "zipサイズ: $(du -sh ../SDU-Shift-mac.zip | cut -f1)"
 
       - name: mac zip をアップロード
@@ -153,8 +154,9 @@ jobs:
             | `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日・38名） |
 
             ### macOS
-            `SDU-Shift-mac.zip` を解凍すると `SDU-Shift.app` と `shift_tool.db` が入っています。
-            **同じフォルダに置いた状態**で `SDU-Shift.app` をダブルクリックして起動してください。
+            `SDU-Shift-mac.zip` を解凍して `SDU-Shift.app` をダブルクリックして起動してください。
+            テストデータは初回起動時に自動でセットアップされます。
+            データは `~/Library/Application Support/SDU-Shift/` に保存されます。
 
             > 初回起動時に「開発元を確認できない」と表示された場合は、
             > Finder で右クリック →「開く」→「開く」を選択してください。
