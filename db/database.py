@@ -6,18 +6,34 @@ from pathlib import Path
 # 開発時: ~/.shift_tool/shift_tool.db を使用
 if getattr(sys, "frozen", False):
     exe = Path(sys.executable)
-    # macOS .app バンドル内: Contents/MacOS/SDU-Shift → .app の親フォルダを使用
-    if sys.platform == "darwin" and exe.parent.name == "MacOS":
-        DB_PATH = exe.parent.parent.parent.parent / "shift_tool.db"
+    if sys.platform == "darwin":
+        # .app バンドル内のパスを親方向にたどり、.app の親フォルダを特定する
+        # 例: /path/to/SDU-Shift.app/Contents/MacOS/SDU-Shift → /path/to/
+        app_parent = None
+        for parent in exe.parents:
+            if parent.suffix == ".app":
+                app_parent = parent.parent
+                break
+        DB_PATH = (app_parent or exe.parent) / "shift_tool.db"
     else:
         DB_PATH = exe.parent / "shift_tool.db"
 else:
     DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 
+print(f"[DB] sys.executable = {sys.executable}", flush=True)
+print(f"[DB] DB_PATH = {DB_PATH}", flush=True)
+
 
 def get_connection() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(DB_PATH))
+    except Exception as e:
+        # フォールバック: ホームの .shift_tool に保存
+        fallback = Path.home() / ".shift_tool" / "shift_tool.db"
+        print(f"[DB] {DB_PATH} 接続失敗: {e} → フォールバック: {fallback}", flush=True)
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(fallback))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
