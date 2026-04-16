@@ -18,6 +18,7 @@ from utils.constants import (
     TimeSlot, Position, SkillLevel, DAY_OF_WEEK_LABELS,
     SHIFT_CONSTRAINTS
 )
+from utils.theme import theme
 
 # 習熟度バッジ
 SKILL_BADGE = {
@@ -64,18 +65,18 @@ class ScheduleView(QWidget):
         header.addWidget(QLabel("期間:"))
         header.addWidget(self.period_combo)
 
-        btn_output = QPushButton("出力 →")
-        btn_output.setFixedHeight(32)
-        btn_output.setStyleSheet("QPushButton { background:#7c3aed; color:white; border-radius:5px; padding:0 14px; } QPushButton:hover { background:#6d28d9; }")
-        btn_output.clicked.connect(self._on_output)
-        header.addWidget(btn_output)
+        self._btn_output = QPushButton("出力 →")
+        self._btn_output.setFixedHeight(32)
+        self._btn_output.clicked.connect(self._on_output)
+        header.addWidget(self._btn_output)
         layout.addLayout(header)
 
         # 凡例
         legend = QHBoxLayout()
-        for text, color in [("✅制約クリア", COLOR_OK), ("⚠️最低人数ちょうど", COLOR_WARN), ("❌制約違反", COLOR_ERROR)]:
+        self._status_legend_labels: list[tuple[QLabel, str]] = []
+        for text, color_key in [("✅制約クリア", "status_ok"), ("⚠️最低人数ちょうど", "status_warn"), ("❌制約違反", "status_err")]:
             lbl = QLabel(text)
-            lbl.setStyleSheet(f"background:{color.name()}; border-radius:3px; padding:2px 8px; font-size:11px;")
+            self._status_legend_labels.append((lbl, color_key))
             legend.addWidget(lbl)
         legend.addStretch()
         legend.addWidget(QLabel("習熟度: ★★リーダー ★ベテラン ▼新人"))
@@ -93,8 +94,23 @@ class ScheduleView(QWidget):
 
         # 凡例（人員数）
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color:#6b7280; font-size:11px;")
         layout.addWidget(self.status_label)
+
+        self._apply_styles()
+
+    def _apply_styles(self):
+        c = theme.c
+        self._btn_output.setStyleSheet(
+            f"QPushButton {{ background:{c['purple']}; color:white; border-radius:5px; padding:0 14px; }}"
+            f" QPushButton:hover {{ background:{c['purple_hover']}; }}"
+        )
+        self.status_label.setStyleSheet(f"color:{c['text2']}; font-size:11px;")
+        for lbl, color_key in self._status_legend_labels:
+            lbl.setStyleSheet(f"background:{c[color_key]}; border-radius:3px; padding:2px 8px; font-size:11px;")
+
+    def apply_theme(self):
+        self._apply_styles()
+        self._render_table()
 
     def _load_periods(self):
         periods = repo.get_all_periods()
@@ -220,24 +236,25 @@ class ScheduleView(QWidget):
             req = self._requests.get((emp.id, ds))
             can_work = (req[0] if slot_v == TimeSlot.BREAKFAST.value else req[1]) if req else False
 
+            c = theme.c
             if pos_v:
                 pos_label = "H" if pos_v == "hall" else "K"
                 skill = emp.hall_skill if pos_v == "hall" else emp.kitchen_skill
                 badge = SKILL_BADGE.get(skill, "")
                 item = QTableWidgetItem(f"{pos_label}{badge}")
-                item.setBackground(QBrush(QColor("#bfdbfe")))  # アサイン済=青
+                item.setBackground(QBrush(QColor(c["cell_assigned"])))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 item.setData(Qt.ItemDataRole.UserRole, ("assigned", emp.id, ds, slot_v))
                 total += 1
             elif can_work:
                 item = QTableWidgetItem("△")
-                item.setBackground(QBrush(QColor("#f0fdf4")))  # 希望あり=薄緑
-                item.setForeground(QBrush(QColor("#6b7280")))
+                item.setBackground(QBrush(QColor(c["cell_available"])))
+                item.setForeground(QBrush(QColor(c["cell_avail_text"])))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 item.setData(Qt.ItemDataRole.UserRole, ("available", emp.id, ds, slot_v))
             else:
                 item = QTableWidgetItem("")
-                item.setBackground(QBrush(QColor("#f9fafb")))
+                item.setBackground(QBrush(QColor(c["cell_unavail"])))
                 item.setData(Qt.ItemDataRole.UserRole, ("unavailable", emp.id, ds, slot_v))
 
             self.table.setItem(row, col_idx, item)
@@ -252,7 +269,7 @@ class ScheduleView(QWidget):
         label = f"{slot.short_label()}\n{pos.label()}"
         label_item = QTableWidgetItem(label)
         label_item.setFont(QFont("", 8, QFont.Weight.Bold))
-        label_item.setBackground(QBrush(QColor("#f1f5f9")))
+        label_item.setBackground(QBrush(QColor(theme.c["surface2"])))
         self.table.setItem(row, 0, label_item)
 
         key = (slot, pos)
@@ -264,7 +281,7 @@ class ScheduleView(QWidget):
             ds, slot_v = meta
             if slot_v != slot.value:
                 item = QTableWidgetItem("")
-                item.setBackground(QBrush(QColor("#f1f5f9")))
+                item.setBackground(QBrush(QColor(theme.c["surface2"])))
                 self.table.setItem(row, col_idx, item)
                 continue
 
@@ -279,12 +296,13 @@ class ScheduleView(QWidget):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             item.setFont(QFont("", 8))
 
+            c = theme.c
             if cnt < min_req or sk < min_sk:
-                item.setBackground(QBrush(COLOR_ERROR))
+                item.setBackground(QBrush(QColor(c["status_err"])))
             elif cnt == min_req:
-                item.setBackground(QBrush(COLOR_WARN))
+                item.setBackground(QBrush(QColor(c["status_warn"])))
             else:
-                item.setBackground(QBrush(COLOR_OK))
+                item.setBackground(QBrush(QColor(c["status_ok"])))
 
             self.table.setItem(row, col_idx, item)
 
@@ -374,12 +392,16 @@ class PositionSelectDialog(QDialog):
                 f"自分の習熟度:{emp_skill.label()}{badge}"
             )
             btn.setFixedHeight(40)
+            c = theme.c
             if current >= constraint.get("max", 3):
                 btn.setEnabled(False)
                 btn.setToolTip("上限人数に達しています")
-                btn.setStyleSheet("color:#9ca3af;")
+                btn.setStyleSheet(f"color:{c['text2']};")
             else:
-                btn.setStyleSheet("QPushButton { text-align:left; padding:0 12px; border:1px solid #d1d5db; border-radius:5px; } QPushButton:hover { background:#f3f4f6; }")
+                btn.setStyleSheet(
+                    f"QPushButton {{ text-align:left; padding:0 12px; border:1px solid {c['border2']}; border-radius:5px; }}"
+                    f" QPushButton:hover {{ background:{c['surface2']}; }}"
+                )
                 btn.clicked.connect(lambda _, p=pos: self._select(p))
             layout.addWidget(btn)
 

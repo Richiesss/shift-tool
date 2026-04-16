@@ -12,6 +12,7 @@ from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo
 from models.employee import Employee, FixedPattern
 from utils.constants import EmploymentType, SkillLevel, DAY_OF_WEEK_LABELS
+from utils.theme import theme
 
 
 class EmployeeView(QWidget):
@@ -31,11 +32,11 @@ class EmployeeView(QWidget):
         title.setFont(QFont("", 16, QFont.Weight.Bold))
         header.addWidget(title)
         header.addStretch()
-        btn_new = QPushButton("＋ 新規登録")
-        btn_new.setFixedHeight(36)
-        btn_new.setStyleSheet("QPushButton { background:#2563eb; color:white; border-radius:6px; padding:0 16px; font-weight:bold; } QPushButton:hover { background:#1d4ed8; }")
-        btn_new.clicked.connect(self._on_new)
-        header.addWidget(btn_new)
+        self._btn_new = QPushButton("＋ 新規登録")
+        self._btn_new.setFixedHeight(36)
+        self._btn_new.clicked.connect(self._on_new)
+        header.addWidget(self._btn_new)
+        self._apply_btn_style()
         layout.addLayout(header)
 
         # テーブル
@@ -53,6 +54,18 @@ class EmployeeView(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(False)
         layout.addWidget(self.table)
+
+    def _apply_btn_style(self):
+        c = theme.c
+        self._btn_new.setStyleSheet(
+            f"QPushButton {{ background:{c['primary']}; color:white; border-radius:6px; "
+            f"padding:0 16px; font-weight:bold; }} "
+            f"QPushButton:hover {{ background:{c['primary_hover']}; }}"
+        )
+
+    def apply_theme(self):
+        self._apply_btn_style()
+        self.refresh()
 
     def refresh(self):
         self.employees = repo.get_all_employees()
@@ -72,12 +85,21 @@ class EmployeeView(QWidget):
 
             btn_edit = QPushButton("編集")
             btn_edit.setFixedSize(56, 28)
-            btn_edit.setStyleSheet("QPushButton { background:#f3f4f6; border:1px solid #d1d5db; border-radius:4px; } QPushButton:hover { background:#e5e7eb; }")
+            c = theme.c
+            btn_edit.setStyleSheet(
+                f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
+                f"border-radius:4px; color:{c['text']}; }} "
+                f"QPushButton:hover {{ background:{c['surface2']}; }}"
+            )
             btn_edit.clicked.connect(lambda _, e=emp: self._on_edit(e))
 
             btn_del = QPushButton("削除")
             btn_del.setFixedSize(56, 28)
-            btn_del.setStyleSheet("QPushButton { background:#fee2e2; border:1px solid #fca5a5; border-radius:4px; color:#b91c1c; } QPushButton:hover { background:#fecaca; }")
+            btn_del.setStyleSheet(
+                f"QPushButton {{ background:{c['danger_bg']}; border:1px solid {c['danger_border']}; "
+                f"border-radius:4px; color:{c['danger_text']}; }} "
+                f"QPushButton:hover {{ background:{c['danger_bg']}; }}"
+            )
             btn_del.clicked.connect(lambda _, e=emp: self._on_delete(e))
 
             btn_layout.addWidget(btn_edit)

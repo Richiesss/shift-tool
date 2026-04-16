@@ -13,6 +13,7 @@ from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.constants import DAY_OF_WEEK_LABELS
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP, default_pattern_from_fixed
+from utils.theme import theme
 
 
 # ドロップダウンに表示するパターン（カスタム含む）
@@ -140,20 +141,15 @@ class ShiftInputView(QWidget):
         period_layout.addWidget(QLabel("終了:"))
         period_layout.addWidget(self.end_date_edit)
 
-        btn_set = QPushButton("期間確定")
-        btn_set.setFixedHeight(32)
-        btn_set.setStyleSheet(
-            "QPushButton { background:#2563eb; color:white; border-radius:5px; padding:0 12px; }"
-            " QPushButton:hover { background:#1d4ed8; }"
-        )
-        btn_set.clicked.connect(self._on_set_period)
-        period_layout.addWidget(btn_set)
+        self._btn_set = QPushButton("期間確定")
+        self._btn_set.setFixedHeight(32)
+        self._btn_set.clicked.connect(self._on_set_period)
+        period_layout.addWidget(self._btn_set)
         period_layout.addStretch()
         layout.addWidget(period_group)
 
         # 進捗
         self.progress_label = QLabel("")
-        self.progress_label.setStyleSheet("color:#6b7280;")
         layout.addWidget(self.progress_label)
 
         # 従業員ナビ
@@ -162,35 +158,30 @@ class ShiftInputView(QWidget):
         self.emp_combo.setMinimumWidth(180)
         self.emp_combo.currentIndexChanged.connect(self._on_employee_changed)
 
-        btn_prev = QPushButton("◀ 前の従業員")
-        btn_next = QPushButton("次の従業員 ▶")
-        btn_prev.clicked.connect(self._on_prev_employee)
-        btn_next.clicked.connect(self._on_next_employee)
-        for b in [btn_prev, btn_next]:
+        self._btn_prev = QPushButton("◀ 前の従業員")
+        self._btn_next = QPushButton("次の従業員 ▶")
+        self._btn_prev.clicked.connect(self._on_prev_employee)
+        self._btn_next.clicked.connect(self._on_next_employee)
+        for b in [self._btn_prev, self._btn_next]:
             b.setFixedHeight(32)
-            b.setStyleSheet(
-                "QPushButton { border:1px solid #d1d5db; border-radius:5px; padding:0 12px; }"
-                " QPushButton:hover { background:#f3f4f6; }"
-            )
 
         emp_nav.addWidget(QLabel("従業員:"))
         emp_nav.addWidget(self.emp_combo)
         emp_nav.addStretch()
-        emp_nav.addWidget(btn_prev)
-        emp_nav.addWidget(btn_next)
+        emp_nav.addWidget(self._btn_prev)
+        emp_nav.addWidget(self._btn_next)
         layout.addLayout(emp_nav)
 
         # パターン凡例
         legend = QHBoxLayout()
         legend.addWidget(QLabel("パターン例:"))
-        for label, color in [
-            ("朝食系", "#dbeafe"), ("ディナー系", "#fce7f3"),
-            ("通し/両対応", "#d1fae5"), ("カバーなし", "#f3f4f6"),
+        self._legend_labels: list[tuple[QLabel, str]] = []
+        for label, color_key in [
+            ("朝食系", "cell_breakfast"), ("ディナー系", "cell_dinner"),
+            ("通し/両対応", "cell_double"), ("カバーなし", "cell_none"),
         ]:
             lbl = QLabel(label)
-            lbl.setStyleSheet(
-                f"background:{color}; border-radius:3px; padding:1px 6px; font-size:11px;"
-            )
+            self._legend_labels.append((lbl, color_key))
             legend.addWidget(lbl)
         legend.addStretch()
         layout.addLayout(legend)
@@ -213,13 +204,36 @@ class ShiftInputView(QWidget):
         btn_row.addStretch()
         self.btn_save = QPushButton("この従業員の希望を保存")
         self.btn_save.setFixedHeight(36)
-        self.btn_save.setStyleSheet(
-            "QPushButton { background:#16a34a; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }"
-            " QPushButton:hover { background:#15803d; }"
-        )
         self.btn_save.clicked.connect(self._on_save)
         btn_row.addWidget(self.btn_save)
         layout.addLayout(btn_row)
+
+        self._apply_styles()
+
+    def _apply_styles(self):
+        c = theme.c
+        self._btn_set.setStyleSheet(
+            f"QPushButton {{ background:{c['primary']}; color:white; border-radius:5px; padding:0 12px; }}"
+            f" QPushButton:hover {{ background:{c['primary_hover']}; }}"
+        )
+        for b in [self._btn_prev, self._btn_next]:
+            b.setStyleSheet(
+                f"QPushButton {{ border:1px solid {c['border2']}; border-radius:5px; padding:0 12px; }}"
+                f" QPushButton:hover {{ background:{c['surface2']}; }}"
+            )
+        self.btn_save.setStyleSheet(
+            f"QPushButton {{ background:{c['success']}; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }}"
+            f" QPushButton:hover {{ background:{c['success_hover']}; }}"
+        )
+        self.progress_label.setStyleSheet(f"color:{c['text2']};")
+        for lbl, color_key in self._legend_labels:
+            lbl.setStyleSheet(
+                f"background:{c[color_key]}; border-radius:3px; padding:1px 6px; font-size:11px;"
+            )
+
+    def apply_theme(self):
+        self._apply_styles()
+        self._render_table()
 
     # ── 期間 ──────────────────────────────────────────────────────────────
 
@@ -320,10 +334,11 @@ class ShiftInputView(QWidget):
             date_item = QTableWidgetItem(date_display)
             date_item.setData(Qt.ItemDataRole.UserRole, date_str)
             date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            c = theme.c
             if dow == 5:
-                date_item.setForeground(QBrush(QColor("#2563eb")))
+                date_item.setForeground(QBrush(QColor(c["sat_text"])))
             elif dow == 6:
-                date_item.setForeground(QBrush(QColor("#dc2626")))
+                date_item.setForeground(QBrush(QColor(c["sun_text"])))
             self.table.setItem(row, 0, date_item)
 
             # ── パターン選択セル ──
@@ -357,8 +372,8 @@ class ShiftInputView(QWidget):
 
             # 不可日はグレーアウト
             if is_unavail:
-                date_item.setBackground(QBrush(QColor("#f3f4f6")))
-                note_item.setBackground(QBrush(QColor("#f3f4f6")))
+                date_item.setBackground(QBrush(QColor(theme.c["cell_none"])))
+                note_item.setBackground(QBrush(QColor(theme.c["cell_none"])))
 
             # 行の背景色でパターン種別を視覚化
             self._apply_row_color(row, date_str, is_unavail)
@@ -381,14 +396,15 @@ class ShiftInputView(QWidget):
         cb = p.covers_breakfast() if pid != "custom" else False
         cd = p.covers_dinner() if pid != "custom" else False
 
+        c = theme.c
         if cb and cd:
-            color = "#d1fae5"   # 両カバー: 緑
+            color = c["cell_double"]
         elif cb:
-            color = "#dbeafe"   # 朝食: 青
+            color = c["cell_breakfast"]
         elif cd:
-            color = "#fce7f3"   # ディナー: ピンク
+            color = c["cell_dinner"]
         else:
-            color = "#f9fafb"   # カバーなし: 薄灰
+            color = c["cell_none"]
 
         from PyQt6.QtWidgets import QTableWidgetItem
         item = self.table.item(row, 0)

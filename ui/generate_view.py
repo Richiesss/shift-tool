@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo
 from optimizer.solver import solve, SolveResult
+from utils.theme import theme
 
 
 class SolverWorker(QObject):
@@ -72,11 +73,6 @@ class GenerateView(QWidget):
         self.btn_generate.setFixedHeight(44)
         self.btn_generate.setEnabled(False)
         self.btn_generate.setFont(QFont("", 12, QFont.Weight.Bold))
-        self.btn_generate.setStyleSheet("""
-            QPushButton { background:#2563eb; color:white; border-radius:8px; padding:0 24px; }
-            QPushButton:hover { background:#1d4ed8; }
-            QPushButton:disabled { background:#93c5fd; }
-        """)
         self.btn_generate.clicked.connect(self._on_generate)
         btn_row.addWidget(self.btn_generate)
         btn_row.addStretch()
@@ -101,14 +97,27 @@ class GenerateView(QWidget):
         self.btn_to_edit = QPushButton("シフト表の確認・編集へ →")
         self.btn_to_edit.setFixedHeight(36)
         self.btn_to_edit.setEnabled(False)
-        self.btn_to_edit.setStyleSheet("""
-            QPushButton { background:#16a34a; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }
-            QPushButton:hover { background:#15803d; }
-            QPushButton:disabled { background:#86efac; }
-        """)
         self.btn_to_edit.clicked.connect(self._on_go_to_edit)
         rl.addWidget(self.btn_to_edit, alignment=Qt.AlignmentFlag.AlignRight)
         layout.addWidget(result_group)
+
+        self._apply_btn_styles()
+
+    def _apply_btn_styles(self):
+        c = theme.c
+        self.btn_generate.setStyleSheet(
+            f"QPushButton {{ background:{c['primary']}; color:white; border-radius:8px; padding:0 24px; }}"
+            f" QPushButton:hover {{ background:{c['primary_hover']}; }}"
+            f" QPushButton:disabled {{ background:{c['primary_dis']}; }}"
+        )
+        self.btn_to_edit.setStyleSheet(
+            f"QPushButton {{ background:{c['success']}; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }}"
+            f" QPushButton:hover {{ background:{c['success_hover']}; }}"
+            f" QPushButton:disabled {{ background:{c['success_dis']}; }}"
+        )
+
+    def apply_theme(self):
+        self._apply_btn_styles()
 
     def _load_periods(self):
         periods = repo.get_all_periods()

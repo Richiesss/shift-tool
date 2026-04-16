@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from models.employee import Employee
 from models.schedule import SchedulePeriod
+from utils.theme import theme
 
 
 class OutputDialog(QDialog):
@@ -68,7 +69,11 @@ class OutputDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         btn_export = QPushButton("出力する")
         btn_export.setFixedHeight(36)
-        btn_export.setStyleSheet("QPushButton { background:#7c3aed; color:white; border-radius:6px; padding:0 20px; font-weight:bold; } QPushButton:hover { background:#6d28d9; }")
+        c = theme.c
+        btn_export.setStyleSheet(
+            f"QPushButton {{ background:{c['purple']}; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }}"
+            f" QPushButton:hover {{ background:{c['purple_hover']}; }}"
+        )
         btn_export.clicked.connect(self._on_export)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)

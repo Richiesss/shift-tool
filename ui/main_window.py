@@ -5,12 +5,13 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QColor, QPalette
+from PyQt6.QtGui import QFont
 
 from ui.employee_view import EmployeeView
 from ui.shift_input_view import ShiftInputView
 from ui.generate_view import GenerateView
 from ui.schedule_view import ScheduleView
+from utils.theme import theme
 
 NAV_ITEMS = [
     ("👥", "従業員管理", 0),
@@ -20,10 +21,6 @@ NAV_ITEMS = [
 ]
 
 SIDEBAR_W = 160
-SIDEBAR_BG = "#1e293b"
-SIDEBAR_ACTIVE = "#2563eb"
-SIDEBAR_HOVER = "#334155"
-SIDEBAR_TEXT = "#e2e8f0"
 
 
 class SidebarButton(QPushButton):
@@ -34,36 +31,42 @@ class SidebarButton(QPushButton):
         self.setFixedWidth(SIDEBAR_W)
         self.setCheckable(True)
         self.setFont(QFont("", 10))
-        self._update_style(False)
+        self._active = False
+        self._update_style()
 
-    def _update_style(self, active: bool):
-        bg = SIDEBAR_ACTIVE if active else "transparent"
+    def _update_style(self):
+        c = theme.c
+        bg = c["sidebar_active"] if self._active else "transparent"
+        hover = c["sidebar_active"] if self._active else c["sidebar_hover"]
         self.setStyleSheet(f"""
             QPushButton {{
                 background: {bg};
-                color: {SIDEBAR_TEXT};
+                color: {c["sidebar_text"]};
                 border: none;
                 text-align: left;
                 padding-left: 16px;
                 border-radius: 0;
             }}
-            QPushButton:hover {{
-                background: {SIDEBAR_HOVER if not active else SIDEBAR_ACTIVE};
-            }}
+            QPushButton:hover {{ background: {hover}; }}
         """)
 
     def setActive(self, active: bool):
+        self._active = active
         self.setChecked(active)
-        self._update_style(active)
+        self._update_style()
+
+    def apply_theme(self):
+        self._update_style()
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("シフト表構築ツール")
+        self.setWindowTitle("SDU-Shift")
         self.setMinimumSize(QSize(1100, 700))
         self._build_ui()
         self._nav_to(0)
+        theme.changed.connect(self._on_theme_changed)
 
     def _build_ui(self):
         central = QWidget()
@@ -73,20 +76,17 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
 
         # サイドバー
-        sidebar = QWidget()
-        sidebar.setFixedWidth(SIDEBAR_W)
-        sidebar.setStyleSheet(f"background: {SIDEBAR_BG};")
-        sb_layout = QVBoxLayout(sidebar)
+        self._sidebar = QWidget()
+        self._sidebar.setFixedWidth(SIDEBAR_W)
+        sb_layout = QVBoxLayout(self._sidebar)
         sb_layout.setContentsMargins(0, 0, 0, 0)
         sb_layout.setSpacing(0)
 
-        # アプリタイトル
-        title_label = QLabel("Shift Tool")
-        title_label.setFixedHeight(56)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setFont(QFont("", 13, QFont.Weight.Bold))
-        title_label.setStyleSheet(f"color: white; background: {SIDEBAR_BG}; border-bottom: 1px solid #334155;")
-        sb_layout.addWidget(title_label)
+        self._title_label = QLabel("Shift Tool")
+        self._title_label.setFixedHeight(56)
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._title_label.setFont(QFont("", 13, QFont.Weight.Bold))
+        sb_layout.addWidget(self._title_label)
 
         self._nav_buttons: list[SidebarButton] = []
         for icon, text, idx in NAV_ITEMS:
@@ -97,45 +97,64 @@ class MainWindow(QMainWindow):
 
         sb_layout.addStretch()
 
-        # バージョン
-        ver = QLabel("v1.0.0")
-        ver.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ver.setStyleSheet(f"color: #64748b; font-size: 10px; padding: 8px;")
-        sb_layout.addWidget(ver)
+        self._ver_label = QLabel("v1.0.0")
+        self._ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sb_layout.addWidget(self._ver_label)
 
-        root.addWidget(sidebar)
+        root.addWidget(self._sidebar)
 
         # 区切り線
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setStyleSheet("color: #e2e8f0;")
-        root.addWidget(sep)
+        self._sep = QFrame()
+        self._sep.setFrameShape(QFrame.Shape.VLine)
+        root.addWidget(self._sep)
 
         # コンテンツエリア
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet("background: white;")
 
         self._employee_view = EmployeeView()
         self._shift_input_view = ShiftInputView()
         self._generate_view = GenerateView()
         self._schedule_view = ScheduleView()
 
-        self.stack.addWidget(self._employee_view)       # 0
-        self.stack.addWidget(self._shift_input_view)    # 1
-        self.stack.addWidget(self._generate_view)       # 2
-        self.stack.addWidget(self._schedule_view)        # 3
+        self.stack.addWidget(self._employee_view)
+        self.stack.addWidget(self._shift_input_view)
+        self.stack.addWidget(self._generate_view)
+        self.stack.addWidget(self._schedule_view)
 
-        # 生成完了 → シフト編集画面に自動遷移
         self._generate_view.schedule_generated.connect(self._on_schedule_generated)
-
         root.addWidget(self.stack)
+
+        self._apply_sidebar_style()
+
+    def _apply_sidebar_style(self):
+        c = theme.c
+        self._sidebar.setStyleSheet(f"background: {c['sidebar_bg']};")
+        self._title_label.setStyleSheet(
+            f"color: white; background: {c['sidebar_bg']}; "
+            f"border-bottom: 1px solid {c['sidebar_border']};"
+        )
+        self._ver_label.setStyleSheet(
+            f"color: {c['text2']}; font-size: 10px; padding: 8px; "
+            f"background: {c['sidebar_bg']};"
+        )
+        self._sep.setStyleSheet(f"color: {c['border']};")
+        self.stack.setStyleSheet(f"background: {c['bg']};")
+
+    def _on_theme_changed(self):
+        self._apply_sidebar_style()
+        for btn in self._nav_buttons:
+            btn.apply_theme()
+        # 各ビューのテーマ更新
+        for view in (self._employee_view, self._shift_input_view,
+                     self._generate_view, self._schedule_view):
+            if hasattr(view, "apply_theme"):
+                view.apply_theme()
 
     def _nav_to(self, idx: int):
         self.stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_buttons):
             btn.setActive(i == idx)
 
-        # 画面切替時にデータをリフレッシュ
         if idx == 2:
             self._generate_view.refresh()
         elif idx == 3:
