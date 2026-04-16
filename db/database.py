@@ -1,6 +1,5 @@
 import sys
 import sqlite3
-import shutil
 from pathlib import Path
 
 # DB 保存先
@@ -18,21 +17,7 @@ else:
     DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 
 
-def _seed_if_needed() -> None:
-    """初回起動時: バンドル内のシードDBを DB_PATH にコピーする。"""
-    if DB_PATH.exists():
-        return
-    if not hasattr(sys, "_MEIPASS"):
-        return
-    seed = Path(sys._MEIPASS) / "shift_tool.db"
-    if seed.exists():
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(seed, DB_PATH)
-        print(f"[DB] シードDBをコピー: {DB_PATH}", flush=True)
-
-
 def get_connection() -> sqlite3.Connection:
-    _seed_if_needed()
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row

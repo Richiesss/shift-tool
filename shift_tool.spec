@@ -41,9 +41,6 @@ added_datas = [
 if IS_MAC and QT6_DIR.exists():
     added_datas.append((str(QT6_DIR), "PyQt6/Qt6"))
 
-# シードDB: 初回起動時に ~/Library/Application Support/SDU-Shift/ へコピーされる
-if os.path.exists("assets/shift_tool_seed.db"):
-    added_datas.append(("assets/shift_tool_seed.db", "."))
 
 # ── 非表示インポート ───────────────────────────────────────────────────
 hidden_imports = [

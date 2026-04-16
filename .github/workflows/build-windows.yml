@@ -26,14 +26,6 @@ jobs:
       - name: EXE をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm
 
-      - name: テストデータDBを生成
-        env:
-          PYTHONIOENCODING: utf-8
-        run: |
-          python scripts/seed_test_data.py --reset
-          copy "$env:USERPROFILE\.shift_tool\shift_tool.db" "dist\shift_tool.db"
-        shell: pwsh
-
       - name: ビルド結果を確認
         run: |
           dir dist
@@ -41,13 +33,11 @@ jobs:
           (Get-Item "dist\SDU-Shift.exe").Length / 1MB
         shell: pwsh
 
-      - name: EXE と DB をアップロード
+      - name: EXE をアップロード
         uses: actions/upload-artifact@v4
         with:
           name: SDU-Shift-Windows
-          path: |
-            dist/SDU-Shift.exe
-            dist/shift_tool.db
+          path: dist/SDU-Shift.exe
           retention-days: 30
 
   # ── macOS ビルド ────────────────────────────────────────────────────────
@@ -89,15 +79,6 @@ jobs:
           subprocess.run(['iconutil', '-c', 'icns', str(iconset), '-o', 'assets/icon.icns'], check=True)
           print(f'icon.icns 生成完了: {os.path.getsize(\"assets/icon.icns\"):,} bytes')
           "
-
-      - name: テストデータDBを生成してバンドル用に配置
-        env:
-          PYTHONIOENCODING: utf-8
-        run: |
-          python scripts/seed_test_data.py --reset
-          # spec の added_datas で取り込めるよう assets/ に置く
-          cp ~/.shift_tool/shift_tool.db assets/shift_tool_seed.db
-          echo "シードDB生成完了: $(du -sh assets/shift_tool_seed.db | cut -f1)"
 
       - name: .app をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm
@@ -146,16 +127,12 @@ jobs:
             ## ダウンロード
 
             ### Windows
-            `SDU-Shift.exe` と `shift_tool.db` を**同じフォルダ**に置いて実行してください。
+            `SDU-Shift.exe` をダウンロードして実行してください。DBは初回起動時に自動作成されます。
 
-            | ファイル | 説明 |
-            |---|---|
-            | `SDU-Shift.exe` | アプリ本体（Windows 10/11 64bit） |
-            | `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日・38名） |
+            > SmartScreen の警告が出た場合は「詳細情報」→「実行」で起動できます。
 
             ### macOS
             `SDU-Shift-mac.zip` を解凍して `SDU-Shift.app` をダブルクリックして起動してください。
-            テストデータは初回起動時に自動でセットアップされます。
             データは `~/Library/Application Support/SDU-Shift/` に保存されます。
 
             > 初回起動時に「開発元を確認できない」と表示された場合は、
@@ -165,7 +142,6 @@ jobs:
             ${{ github.event.head_commit.message }}
           files: |
             release/SDU-Shift.exe
-            release/shift_tool.db
             release/SDU-Shift-mac.zip
           draft: false
           prerelease: false
