@@ -216,12 +216,25 @@ class ShiftInputView(QWidget):
         # 左右矢印キー: 従業員切り替え
         QShortcut(QKeySequence(Qt.Key.Key_Left),  self).activated.connect(self._on_prev_employee)
         QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(self._on_next_employee)
-        # 0〜9キー: シフトパターン選択（0=休み, 1〜=各パターン）
-        for i in range(min(10, len(_COMBO_ITEMS))):
-            key = getattr(Qt.Key, f"Key_{i}")
-            QShortcut(QKeySequence(key), self).activated.connect(
-                lambda _=False, idx=i: self._select_pattern_by_key(idx)
-            )
+        # 0〜9キー: QComboBox がフォーカスを持つときQShortcutが効かないため
+        # アプリレベルのイベントフィルタで処理する
+        from PyQt6.QtWidgets import QApplication
+        QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        from PyQt6.QtWidgets import QApplication, QLineEdit
+        if self.isVisible() and event.type() == QEvent.Type.KeyPress:
+            focused = QApplication.focusWidget()
+            # テキスト入力中（備考欄・カスタム時刻欄）は横取りしない
+            if not isinstance(focused, QLineEdit):
+                key = event.key()
+                if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
+                    idx = key - Qt.Key.Key_0
+                    if idx < len(_COMBO_ITEMS):
+                        self._select_pattern_by_key(idx)
+                        return True
+        return False
 
     def _select_pattern_by_key(self, combo_index: int):
         """現在選択中の行のシフトパターンをコンボインデックスで設定"""

@@ -258,24 +258,8 @@ def solve(
     status_name = solver.status_name(status)
 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        result_assignments = []
-        for emp in active_employees:
-            for ds in date_strs:
-                for slot in slots:
-                    for pos in positions:
-                        val = solver.value(assign[emp.id][ds][slot.value][pos.value])
-                        if val:
-                            result_assignments.append(
-                                ShiftAssignment(
-                                    employee_id=emp.id,
-                                    date=ds,
-                                    time_slot=slot,
-                                    position=pos,
-                                )
-                            )
-        # 警告: 人員ギリギリ日を検出
+        result_assignments = _extract_assignments(solver, assign, active_employees, date_strs, slots, positions)
         _check_warnings(result_assignments, date_strs, warnings)
-
         return SolveResult(
             status="optimal" if status == cp_model.OPTIMAL else "feasible",
             assignments=result_assignments,
@@ -284,15 +268,160 @@ def solve(
             solve_time_sec=elapsed,
         )
     else:
-        # 実行不可能 → どの制約が原因か特定
+        # 実行不可能 → 制約違反の診断メッセージを収集
         errs = _diagnose_infeasible(active_employees, date_strs, req_map)
-        return SolveResult(
-            status="infeasible",
-            assignments=[],
-            warnings=warnings,
-            errors=errs,
-            solve_time_sec=elapsed,
+
+        # ベストエフォート生成: 人数・リーダー制約をソフト化して再実行
+        best_assignments, best_warnings = _solve_best_effort(
+            active_employees, date_strs, slots, positions,
+            req_map, req_hours
         )
+        _check_warnings(best_assignments, date_strs, best_warnings)
+
+        return SolveResult(
+            status="feasible",   # ベストエフォートなので feasible 扱い
+            assignments=best_assignments,
+            warnings=best_warnings,
+            errors=errs,         # どこが不足しているかを表示
+            solve_time_sec=time.time() - t0,
+        )
+
+
+def _extract_assignments(solver, assign, active_employees, date_strs, slots, positions) -> list[ShiftAssignment]:
+    result = []
+    for emp in active_employees:
+        for ds in date_strs:
+            for slot in slots:
+                for pos in positions:
+                    if solver.value(assign[emp.id][ds][slot.value][pos.value]):
+                        result.append(ShiftAssignment(
+                            employee_id=emp.id, date=ds,
+                            time_slot=slot, position=pos,
+                        ))
+    return result
+
+
+def _solve_best_effort(
+    active_employees, date_strs, slots, positions,
+    req_map, req_hours
+) -> tuple[list[ShiftAssignment], list[str]]:
+    """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
+    import time
+    model = cp_model.CpModel()
+
+    assign: dict = {}
+    for emp in active_employees:
+        assign[emp.id] = {}
+        for ds in date_strs:
+            assign[emp.id][ds] = {}
+            for slot in slots:
+                assign[emp.id][ds][slot.value] = {}
+                for pos in positions:
+                    assign[emp.id][ds][slot.value][pos.value] = model.new_bool_var(
+                        f"be_{emp.id}_{ds}_{slot.value}_{pos.value}"
+                    )
+
+    # 絶対制約 0-3（ポジション・希望なし・1枠1ポジション・アルバイト1日制限）
+    for emp in active_employees:
+        if emp.primary_position is not None:
+            restricted = [p for p in positions if p.value != emp.primary_position.value]
+            for ds in date_strs:
+                for slot in slots:
+                    for pos in restricted:
+                        model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+
+    for emp in active_employees:
+        for ds in date_strs:
+            for slot in slots:
+                can_work = req_map.get((emp.id, ds, slot.value), False)
+                for pos in positions:
+                    if not can_work:
+                        model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+
+    for emp in active_employees:
+        for ds in date_strs:
+            for slot in slots:
+                model.add_at_most_one(
+                    assign[emp.id][ds][slot.value][pos.value] for pos in positions
+                )
+
+    for emp in active_employees:
+        if emp.employment_type.value == "part_time":
+            for ds in date_strs:
+                all_vars = [
+                    assign[emp.id][ds][slot.value][pos.value]
+                    for slot in slots for pos in positions
+                ]
+                model.add(sum(all_vars) <= 1)
+
+    penalty_terms = []
+    STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
+    LEADER_PENALTY = 800_000    # リーダー不足ペナルティ
+
+    for ds in date_strs:
+        for slot in slots:
+            for pos in positions:
+                constraint = SHIFT_CONSTRAINTS.get((slot, pos))
+                if not constraint:
+                    continue
+                min_req = constraint["min"]
+                max_req = constraint["max"]
+                staff_vars = [assign[emp.id][ds][slot.value][pos.value] for emp in active_employees]
+
+                # 最大は引き続き絶対制約
+                model.add(sum(staff_vars) <= max_req)
+
+                # 最低人数はソフト制約: shortfall 分をペナルティ
+                shortfall = model.new_int_var(0, min_req, f"sf_{ds}_{slot.value}_{pos.value}")
+                model.add(sum(staff_vars) + shortfall >= min_req)
+                penalty_terms.append(STAFF_PENALTY * shortfall)
+
+                # リーダー最低数もソフト制約
+                min_leader = constraint.get("min_leader", 0)
+                if min_leader > 0:
+                    leader_vars = [
+                        assign[emp.id][ds][slot.value][pos.value]
+                        for emp in active_employees if emp.is_leader(pos.value)
+                    ]
+                    lshortfall = model.new_int_var(0, min_leader, f"lsf_{ds}_{slot.value}_{pos.value}")
+                    model.add(sum(leader_vars) + lshortfall >= min_leader)
+                    penalty_terms.append(LEADER_PENALTY * lshortfall)
+
+    # 元のソフト制約（P1: 人件費、P3: 希望充当）も追加
+    DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
+    for emp in active_employees:
+        for ds in date_strs:
+            for slot in slots:
+                for pos in positions:
+                    var = assign[emp.id][ds][slot.value][pos.value]
+                    hours = req_hours.get((emp.id, ds, slot.value), DEFAULT_SLOT_HOURS[slot])
+                    penalty_terms.append(int(1000 * hours * 10) * var)
+
+    FT_PENALTY = 200_000
+    PT_PENALTY = 100
+    for emp in active_employees:
+        penalty = FT_PENALTY if emp.employment_type.value == "full_time" else PT_PENALTY
+        for ds in date_strs:
+            for slot in slots:
+                if req_map.get((emp.id, ds, slot.value)):
+                    worked = sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
+                    not_worked = model.new_bool_var(f"nw_be_{emp.id}_{ds}_{slot.value}")
+                    model.add(worked == 0).only_enforce_if(not_worked)
+                    model.add(worked >= 1).only_enforce_if(not_worked.negated())
+                    penalty_terms.append(penalty * not_worked)
+
+    model.minimize(sum(penalty_terms))
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 30.0
+    solver.parameters.num_search_workers = 4
+    status = solver.solve(model)
+
+    warnings: list[str] = []
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return _extract_assignments(solver, assign, active_employees, date_strs, slots, positions), warnings
+    # フォールバック: 全員不在
+    return [], ["⚠️ ベストエフォート生成にも失敗しました。希望シフトの入力状況を確認してください。"]
 
 
 def _check_warnings(assignments: list[ShiftAssignment], date_strs: list[str], warnings: list[str]):
