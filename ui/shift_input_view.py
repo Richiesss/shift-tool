@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QMessageBox, QGroupBox, QLineEdit, QSizePolicy,
     QFrame
 )
-from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtCore import Qt, QDate, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush, QKeySequence, QShortcut
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
@@ -25,10 +25,23 @@ for _p in ALL_PATTERNS:
 
 
 class _ShiftComboBox(QComboBox):
-    """マウスホイールで選択変更しないコンボボックス"""
+    """マウスホイールで選択変更しない / 数字キーでパターン直接選択"""
+
+    # 0〜9 キーが押されたときにコンボインデックスを通知
+    number_pressed = pyqtSignal(int)
 
     def wheelEvent(self, event):
         event.ignore()  # ホバー中のスクロールを無視
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        # テンキー（KeypadModifier）は除外し、上段の 0〜9 のみ処理
+        if (Qt.Key.Key_0 <= key <= Qt.Key.Key_9
+                and not (event.modifiers() & Qt.KeyboardModifier.KeypadModifier)):
+            self.number_pressed.emit(key - Qt.Key.Key_0)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 def _make_pattern_combo() -> _ShiftComboBox:
@@ -223,52 +236,39 @@ class ShiftInputView(QWidget):
         # 左右矢印キー: 従業員切り替え
         QShortcut(QKeySequence(Qt.Key.Key_Left),  self).activated.connect(self._on_prev_employee)
         QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(self._on_next_employee)
-        # 0〜9キー: QComboBox がフォーカスを持つときQShortcutが効かないため
-        # アプリレベルのイベントフィルタで処理する
-        from PyQt6.QtWidgets import QApplication
-        QApplication.instance().installEventFilter(self)
+        # 0〜9キー:
+        #   ・コンボにフォーカスがある場合 → _ShiftComboBox.keyPressEvent が直接処理
+        #   ・日付セル等にフォーカスがある場合 → テーブルへのフィルタで処理
+        self.table.installEventFilter(self)
 
     def eventFilter(self, obj, event):
+        """テーブルにフォーカスがある状態での数字キーを処理"""
         from PyQt6.QtCore import QEvent
-        from PyQt6.QtWidgets import QApplication, QLineEdit
-        if self.isVisible() and event.type() == QEvent.Type.KeyPress:
-            focused = QApplication.focusWidget()
-            # テキスト入力中（備考欄・カスタム時刻欄）は横取りしない
-            if not isinstance(focused, QLineEdit):
-                key = event.key()
-                if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
-                    idx = key - Qt.Key.Key_0
-                    if idx < len(_COMBO_ITEMS):
-                        self._select_pattern_by_key(idx)
-                        return True
+        if obj is self.table and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if (Qt.Key.Key_0 <= key <= Qt.Key.Key_9
+                    and not (event.modifiers() & Qt.KeyboardModifier.KeypadModifier)):
+                idx = key - Qt.Key.Key_0
+                if idx < len(_COMBO_ITEMS):
+                    self._select_pattern_for_row(self.table.currentRow(), idx)
+                    return True
         return False
 
-    def _select_pattern_by_key(self, combo_index: int):
-        """現在フォーカスのある行（またはテーブル選択行）のシフトパターンをインデックスで設定"""
-        from PyQt6.QtWidgets import QApplication
-
-        # フォーカスがいずれかのコンボにある場合はそのセルを優先
-        focused = QApplication.focusWidget()
-        for date_str, cell in self._pattern_cells.items():
-            if cell.combo is focused:
-                if cell.combo.isEnabled() and combo_index < cell.combo.count():
-                    cell.combo.setCurrentIndex(combo_index)
-                    # 対応する行番号を探して色更新
-                    for r in range(self.table.rowCount()):
-                        it = self.table.item(r, 0)
-                        if it and it.data(Qt.ItemDataRole.UserRole) == date_str:
-                            self._apply_row_color(r, date_str, False)
-                            break
-                return
-
-        # フォーカスがコンボにない場合はテーブルの選択行を使用
-        row = self.table.currentRow()
+    def _select_pattern_for_row(self, row: int, combo_index: int):
+        """指定行のシフトパターンをコンボインデックスで設定"""
         if row < 0:
             return
         item = self.table.item(row, 0)
         if not item:
             return
         date_str = item.data(Qt.ItemDataRole.UserRole)
+        cell = self._pattern_cells.get(date_str)
+        if cell and cell.combo.isEnabled() and combo_index < cell.combo.count():
+            cell.combo.setCurrentIndex(combo_index)
+            self._apply_row_color(row, date_str, False)
+
+    def _on_combo_number_key(self, combo_index: int, date_str: str, row: int):
+        """コンボが number_pressed シグナルを emit したときの処理"""
         cell = self._pattern_cells.get(date_str)
         if cell and cell.combo.isEnabled() and combo_index < cell.combo.count():
             cell.combo.setCurrentIndex(combo_index)
@@ -425,6 +425,11 @@ class ShiftInputView(QWidget):
                 if fp:
                     default_pid = default_pattern_from_fixed(fp.breakfast, fp.dinner)
                     cell.set_pattern(default_pid)
+
+            # コンボの数字キーシグナルをビューのハンドラに接続
+            cell.combo.number_pressed.connect(
+                lambda idx, ds=date_str, r=row: self._on_combo_number_key(idx, ds, r)
+            )
 
             self.table.setCellWidget(row, 1, cell)
             self._pattern_cells[date_str] = cell
