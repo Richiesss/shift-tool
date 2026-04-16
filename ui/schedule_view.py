@@ -15,7 +15,7 @@ from models.employee import Employee
 from models.schedule import ShiftAssignment, ShiftRequest
 from utils.constants import (
     TimeSlot, Position, PrimaryPosition, SkillLevel,
-    DAY_OF_WEEK_LABELS, SHIFT_CONSTRAINTS
+    DAY_OF_WEEK_LABELS
 )
 from utils.theme import theme
 
@@ -61,6 +61,12 @@ class ScheduleView(QWidget):
         header.addWidget(QLabel("期間:"))
         header.addWidget(self.period_combo)
 
+        self._btn_confirm = QPushButton("✅ 確定する")
+        self._btn_confirm.setFixedHeight(32)
+        self._btn_confirm.setEnabled(False)
+        self._btn_confirm.clicked.connect(self._on_toggle_confirm)
+        header.addWidget(self._btn_confirm)
+
         self._btn_output = QPushButton("出力 →")
         self._btn_output.setFixedHeight(32)
         self._btn_output.clicked.connect(self._on_output)
@@ -99,6 +105,20 @@ class ScheduleView(QWidget):
 
         self.tab_widget.addTab(tab_b, "🌅 朝食")
         self.tab_widget.addTab(tab_d, "🌆 ディナー")
+
+        # 月間勤務集計タブ
+        self._monthly_table = QTableWidget()
+        self._monthly_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._monthly_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self._monthly_table.verticalHeader().setVisible(False)
+        self._monthly_table.setAlternatingRowColors(True)
+        self._monthly_table.setShowGrid(True)
+        monthly_tab = QWidget()
+        monthly_layout = QVBoxLayout(monthly_tab)
+        monthly_layout.setContentsMargins(0, 6, 0, 0)
+        monthly_layout.addWidget(self._monthly_table)
+        self.tab_widget.addTab(monthly_tab, "📊 月間集計")
+
         layout.addWidget(self.tab_widget)
 
         self.status_label = QLabel("")
@@ -209,6 +229,7 @@ class ScheduleView(QWidget):
 
     def apply_theme(self):
         self._apply_styles()
+        self._update_confirm_button()
         self._render_table()
 
     # ── データ読み込み ─────────────────────────────────────────────────────
@@ -239,9 +260,11 @@ class ScheduleView(QWidget):
                       self.sum_table_b, self.sum_table_d):
                 t.setRowCount(0)
                 t.setColumnCount(0)
+            self._btn_confirm.setEnabled(False)
             return
         self._load_data()
         self._render_table()
+        self._update_confirm_button()
 
     def _load_data(self):
         self._employees = repo.get_all_employees()
@@ -269,6 +292,57 @@ class ScheduleView(QWidget):
             self.emp_table_b, self.sum_table_b, TimeSlot.BREAKFAST, self._warn_label_b)
         self._render_slot_table(
             self.emp_table_d, self.sum_table_d, TimeSlot.DINNER,    self._warn_label_d)
+        self._render_monthly_tab()
+
+    def _render_monthly_tab(self):
+        if not self._period or not self._employees:
+            self._monthly_table.setRowCount(0)
+            return
+
+        headers = ["氏名", "朝食(H)", "朝食(K)", "ディナー(H)", "ディナー(K)", "朝食計", "ディナー計", "合計", "応援"]
+        self._monthly_table.setColumnCount(len(headers))
+        self._monthly_table.setHorizontalHeaderLabels(headers)
+        self._monthly_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents)
+        for ci in range(1, len(headers)):
+            self._monthly_table.setColumnWidth(ci, 72)
+
+        # emp_id -> {bh, bk, dh, dk, reinforcement}
+        counts: dict[int, dict] = {
+            e.id: {"bh": 0, "bk": 0, "dh": 0, "dk": 0, "reinf": 0}
+            for e in self._employees
+        }
+        for (emp_id, ds, slot_v), (pos_v, is_reinf) in self._assignments.items():
+            if emp_id not in counts:
+                continue
+            key = ("b" if slot_v == "breakfast" else "d") + ("h" if pos_v == "hall" else "k")
+            counts[emp_id][key] += 1
+            if is_reinf:
+                counts[emp_id]["reinf"] += 1
+
+        self._monthly_table.setRowCount(len(self._employees))
+        c = theme.c
+        for row, emp in enumerate(self._employees):
+            d = counts[emp.id]
+            bh, bk = d["bh"], d["bk"]
+            dh, dk = d["dh"], d["dk"]
+            b_total = bh + bk
+            d_total = dh + dk
+            total   = b_total + d_total
+            reinf   = d["reinf"]
+
+            vals = [emp.name, bh, bk, dh, dk, b_total, d_total, total, reinf]
+            for ci, val in enumerate(vals):
+                item = QTableWidgetItem(str(val))
+                if ci > 0:
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if ci == 7 and total > 0:
+                    item.setBackground(QBrush(QColor(c["cell_assigned"])))
+                if ci == 8 and reinf > 0:
+                    item.setBackground(QBrush(QColor(c["cell_reinforcement"])))
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                self._monthly_table.setItem(row, ci, item)
+            self._monthly_table.setRowHeight(row, 28)
 
     def _render_slot_table(self, emp_table: QTableWidget, sum_table: QTableWidget,
                            slot: TimeSlot, warn_label: QLabel):
@@ -439,7 +513,8 @@ class ScheduleView(QWidget):
         label_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         table.setItem(row, 0, label_item)
 
-        constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
+        shift_constraints = repo.get_shift_constraints()
+        constraint = shift_constraints.get((slot, pos), {})
         min_req    = constraint.get("min", 0)
         min_leader = constraint.get("min_leader", 0)
 
@@ -465,6 +540,7 @@ class ScheduleView(QWidget):
 
     def _update_constraint_warnings(self, warn_label: QLabel, slot: TimeSlot,
                                     dates: list, count_map: dict, leader_map: dict):
+        shift_constraints = repo.get_shift_constraints()
         violations = []
         for d in dates:
             ds = d.isoformat()
@@ -472,7 +548,7 @@ class ScheduleView(QWidget):
             for pos in Position:
                 cnt = count_map[(ds, pos.value)]
                 ld  = leader_map[(ds, pos.value)]
-                constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
+                constraint = shift_constraints.get((slot, pos), {})
                 min_req    = constraint.get("min", 0)
                 min_leader = constraint.get("min_leader", 0)
                 if cnt < min_req:
@@ -500,6 +576,8 @@ class ScheduleView(QWidget):
         dlg.exec()
 
     def _on_cell_clicked(self, row: int, col: int, table: QTableWidget, slot: TimeSlot):
+        if self._period and self._period.status == "confirmed":
+            return  # 確定済みは編集不可
         item = table.item(row, col)
         if not item:
             return
@@ -563,6 +641,53 @@ class ScheduleView(QWidget):
                 repo.add_assignment(self._period.id, assignment)
                 self._assignments[(emp_id, ds, slot_v)] = (dlg.selected_position.value, True)
                 self._render_table()
+
+    def _update_confirm_button(self):
+        if not self._period:
+            self._btn_confirm.setEnabled(False)
+            return
+        self._btn_confirm.setEnabled(True)
+        is_confirmed = (self._period.status == "confirmed")
+        c = theme.c
+        if is_confirmed:
+            self._btn_confirm.setText("🔒 確定済み（解除する）")
+            self._btn_confirm.setStyleSheet(
+                f"QPushButton {{ background:{c['surface2']}; border:1px solid {c['border2']}; "
+                f"border-radius:5px; padding:0 14px; color:{c['text2']}; }}"
+                f" QPushButton:hover {{ background:{c['danger_bg']}; color:{c['danger_text']}; }}"
+            )
+        else:
+            self._btn_confirm.setText("✅ 確定する")
+            self._btn_confirm.setStyleSheet(
+                f"QPushButton {{ background:#16a34a; color:white; border-radius:5px; padding:0 14px; }}"
+                f" QPushButton:hover {{ background:#15803d; }}"
+            )
+
+    def _on_toggle_confirm(self):
+        if not self._period:
+            return
+        is_confirmed = (self._period.status == "confirmed")
+        if is_confirmed:
+            reply = QMessageBox.question(
+                self, "確定解除",
+                "このシフト表の確定を解除しますか？\n解除後は再び編集可能になります。",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            self._period.status = "draft"
+        else:
+            reply = QMessageBox.question(
+                self, "シフト確定",
+                "このシフト表を確定しますか？\n確定後は編集がロックされます。",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            self._period.status = "confirmed"
+        repo.save_period(self._period)
+        self._update_confirm_button()
+        self._render_table()
 
     def _on_output(self):
         if not self._period:

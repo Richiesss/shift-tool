@@ -89,6 +89,15 @@ def initialize_db():
             position    TEXT NOT NULL CHECK(position IN ('hall','kitchen')),
             UNIQUE(period_id, employee_id, date, time_slot)
         );
+
+        CREATE TABLE IF NOT EXISTS shift_constraints (
+            slot        TEXT NOT NULL,
+            position    TEXT NOT NULL,
+            min_staff   INTEGER NOT NULL DEFAULT 2,
+            max_staff   INTEGER NOT NULL DEFAULT 4,
+            min_leader  INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (slot, position)
+        );
     """)
 
     # マイグレーション: 新カラムを既存テーブルへ追加
@@ -105,6 +114,19 @@ def initialize_db():
             cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
         except Exception:
             pass  # 既に存在する場合は無視
+
+    # シフト制約のデフォルト値を投入（既に存在する場合は無視）
+    default_constraints = [
+        ("breakfast", "hall",    3, 4, 1),
+        ("breakfast", "kitchen", 3, 3, 1),
+        ("dinner",    "hall",    2, 3, 1),
+        ("dinner",    "kitchen", 3, 3, 2),
+    ]
+    for slot, pos, mn, mx, ml in default_constraints:
+        cur.execute(
+            "INSERT OR IGNORE INTO shift_constraints (slot, position, min_staff, max_staff, min_leader) VALUES (?,?,?,?,?)",
+            (slot, pos, mn, mx, ml)
+        )
 
     conn.commit()
     conn.close()

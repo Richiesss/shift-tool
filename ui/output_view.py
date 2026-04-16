@@ -51,7 +51,13 @@ class OutputDialog(QDialog):
         path_group = QGroupBox("保存先")
         pl = QHBoxLayout(path_group)
         self.path_edit = QLineEdit()
-        default_name = f"シフト表_{self.period.start_date}.pdf"
+        # 自動ファイル名: シフト表_YYYY年M月D日-M月D日
+        from datetime import date as _date
+        sd = _date.fromisoformat(self.period.start_date)
+        ed = _date.fromisoformat(self.period.end_date)
+        default_name = (
+            f"シフト表_{sd.year}年{sd.month}月{sd.day}日-{ed.month}月{ed.day}日.pdf"
+        )
         default_dir = os.path.expanduser("~/Desktop")
         self.path_edit.setText(os.path.join(default_dir, default_name))
         btn_browse = QPushButton("参照...")

@@ -5,12 +5,14 @@ from datetime import datetime
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QGroupBox, QFileDialog, QMessageBox
+    QGroupBox, QFileDialog, QMessageBox, QFormLayout, QSpinBox,
+    QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 from db.database import DB_PATH
 from utils.theme import theme
+from utils.constants import TimeSlot, Position
 
 
 class SettingsView(QWidget):
@@ -57,6 +59,59 @@ class SettingsView(QWidget):
         backup_layout.addWidget(self._btn_backup)
         layout.addWidget(backup_group)
 
+        # ── シフト人員制約 ────────────────────────────────────────────
+        constraint_group = QGroupBox("シフト人員設定")
+        constraint_layout = QVBoxLayout(constraint_group)
+        constraint_layout.setSpacing(8)
+
+        note_c = QLabel("各時間帯・ポジションの最低/最大人数とリーダー最低人数を設定します。")
+        note_c.setWordWrap(True)
+        constraint_layout.addWidget(note_c)
+
+        grid_widget = QWidget()
+        grid_layout = QFormLayout(grid_widget)
+        grid_layout.setSpacing(6)
+
+        # (TimeSlot, Position) -> (min_spin, max_spin, leader_spin)
+        self._constraint_spins: dict[tuple, tuple] = {}
+
+        _LABELS = {
+            (TimeSlot.BREAKFAST, Position.HALL):    "朝食 ホール",
+            (TimeSlot.BREAKFAST, Position.KITCHEN): "朝食 キッチン",
+            (TimeSlot.DINNER,    Position.HALL):    "ディナー ホール",
+            (TimeSlot.DINNER,    Position.KITCHEN): "ディナー キッチン",
+        }
+        for key, label in _LABELS.items():
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+
+            min_spin = QSpinBox(); min_spin.setRange(0, 20); min_spin.setFixedWidth(60)
+            max_spin = QSpinBox(); max_spin.setRange(0, 20); max_spin.setFixedWidth(60)
+            ldr_spin = QSpinBox(); ldr_spin.setRange(0, 20); ldr_spin.setFixedWidth(60)
+
+            row_layout.addWidget(QLabel("最低:"))
+            row_layout.addWidget(min_spin)
+            row_layout.addWidget(QLabel("最大:"))
+            row_layout.addWidget(max_spin)
+            row_layout.addWidget(QLabel("リーダー最低:"))
+            row_layout.addWidget(ldr_spin)
+            row_layout.addStretch()
+
+            grid_layout.addRow(label, row_widget)
+            self._constraint_spins[key] = (min_spin, max_spin, ldr_spin)
+
+        constraint_layout.addWidget(grid_widget)
+
+        self._btn_save_constraints = QPushButton("人員設定を保存")
+        self._btn_save_constraints.setFixedHeight(36)
+        self._btn_save_constraints.clicked.connect(self._on_save_constraints)
+        constraint_layout.addWidget(self._btn_save_constraints)
+        layout.addWidget(constraint_group)
+
+        self._load_constraints()
+
         # ── インポート（復元）────────────────────────────────────────
         import_group = QGroupBox("インポート（復元）")
         import_layout = QVBoxLayout(import_group)
@@ -75,8 +130,34 @@ class SettingsView(QWidget):
 
         self._apply_styles()
 
+    def _load_constraints(self):
+        from db import repositories as repo
+        constraints = repo.get_shift_constraints()
+        for key, (mn_spin, mx_spin, ldr_spin) in self._constraint_spins.items():
+            c = constraints.get(key, {"min": 0, "max": 0, "min_leader": 0})
+            mn_spin.setValue(c["min"])
+            mx_spin.setValue(c["max"])
+            ldr_spin.setValue(c["min_leader"])
+
+    def _on_save_constraints(self):
+        from db import repositories as repo
+        constraints = {}
+        for key, (mn_spin, mx_spin, ldr_spin) in self._constraint_spins.items():
+            constraints[key] = {
+                "min":        mn_spin.value(),
+                "max":        mx_spin.value(),
+                "min_leader": ldr_spin.value(),
+            }
+        repo.save_shift_constraints(constraints)
+        QMessageBox.information(self, "保存完了", "シフト人員設定を保存しました。")
+
     def _apply_styles(self):
         c = theme.c
+        self._btn_save_constraints.setStyleSheet(
+            f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
+            f"border-radius:6px; padding:0 16px; color:{c['text']}; }}"
+            f" QPushButton:hover {{ background:{c['surface2']}; }}"
+        )
         self._btn_backup.setStyleSheet(
             f"QPushButton {{ background:{c['primary']}; color:white; border-radius:6px; padding:0 16px; font-weight:bold; }}"
             f" QPushButton:hover {{ background:{c['primary_hover']}; }}"

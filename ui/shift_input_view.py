@@ -122,6 +122,7 @@ class ShiftInputView(QWidget):
         self._pattern_cells: dict[str, _PatternCellWidget] = {}
         # date_str -> QLineEdit (備考)
         self._note_edits: dict[str, QLineEdit] = {}
+        self._saved_snapshot: dict = {}   # 保存済み状態のスナップショット
         self._build_ui()
         self._load_periods()
 
@@ -165,6 +166,13 @@ class ShiftInputView(QWidget):
         self._btn_set.setFixedHeight(32)
         self._btn_set.clicked.connect(self._on_set_period)
         period_layout.addWidget(self._btn_set)
+
+        self._btn_del_period = QPushButton("期間削除")
+        self._btn_del_period.setFixedHeight(32)
+        self._btn_del_period.setEnabled(False)
+        self._btn_del_period.clicked.connect(self._on_delete_period)
+        period_layout.addWidget(self._btn_del_period)
+
         period_layout.addStretch()
         layout.addWidget(period_group)
 
@@ -191,6 +199,22 @@ class ShiftInputView(QWidget):
         emp_nav.addWidget(self._btn_prev)
         emp_nav.addWidget(self._btn_next)
         layout.addLayout(emp_nav)
+
+        # 前期間コピー行
+        copy_row = QHBoxLayout()
+        copy_lbl = QLabel("前期間から:")
+        copy_lbl.setStyleSheet("color:#6b7280; font-size:11px;")
+        self._prev_period_combo = QComboBox()
+        self._prev_period_combo.setMinimumWidth(200)
+        self._btn_copy = QPushButton("この従業員の希望をコピー")
+        self._btn_copy.setFixedHeight(28)
+        self._btn_copy.setEnabled(False)
+        self._btn_copy.clicked.connect(self._on_copy_from_prev)
+        copy_row.addWidget(copy_lbl)
+        copy_row.addWidget(self._prev_period_combo)
+        copy_row.addWidget(self._btn_copy)
+        copy_row.addStretch()
+        layout.addLayout(copy_row)
 
         # パターン凡例
         legend = QHBoxLayout()
@@ -289,6 +313,18 @@ class ShiftInputView(QWidget):
             f"QPushButton {{ background:{c['success']}; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }}"
             f" QPushButton:hover {{ background:{c['success_hover']}; }}"
         )
+        self._btn_copy.setStyleSheet(
+            f"QPushButton {{ border:1px solid {c['border2']}; border-radius:4px; "
+            f"padding:0 10px; color:{c['text']}; background:{c['surface']}; }}"
+            f" QPushButton:hover {{ background:{c['surface2']}; }}"
+            f" QPushButton:disabled {{ opacity:0.4; }}"
+        )
+        self._btn_del_period.setStyleSheet(
+            f"QPushButton {{ background:{c['danger_bg']}; border:1px solid {c['danger_border']}; "
+            f"border-radius:5px; padding:0 12px; color:{c['danger_text']}; }}"
+            f" QPushButton:hover {{ background:{c['danger_bg']}; }}"
+            f" QPushButton:disabled {{ opacity:0.4; }}"
+        )
         self.progress_label.setStyleSheet(f"color:{c['text2']};")
         for lbl, color_key in self._legend_labels:
             lbl.setStyleSheet(
@@ -310,11 +346,90 @@ class ShiftInputView(QWidget):
             self.period_combo.addItem(f"{p.start_date} 〜 {p.end_date}", p)
         self.period_combo.blockSignals(False)
 
+        # コピー元コンボ: 現在の期間を除く
+        self._prev_period_combo.blockSignals(True)
+        self._prev_period_combo.clear()
+        self._prev_period_combo.addItem("（コピー元期間を選択）", None)
+        for p in periods:
+            if self._period and p.id == self._period.id:
+                continue
+            self._prev_period_combo.addItem(f"{p.start_date} 〜 {p.end_date}", p)
+        self._prev_period_combo.blockSignals(False)
+        self._btn_copy.setEnabled(
+            self._prev_period_combo.count() > 1 and bool(self._period)
+        )
+
     def _on_period_changed(self, idx):
         p = self.period_combo.currentData()
+        self._btn_del_period.setEnabled(p is not None)
         if p:
             self._period = p
             self._load_employees()
+
+    def _on_copy_from_prev(self):
+        src_period = self._prev_period_combo.currentData()
+        if not src_period or not self._period or not self._employees:
+            return
+        emp = self._employees[self._current_idx]
+        src_requests = repo.get_shift_requests(src_period.id)
+        src_map = {r.date: r for r in src_requests if r.employee_id == emp.id}
+        if not src_map:
+            QMessageBox.information(
+                self, "コピー元なし",
+                f"期間「{src_period.start_date} 〜 {src_period.end_date}」に\n"
+                f"「{emp.name}さん」の希望データがありません。"
+            )
+            return
+        # 日付のオフセットを計算して対応付け
+        from datetime import date as dt_date, timedelta
+        src_dates = src_period.date_range()
+        dst_dates = self._period.date_range()
+        # 曜日ベースでマッピング（同じ曜日オフセット順に対応）
+        for i, dst_d in enumerate(dst_dates):
+            if i < len(src_dates):
+                src_ds = src_dates[i].isoformat()
+            else:
+                break
+            src_req = src_map.get(src_ds)
+            dst_ds = dst_d.isoformat()
+            cell = self._pattern_cells.get(dst_ds)
+            if cell and src_req and cell.combo.isEnabled():
+                cell.set_pattern(src_req.pattern_id, src_req.custom_start, src_req.custom_end)
+                row = next(
+                    (r for r in range(self.table.rowCount())
+                     if (self.table.item(r, 0) or type('', (), {'data': lambda *_: None})()).data(
+                         Qt.ItemDataRole.UserRole) == dst_ds),
+                    -1
+                )
+                if row >= 0:
+                    self._apply_row_color(row, dst_ds, False)
+        QMessageBox.information(
+            self, "コピー完了",
+            f"「{src_period.start_date} 〜 {src_period.end_date}」から\n"
+            f"「{emp.name}さん」の希望をコピーしました。\n保存ボタンで確定してください。"
+        )
+
+    def _on_delete_period(self):
+        p = self.period_combo.currentData()
+        if not p:
+            return
+        reply = QMessageBox.question(
+            self, "期間削除の確認",
+            f"期間「{p.start_date} 〜 {p.end_date}」を削除しますか？\n"
+            "関連するシフト希望・アサインデータもすべて削除されます。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        repo.delete_period(p.id)
+        self._period = None
+        self._employees = []
+        self._requests = {}
+        self._pattern_cells = {}
+        self.table.setRowCount(0)
+        self._load_periods()
+        self._btn_del_period.setEnabled(False)
+        self.progress_label.setText("")
 
     def _on_set_period(self):
         start = self.start_date_edit.date().toString("yyyy-MM-dd")
@@ -360,19 +475,58 @@ class ShiftInputView(QWidget):
         total = len(self._employees)
         self.progress_label.setText(f"入力済: {len(filled)} / {total} 名")
 
+    def _current_snapshot(self) -> dict:
+        """現在の入力状態をスナップショットとして返す"""
+        snap = {}
+        for ds, cell in self._pattern_cells.items():
+            snap[ds] = (cell.get_pattern_id(), cell.custom_edit.text())
+        return snap
+
+    def _has_unsaved_changes(self) -> bool:
+        return self._current_snapshot() != self._saved_snapshot
+
+    def _confirm_leave(self) -> bool:
+        """未保存の変更がある場合に確認ダイアログを表示。離脱してよければ True を返す"""
+        if not self._has_unsaved_changes():
+            return True
+        reply = QMessageBox.question(
+            self, "未保存の変更",
+            "保存されていない変更があります。\nこのまま切り替えますか？（変更は失われます）",
+            QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+        )
+        return reply == QMessageBox.StandardButton.Discard
+
     def _on_employee_changed(self, idx):
+        if idx == self._current_idx:
+            return
+        if not self._confirm_leave():
+            # キャンセル: コンボを元に戻す
+            self.emp_combo.blockSignals(True)
+            self.emp_combo.setCurrentIndex(self._current_idx)
+            self.emp_combo.blockSignals(False)
+            return
         self._current_idx = idx
         self._render_table()
 
     def _on_prev_employee(self):
         if self._current_idx > 0:
+            if not self._confirm_leave():
+                return
             self._current_idx -= 1
+            self.emp_combo.blockSignals(True)
             self.emp_combo.setCurrentIndex(self._current_idx)
+            self.emp_combo.blockSignals(False)
+            self._render_table()
 
     def _on_next_employee(self):
         if self._current_idx < len(self._employees) - 1:
+            if not self._confirm_leave():
+                return
             self._current_idx += 1
+            self.emp_combo.blockSignals(True)
             self.emp_combo.setCurrentIndex(self._current_idx)
+            self.emp_combo.blockSignals(False)
+            self._render_table()
 
     # ── テーブル描画 ──────────────────────────────────────────────────────
 
@@ -449,6 +603,9 @@ class ShiftInputView(QWidget):
 
             self.table.setRowHeight(row, 38)
 
+        # テーブル描画後、現在の状態を「保存済み」スナップショットとして記録
+        self._saved_snapshot = self._current_snapshot()
+
     def _apply_row_color(self, row: int, date_str: str, is_unavail: bool):
         """選択パターンに応じて行背景を更新（変更時にも呼べるよう分離）"""
         if is_unavail:
@@ -509,5 +666,6 @@ class ShiftInputView(QWidget):
                 self._requests[(emp.id, date_str)] = req
 
         repo.save_shift_requests(self._period.id, requests)
+        self._saved_snapshot = self._current_snapshot()  # 保存済み状態を更新
         self._update_progress()
         QMessageBox.information(self, "保存完了", f"「{emp.name}さん」の希望シフトを保存しました")

@@ -7,7 +7,7 @@ from models.employee import Employee
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import (
     TimeSlot, Position, SkillLevel, EmploymentType, PrimaryPosition,
-    SHIFT_CONSTRAINTS, LATE_NIGHT_START
+    LATE_NIGHT_START
 )
 
 
@@ -76,6 +76,10 @@ def solve(
 
     active_employees = [e for e in employees if e.is_active]
 
+    # DB から制約を読み込む
+    from db import repositories as repo
+    shift_constraints = repo.get_shift_constraints()
+
     # ── 決定変数 ────────────────────────────────────────────────────────
     # assign[e_id][date_str][slot][pos] = BoolVar
     assign: dict = {}
@@ -136,7 +140,7 @@ def solve(
         for slot in slots:
             for pos in positions:
                 key = (slot, pos)
-                constraint = SHIFT_CONSTRAINTS.get(key)
+                constraint = shift_constraints.get(key)
                 if not constraint:
                     continue
                 staff_vars = [
@@ -151,7 +155,7 @@ def solve(
         for slot in slots:
             for pos in positions:
                 key = (slot, pos)
-                constraint = SHIFT_CONSTRAINTS.get(key)
+                constraint = shift_constraints.get(key)
                 if not constraint:
                     continue
                 min_leader = constraint.get("min_leader", 0)
@@ -289,7 +293,7 @@ def solve(
         # ベストエフォート生成: 人数・リーダー制約をソフト化して再実行
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
-            req_map, req_hours, config
+            req_map, req_hours, config, shift_constraints
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
 
@@ -319,11 +323,15 @@ def _extract_assignments(solver, assign, active_employees, date_strs, slots, pos
 def _solve_best_effort(
     active_employees, date_strs, slots, positions,
     req_map, req_hours, config: SolverConfig | None = None,
+    shift_constraints: dict | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     import time
     if config is None:
         config = SolverConfig()
+    if shift_constraints is None:
+        from db import repositories as repo
+        shift_constraints = repo.get_shift_constraints()
     model = cp_model.CpModel()
 
     assign: dict = {}
@@ -378,7 +386,7 @@ def _solve_best_effort(
     for ds in date_strs:
         for slot in slots:
             for pos in positions:
-                constraint = SHIFT_CONSTRAINTS.get((slot, pos))
+                constraint = shift_constraints.get((slot, pos))
                 if not constraint:
                     continue
                 min_req = constraint["min"]
@@ -444,6 +452,8 @@ def _solve_best_effort(
 
 def _check_warnings(assignments: list[ShiftAssignment], date_strs: list[str], warnings: list[str]):
     from collections import defaultdict
+    from db import repositories as repo
+    shift_constraints = repo.get_shift_constraints()
     count = defaultdict(int)
     for a in assignments:
         count[(a.date, a.time_slot.value, a.position.value)] += 1
@@ -455,7 +465,7 @@ def _check_warnings(assignments: list[ShiftAssignment], date_strs: list[str], wa
         for slot in TimeSlot:
             for pos in Position:
                 c = count[(ds, slot.value, pos.value)]
-                constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
+                constraint = shift_constraints.get((slot, pos), {})
                 if c == constraint.get("min", 0):
                     warnings.append(
                         f"{label} {slot.short_label()} {pos.label()}: "
@@ -471,7 +481,8 @@ def _diagnose_infeasible(
     """実行不可能の原因を診断してエラーメッセージを返す"""
     errors = []
     from collections import defaultdict
-    from utils.constants import SHIFT_CONSTRAINTS
+    from db import repositories as repo
+    shift_constraints = repo.get_shift_constraints()
 
     for ds in date_strs:
         d = date.fromisoformat(ds)
@@ -481,7 +492,7 @@ def _diagnose_infeasible(
         for slot in TimeSlot:
             for pos in Position:
                 key = (slot, pos)
-                constraint = SHIFT_CONSTRAINTS.get(key)
+                constraint = shift_constraints.get(key)
                 if not constraint:
                     continue
 

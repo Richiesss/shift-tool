@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QDialog, QFormLayout, QLineEdit,
     QComboBox, QGroupBox, QCheckBox, QLabel, QMessageBox,
     QCalendarWidget, QDialogButtonBox, QSizePolicy, QFrame,
-    QScrollArea, QGridLayout
+    QScrollArea, QGridLayout, QListWidget, QDateEdit
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
@@ -32,12 +32,19 @@ class EmployeeView(QWidget):
         title.setFont(QFont("", 16, QFont.Weight.Bold))
         header.addWidget(title)
         header.addStretch()
+        self._btn_show_archive = QPushButton("アーカイブを表示")
+        self._btn_show_archive.setFixedHeight(36)
+        self._btn_show_archive.setCheckable(True)
+        self._btn_show_archive.toggled.connect(self._on_toggle_archive)
+        header.addWidget(self._btn_show_archive)
         self._btn_new = QPushButton("＋ 新規登録")
         self._btn_new.setFixedHeight(36)
         self._btn_new.clicked.connect(self._on_new)
         header.addWidget(self._btn_new)
         self._apply_btn_style()
         layout.addLayout(header)
+
+        self._show_archive = False
 
         # テーブル
         self.table = QTableWidget()
@@ -59,6 +66,12 @@ class EmployeeView(QWidget):
 
     def _apply_btn_style(self):
         c = theme.c
+        self._btn_show_archive.setStyleSheet(
+            f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
+            f"border-radius:6px; padding:0 16px; color:{c['text']}; }} "
+            f"QPushButton:checked {{ background:{c['surface2']}; color:{c['text2']}; }} "
+            f"QPushButton:hover {{ background:{c['surface2']}; }}"
+        )
         self._btn_new.setStyleSheet(
             f"QPushButton {{ background:{c['primary']}; color:white; border-radius:6px; "
             f"padding:0 16px; font-weight:bold; }} "
@@ -69,19 +82,33 @@ class EmployeeView(QWidget):
         self._apply_btn_style()
         self.refresh()
 
+    def _on_toggle_archive(self, checked: bool):
+        self._show_archive = checked
+        self._btn_show_archive.setText(
+            "アクティブを表示" if checked else "アーカイブを表示"
+        )
+        self.refresh()
+
     def refresh(self):
-        self.employees = repo.get_all_employees()
+        self.employees = repo.get_all_employees(active_only=not self._show_archive)
         self.table.setRowCount(len(self.employees))
         for row, emp in enumerate(self.employees):
             pp_text = emp.primary_position.label() if emp.primary_position else "どちらでも"
             pt_text = emp.primary_timeslot.short_label() + "専任" if emp.primary_timeslot else "どちらでも"
             skill_text = f"H:{emp.hall_skill.label()} / K:{emp.kitchen_skill.label()}"
+            name_text = emp.name if emp.is_active else f"{emp.name}（アーカイブ）"
             self.table.setItem(row, 0, QTableWidgetItem(str(emp.id)))
-            self.table.setItem(row, 1, QTableWidgetItem(emp.name))
+            self.table.setItem(row, 1, QTableWidgetItem(name_text))
             self.table.setItem(row, 2, QTableWidgetItem(pp_text))
             self.table.setItem(row, 3, QTableWidgetItem(pt_text))
             self.table.setItem(row, 4, QTableWidgetItem(skill_text))
             self.table.setItem(row, 5, QTableWidgetItem(emp.employment_type.label()))
+            if not emp.is_active:
+                from PyQt6.QtGui import QColor, QBrush
+                for col in range(6):
+                    item = self.table.item(row, col)
+                    if item:
+                        item.setForeground(QBrush(QColor("#9ca3af")))
 
             # 操作ボタン
             btn_widget = QWidget()
@@ -89,27 +116,38 @@ class EmployeeView(QWidget):
             btn_layout.setContentsMargins(4, 2, 4, 2)
             btn_layout.setSpacing(6)
 
-            btn_edit = QPushButton("編集")
-            btn_edit.setFixedSize(56, 28)
             c = theme.c
-            btn_edit.setStyleSheet(
-                f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
-                f"border-radius:4px; color:{c['text']}; }} "
-                f"QPushButton:hover {{ background:{c['surface2']}; }}"
-            )
-            btn_edit.clicked.connect(lambda _, e=emp: self._on_edit(e))
+            if emp.is_active:
+                btn_edit = QPushButton("編集")
+                btn_edit.setFixedSize(56, 28)
+                btn_edit.setStyleSheet(
+                    f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
+                    f"border-radius:4px; color:{c['text']}; }} "
+                    f"QPushButton:hover {{ background:{c['surface2']}; }}"
+                )
+                btn_edit.clicked.connect(lambda _, e=emp: self._on_edit(e))
+                btn_layout.addWidget(btn_edit)
 
-            btn_del = QPushButton("削除")
-            btn_del.setFixedSize(56, 28)
-            btn_del.setStyleSheet(
-                f"QPushButton {{ background:{c['danger_bg']}; border:1px solid {c['danger_border']}; "
-                f"border-radius:4px; color:{c['danger_text']}; }} "
-                f"QPushButton:hover {{ background:{c['danger_bg']}; }}"
-            )
-            btn_del.clicked.connect(lambda _, e=emp: self._on_delete(e))
+                btn_del = QPushButton("削除")
+                btn_del.setFixedSize(56, 28)
+                btn_del.setStyleSheet(
+                    f"QPushButton {{ background:{c['danger_bg']}; border:1px solid {c['danger_border']}; "
+                    f"border-radius:4px; color:{c['danger_text']}; }} "
+                    f"QPushButton:hover {{ background:{c['danger_bg']}; }}"
+                )
+                btn_del.clicked.connect(lambda _, e=emp: self._on_delete(e))
+                btn_layout.addWidget(btn_del)
+            else:
+                btn_restore = QPushButton("復元")
+                btn_restore.setFixedSize(56, 28)
+                btn_restore.setStyleSheet(
+                    f"QPushButton {{ background:{c['primary']}; border:none; "
+                    f"border-radius:4px; color:white; }} "
+                    f"QPushButton:hover {{ background:{c['primary_hover']}; }}"
+                )
+                btn_restore.clicked.connect(lambda _, e=emp: self._on_restore(e))
+                btn_layout.addWidget(btn_restore)
 
-            btn_layout.addWidget(btn_edit)
-            btn_layout.addWidget(btn_del)
             self.table.setCellWidget(row, 6, btn_widget)
             self.table.setRowHeight(row, 40)
 
@@ -123,6 +161,16 @@ class EmployeeView(QWidget):
         dlg = EmployeeDialog(employee=emp, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             repo.save_employee(dlg.employee)
+            self.refresh()
+
+    def _on_restore(self, emp: Employee):
+        reply = QMessageBox.question(
+            self, "復元確認",
+            f"「{emp.name}さん」を復元しますか？\n（アクティブな従業員として再登録されます）",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            repo.restore_employee(emp.id)
             self.refresh()
 
     def _on_delete(self, emp: Employee):
@@ -228,6 +276,40 @@ class EmployeeDialog(QDialog):
 
         layout.addWidget(self.parttime_group)
 
+        # 固定不可日
+        unavail_group = QGroupBox("固定不可日（出勤不可の日を登録）")
+        unavail_vl = QVBoxLayout(unavail_group)
+        unavail_vl.setSpacing(6)
+
+        add_row = QHBoxLayout()
+        self._unavail_date_edit = QDateEdit()
+        self._unavail_date_edit.setCalendarPopup(True)
+        self._unavail_date_edit.setDate(QDate.currentDate())
+        self._unavail_date_edit.setDisplayFormat("yyyy/MM/dd")
+        btn_add_unavail = QPushButton("追加")
+        btn_add_unavail.setFixedWidth(56)
+        btn_add_unavail.clicked.connect(self._add_unavail_date)
+        add_row.addWidget(QLabel("日付:"))
+        add_row.addWidget(self._unavail_date_edit)
+        add_row.addWidget(btn_add_unavail)
+        add_row.addStretch()
+        unavail_vl.addLayout(add_row)
+
+        self._unavail_list = QListWidget()
+        self._unavail_list.setMaximumHeight(90)
+        self._unavail_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        unavail_vl.addWidget(self._unavail_list)
+
+        btn_remove_row = QHBoxLayout()
+        btn_remove_row.addStretch()
+        btn_remove_unavail = QPushButton("選択した日を削除")
+        btn_remove_unavail.setFixedHeight(28)
+        btn_remove_unavail.clicked.connect(self._remove_unavail_dates)
+        btn_remove_row.addWidget(btn_remove_unavail)
+        unavail_vl.addLayout(btn_remove_row)
+
+        layout.addWidget(unavail_group)
+
         # ボタン
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Save).setText("保存")
@@ -242,6 +324,18 @@ class EmployeeDialog(QDialog):
         is_part = self.emp_type_combo.currentData() == EmploymentType.PART_TIME
         self.parttime_group.setVisible(is_part)
         self.adjustSize()
+
+    def _add_unavail_date(self):
+        ds = self._unavail_date_edit.date().toString("yyyy-MM-dd")
+        # 重複チェック
+        existing = [self._unavail_list.item(i).text() for i in range(self._unavail_list.count())]
+        if ds not in existing:
+            self._unavail_list.addItem(ds)
+            self._unavail_list.sortItems()
+
+    def _remove_unavail_dates(self):
+        for item in self._unavail_list.selectedItems():
+            self._unavail_list.takeItem(self._unavail_list.row(item))
 
     def _load_employee(self, emp: Employee):
         self.name_edit.setText(emp.name)
@@ -262,6 +356,10 @@ class EmployeeDialog(QDialog):
             cb_b.setChecked(p.breakfast if p else False)
             cb_d.setChecked(p.dinner if p else False)
 
+        self._unavail_list.clear()
+        for ds in sorted(emp.fixed_unavailable_dates):
+            self._unavail_list.addItem(ds)
+
     def _on_save(self):
         name = self.name_edit.text().strip()
         if not name:
@@ -281,7 +379,10 @@ class EmployeeDialog(QDialog):
                     patterns.append(FixedPattern(i, cb_b.isChecked(), cb_d.isChecked()))
 
         existing_id = self.employee.id if self.employee else None
-        existing_unavail = self.employee.fixed_unavailable_dates if self.employee else []
+        unavail_dates = [
+            self._unavail_list.item(i).text()
+            for i in range(self._unavail_list.count())
+        ]
 
         self.employee = Employee(
             id=existing_id,
@@ -292,6 +393,6 @@ class EmployeeDialog(QDialog):
             primary_position=primary_position,
             primary_timeslot=primary_timeslot,
             fixed_patterns=patterns,
-            fixed_unavailable_dates=existing_unavail,
+            fixed_unavailable_dates=unavail_dates,
         )
         self.accept()

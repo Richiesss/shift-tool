@@ -59,6 +59,13 @@ def delete_employee(employee_id: int):
     conn.close()
 
 
+def restore_employee(employee_id: int):
+    conn = get_connection()
+    conn.execute("UPDATE employees SET is_active=1 WHERE id=?", (employee_id,))
+    conn.commit()
+    conn.close()
+
+
 def _row_to_employee(row, conn) -> Employee:
     patterns = conn.execute(
         "SELECT * FROM fixed_patterns WHERE employee_id=? ORDER BY day_of_week",
@@ -268,5 +275,49 @@ def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: Ti
         "DELETE FROM shift_assignments WHERE period_id=? AND employee_id=? AND date=? AND time_slot=?",
         (period_id, employee_id, date, time_slot.value)
     )
+    conn.commit()
+    conn.close()
+
+
+# ── シフト制約 ──────────────────────────────────────────────────────────
+
+def get_shift_constraints() -> dict:
+    """
+    DB から制約を読み込んで {(TimeSlot, Position): {"min": int, "max": int, "min_leader": int}} を返す。
+    テーブルが空の場合は定数フォールバック。
+    """
+    from utils.constants import SHIFT_CONSTRAINTS as _FALLBACK
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM shift_constraints").fetchall()
+    conn.close()
+    if not rows:
+        return _FALLBACK
+    result = {}
+    for r in rows:
+        slot = TimeSlot(r["slot"])
+        pos  = Position(r["position"])
+        result[(slot, pos)] = {
+            "min":        r["min_staff"],
+            "max":        r["max_staff"],
+            "min_leader": r["min_leader"],
+        }
+    return result
+
+
+def save_shift_constraints(constraints: dict):
+    """
+    {(TimeSlot, Position): {"min": int, "max": int, "min_leader": int}} を DB に保存。
+    """
+    conn = get_connection()
+    for (slot, pos), vals in constraints.items():
+        conn.execute(
+            """INSERT INTO shift_constraints (slot, position, min_staff, max_staff, min_leader)
+               VALUES (?,?,?,?,?)
+               ON CONFLICT(slot, position) DO UPDATE SET
+                   min_staff=excluded.min_staff,
+                   max_staff=excluded.max_staff,
+                   min_leader=excluded.min_leader""",
+            (slot.value, pos.value, vals["min"], vals["max"], vals["min_leader"])
+        )
     conn.commit()
     conn.close()
