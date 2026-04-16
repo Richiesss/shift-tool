@@ -83,15 +83,15 @@ class ScheduleView(QWidget):
         layout.addLayout(legend)
 
         # タブ（朝食 / ディナー）
+        self._show_other: dict[TimeSlot, bool] = {
+            TimeSlot.BREAKFAST: False,
+            TimeSlot.DINNER: False,
+        }
         self.tab_widget = QTabWidget()
-        self.table_b = self._make_table()  # 朝食
-        self.table_d = self._make_table()  # ディナー
-        self.tab_widget.addTab(self.table_b, "🌅 朝食")
-        self.tab_widget.addTab(self.table_d, "🌆 ディナー")
-        self.table_b.cellClicked.connect(
-            lambda r, c: self._on_cell_clicked(r, c, self.table_b, TimeSlot.BREAKFAST))
-        self.table_d.cellClicked.connect(
-            lambda r, c: self._on_cell_clicked(r, c, self.table_d, TimeSlot.DINNER))
+        tab_b_w, self.table_b, self._btn_other_b = self._make_tab_widget(TimeSlot.BREAKFAST)
+        tab_d_w, self.table_d, self._btn_other_d = self._make_tab_widget(TimeSlot.DINNER)
+        self.tab_widget.addTab(tab_b_w, "🌅 朝食")
+        self.tab_widget.addTab(tab_d_w, "🌆 ディナー")
         layout.addWidget(self.tab_widget)
 
         self.status_label = QLabel("")
@@ -99,14 +99,40 @@ class ScheduleView(QWidget):
 
         self._apply_styles()
 
-    def _make_table(self) -> QTableWidget:
-        t = QTableWidget()
-        t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        t.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        t.verticalHeader().setVisible(False)
-        t.setShowGrid(True)
-        t.setAlternatingRowColors(False)
-        return t
+    def _make_tab_widget(self, slot: TimeSlot):
+        """タブの中身 (QWidget, QTableWidget, toggle_btn) を生成"""
+        container = QWidget()
+        vbox = QVBoxLayout(container)
+        vbox.setContentsMargins(0, 6, 0, 0)
+        vbox.setSpacing(4)
+
+        # 他スロット専任メンバー表示トグル
+        other_label = "ディナー専任" if slot == TimeSlot.BREAKFAST else "朝食専任"
+        btn = QPushButton(f"　{other_label}メンバーも表示　")
+        btn.setCheckable(True)
+        btn.setFixedHeight(28)
+        btn.toggled.connect(lambda checked, s=slot: self._on_toggle_other(s, checked))
+        row_btn = QHBoxLayout()
+        row_btn.addWidget(btn)
+        row_btn.addStretch()
+        vbox.addLayout(row_btn)
+
+        table = QTableWidget()
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        table.verticalHeader().setVisible(False)
+        table.setShowGrid(True)
+        table.setAlternatingRowColors(False)
+        table.cellClicked.connect(
+            lambda r, c, s=slot, t=table: self._on_cell_clicked(r, c, t, s))
+        vbox.addWidget(table)
+
+        return container, table, btn
+
+    def _on_toggle_other(self, slot: TimeSlot, checked: bool):
+        self._show_other[slot] = checked
+        table = self.table_b if slot == TimeSlot.BREAKFAST else self.table_d
+        self._render_slot_table(table, slot)
 
     def _apply_styles(self):
         c = theme.c
@@ -117,6 +143,12 @@ class ScheduleView(QWidget):
         self.status_label.setStyleSheet(f"color:{c['text2']}; font-size:11px;")
         for lbl, color_key in self._status_legend_labels:
             lbl.setStyleSheet(f"background:{c[color_key]}; border-radius:3px; padding:2px 8px; font-size:11px;")
+        for btn in (self._btn_other_b, self._btn_other_d):
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{c['cell_other_slot']}; border:1px solid {c['border2']}; "
+                f"border-radius:4px; font-size:11px; color:{c['text']}; }}"
+                f" QPushButton:checked {{ background:{c['status_warn']}; border-color:{c['border2']}; }}"
+            )
 
     def apply_theme(self):
         self._apply_styles()
@@ -183,8 +215,20 @@ class ScheduleView(QWidget):
         col_headers.append("計")
         col_date_strs.append(None)
 
-        # 行: 全従業員 + 集計行（ポジション別）
-        rows_data: list[tuple] = [("employee", emp) for emp in self._employees]
+        # 従業員フィルタリング
+        # 主メンバー: primary_timeslot が None（どちらでも）またはこのスロット専任
+        primary_emps = [e for e in self._employees
+                        if e.primary_timeslot is None or e.primary_timeslot == slot]
+        # 他スロット専任メンバー
+        other_emps = [e for e in self._employees
+                      if e.primary_timeslot is not None and e.primary_timeslot != slot]
+        other_ids = {e.id for e in other_emps}
+
+        show_other = self._show_other.get(slot, False)
+        display_emps = primary_emps + (other_emps if show_other else [])
+
+        # 行: 表示対象の従業員 + 集計行（ポジション別）
+        rows_data: list[tuple] = [("employee", emp) for emp in display_emps]
         for pos in Position:
             rows_data.append(("summary", pos))
 
@@ -210,18 +254,23 @@ class ScheduleView(QWidget):
 
         for row_idx, (row_type, row_data) in enumerate(rows_data):
             if row_type == "employee":
-                self._fill_emp_slot_row(table, row_idx, row_data, slot, col_date_strs)
+                self._fill_emp_slot_row(table, row_idx, row_data, slot, col_date_strs, other_ids)
             else:
                 self._fill_summary_slot_row(table, row_idx, row_data, slot, col_date_strs, count_map, leader_map)
             table.setRowHeight(row_idx, 28)
 
     def _fill_emp_slot_row(self, table: QTableWidget, row: int, emp: Employee,
-                           slot: TimeSlot, col_date_strs: list):
+                           slot: TimeSlot, col_date_strs: list, other_ids: set = None):
         skill_b = SKILL_BADGE.get(emp.hall_skill, "")
         skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
         pp = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
-        name_item = QTableWidgetItem(f"{emp.name}{pp}\nH:{skill_b} K:{skill_k}")
+        is_other = other_ids and emp.id in other_ids
+        other_slot = TimeSlot.DINNER if slot == TimeSlot.BREAKFAST else TimeSlot.BREAKFAST
+        suffix = f" ↔{other_slot.short_label()}" if is_other else ""
+        name_item = QTableWidgetItem(f"{emp.name}{pp}{suffix}\nH:{skill_b} K:{skill_k}")
         name_item.setFont(QFont("", 9))
+        if is_other:
+            name_item.setBackground(QBrush(QColor(theme.c["cell_other_slot"])))
         table.setItem(row, 0, name_item)
 
         slot_v = slot.value

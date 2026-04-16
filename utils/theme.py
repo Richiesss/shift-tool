@@ -56,6 +56,8 @@ LIGHT: dict[str, str] = {
     # スクロールバー
     "scroll_bg":        "#f1f5f9",
     "scroll_handle":    "#cbd5e1",
+    # 他スロット専任メンバーの行背景（薄い黄）
+    "cell_other_slot":  "#fef9c3",
     # サイドバー（ダークのまま固定）
     "sidebar_bg":       "#1e293b",
     "sidebar_active":   "#2563eb",
@@ -114,6 +116,8 @@ DARK: dict[str, str] = {
     # スクロールバー
     "scroll_bg":        "#1e293b",
     "scroll_handle":    "#475569",
+    # 他スロット専任メンバーの行背景（ダーク：暗い黄）
+    "cell_other_slot":  "#3d3200",
     # サイドバー
     "sidebar_bg":       "#020617",
     "sidebar_active":   "#2563eb",

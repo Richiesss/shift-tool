@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
-from utils.constants import EmploymentType, SkillLevel, PrimaryPosition
+from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot
 
 
 @dataclass
@@ -17,7 +17,8 @@ class Employee:
     employment_type: EmploymentType
     hall_skill: SkillLevel = SkillLevel.BEGINNER
     kitchen_skill: SkillLevel = SkillLevel.BEGINNER
-    primary_position: Optional[PrimaryPosition] = None  # None = どちらでも可
+    primary_position: Optional[PrimaryPosition] = None   # None = どちらでも可
+    primary_timeslot: Optional[TimeSlot] = None          # None = どちらでも可
     fixed_patterns: list[FixedPattern] = field(default_factory=list)
     fixed_unavailable_dates: list[str] = field(default_factory=list)  # YYYY-MM-DD
     is_active: bool = True

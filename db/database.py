@@ -110,6 +110,7 @@ def initialize_db():
         ("shift_requests", "custom_start",       "TEXT"),
         ("shift_requests", "custom_end",         "TEXT"),
         ("employees",      "primary_position",   "TEXT DEFAULT NULL"),
+        ("employees",      "primary_timeslot",   "TEXT DEFAULT NULL"),
     ]
     for table, col, definition in migrations:
         try:

@@ -4,7 +4,7 @@ from typing import Optional
 from db.database import get_connection
 from models.employee import Employee, FixedPattern
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
-from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition
+from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition, TimeSlot
 
 
 # ── 従業員 ──────────────────────────────────────────────────────────────
@@ -33,16 +33,17 @@ def get_employee(employee_id: int) -> Optional[Employee]:
 def save_employee(emp: Employee) -> Employee:
     conn = get_connection()
     pp = emp.primary_position.value if emp.primary_position else None
+    pt = emp.primary_timeslot.value if emp.primary_timeslot else None
     if emp.id is None:
         cur = conn.execute(
-            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, is_active) VALUES (?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, 1)
+            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, is_active) VALUES (?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, 1)
         )
         emp.id = cur.lastrowid
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, int(emp.is_active), emp.id)
         )
     _save_fixed_patterns(conn, emp)
     _save_fixed_unavailable_dates(conn, emp)
@@ -69,6 +70,7 @@ def _row_to_employee(row, conn) -> Employee:
     ).fetchall()
     keys = row.keys()
     pp_val = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
+    pt_val = row["primary_timeslot"] if "primary_timeslot" in keys and row["primary_timeslot"] else None
     return Employee(
         id=row["id"],
         name=row["name"],
@@ -76,6 +78,7 @@ def _row_to_employee(row, conn) -> Employee:
         hall_skill=SkillLevel(row["hall_skill"]),
         kitchen_skill=SkillLevel(row["kitchen_skill"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
+        primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         is_active=bool(row["is_active"]),
         fixed_patterns=[
             FixedPattern(p["day_of_week"], bool(p["breakfast"]), bool(p["dinner"]))
