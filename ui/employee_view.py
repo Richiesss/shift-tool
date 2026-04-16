@@ -185,8 +185,8 @@ class EmployeeDialog(QDialog):
 
         self.hall_skill_combo = QComboBox()
         self.kitchen_skill_combo = QComboBox()
-        for label, val in [("⭐⭐⭐⭐", SkillLevel.LEADER), ("⭐⭐⭐", SkillLevel.VETERAN),
-                            ("⭐⭐", SkillLevel.GENERAL), ("⭐", SkillLevel.BEGINNER)]:
+        for label, val in [("リーダー", SkillLevel.LEADER), ("ベテラン", SkillLevel.VETERAN),
+                            ("メンバー", SkillLevel.GENERAL), ("ビギナー", SkillLevel.BEGINNER)]:
             self.hall_skill_combo.addItem(label, val)
             self.kitchen_skill_combo.addItem(label, val)
         self.hall_skill_combo.setCurrentIndex(3)

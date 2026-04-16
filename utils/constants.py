@@ -16,7 +16,7 @@ class SkillLevel(str, Enum):
     BEGINNER = "beginner"
 
     def label(self):
-        return {"leader": "⭐⭐⭐⭐", "veteran": "⭐⭐⭐", "general": "⭐⭐", "beginner": "⭐"}[self.value]
+        return {"leader": "リーダー", "veteran": "ベテラン", "general": "メンバー", "beginner": "ビギナー"}[self.value]
 
     def rank(self):
         return {"leader": 3, "veteran": 2, "general": 1, "beginner": 0}[self.value]
