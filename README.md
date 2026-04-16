@@ -140,15 +140,6 @@ python main.py
 ```
 
 **動作確認済み環境**: Python 3.11以上 / macOS 13+ / Windows 10・11
-
-### テストデータの投入（任意）
-
-```bash
-python scripts/seed_test_data.py --reset
-```
-
-2024年3月1〜15日のサンプルシフト（38名）がDBに登録されます。
-
 ---
 
 ## 今後の予定
