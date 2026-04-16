@@ -123,7 +123,7 @@
 | 実行方法 | 保存先 |
 |---|---|
 | macOS .app | `~/Library/Application Support/SDU-Shift/shift_tool.db` |
-| Windows EXE | EXEと同じフォルダの `shift_tool.db`（初回起動時に自動作成） |
+| Windows EXE | `%APPDATA%\SDU-Shift\shift_tool.db`（初回起動時に自動作成） |
 | 開発環境（python main.py） | `~/.shift_tool/shift_tool.db` |
 
 設定画面のバックアップ機能を使うと、任意の場所にDBを保存・復元できます。

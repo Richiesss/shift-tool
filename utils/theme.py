@@ -58,6 +58,8 @@ LIGHT: dict[str, str] = {
     "scroll_handle":    "#cbd5e1",
     # 他スロット専任メンバーの行背景（薄い黄）
     "cell_other_slot":  "#fef9c3",
+    # 応援要員セル（オレンジ）
+    "cell_reinforcement": "#fed7aa",
     # サイドバー（ダークのまま固定）
     "sidebar_bg":       "#1e293b",
     "sidebar_active":   "#2563eb",
@@ -118,6 +120,8 @@ DARK: dict[str, str] = {
     "scroll_handle":    "#475569",
     # 他スロット専任メンバーの行背景（ダーク：暗い黄）
     "cell_other_slot":  "#3d3200",
+    # 応援要員セル（ダーク：暗いオレンジ）
+    "cell_reinforcement": "#7c2d12",
     # サイドバー
     "sidebar_bg":       "#020617",
     "sidebar_active":   "#2563eb",

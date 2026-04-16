@@ -5,22 +5,20 @@ from collections import defaultdict
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
-    QGroupBox, QDialog, QListWidget, QListWidgetItem,
-    QDialogButtonBox, QScrollArea, QSizePolicy, QFrame,
-    QMessageBox, QAbstractItemView, QTabWidget, QScrollBar
+    QDialog, QAbstractItemView, QTabWidget, QMessageBox,
+    QScrollBar, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QColor, QBrush, QPainter, QPen, QFontMetrics
+from PyQt6.QtGui import QFont, QColor, QBrush, QPainter, QPen
 from db import repositories as repo
 from models.employee import Employee
 from models.schedule import ShiftAssignment, ShiftRequest
 from utils.constants import (
-    TimeSlot, Position, PrimaryPosition, SkillLevel, DAY_OF_WEEK_LABELS,
-    SHIFT_CONSTRAINTS
+    TimeSlot, Position, PrimaryPosition, SkillLevel,
+    DAY_OF_WEEK_LABELS, SHIFT_CONSTRAINTS
 )
 from utils.theme import theme
 
-# 習熟度バッジ
 SKILL_BADGE = {
     SkillLevel.LEADER: "★★",
     SkillLevel.VETERAN: "★",
@@ -28,10 +26,8 @@ SKILL_BADGE = {
     SkillLevel.BEGINNER: "▼",
 }
 
-# セル色
-COLOR_OK = QColor("#d1fae5")
-COLOR_WARN = QColor("#fef3c7")
-COLOR_ERROR = QColor("#fee2e2")
+# _assignments value: (position_str, is_reinforcement_bool)
+AssignVal = tuple[str, bool]
 
 
 class ScheduleView(QWidget):
@@ -39,18 +35,20 @@ class ScheduleView(QWidget):
         super().__init__(parent)
         self._period = None
         self._employees: list[Employee] = []
-        self._assignments: dict[tuple[int, str, str], str] = {}
+        # {(emp_id, date, slot_value): (position_value, is_reinforcement)}
+        self._assignments: dict[tuple[int, str, str], AssignVal] = {}
         self._requests: dict[tuple[int, str], tuple[bool, bool]] = {}
         self._raw_requests: dict[tuple[int, str], ShiftRequest] = {}
         self._build_ui()
         self._load_periods()
+
+    # ── UI構築 ─────────────────────────────────────────────────────────────
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        # ヘッダー
         header = QHBoxLayout()
         title = QLabel("シフト表 確認・編集")
         title.setFont(QFont("", 16, QFont.Weight.Bold))
@@ -81,21 +79,26 @@ class ScheduleView(QWidget):
             self._status_legend_labels.append((lbl, color_key))
             legend.addWidget(lbl)
         legend.addStretch()
-        legend.addWidget(QLabel("習熟度: ★★リーダー ★ベテラン ▼新人"))
+        legend.addWidget(QLabel("習熟度: ★★リーダー ★ベテラン ▼新人　"))
+        reinf_lbl = QLabel("■ 応援要員（希望外追加）")
+        reinf_lbl.setStyleSheet("background:#fed7aa; border-radius:3px; padding:2px 6px; font-size:11px;")
+        legend.addWidget(reinf_lbl)
         layout.addLayout(legend)
 
-        # タブ（朝食 / ディナー）
+        # タブ
         self._show_other: dict[TimeSlot, bool] = {
             TimeSlot.BREAKFAST: False,
-            TimeSlot.DINNER: False,
+            TimeSlot.DINNER:    False,
         }
         self.tab_widget = QTabWidget()
-        (tab_b_w, self.table_b,
+
+        (tab_b, self.emp_table_b, self.sum_table_b,
          self._btn_other_b, self._warn_label_b) = self._make_tab_widget(TimeSlot.BREAKFAST)
-        (tab_d_w, self.table_d,
+        (tab_d, self.emp_table_d, self.sum_table_d,
          self._btn_other_d, self._warn_label_d) = self._make_tab_widget(TimeSlot.DINNER)
-        self.tab_widget.addTab(tab_b_w, "🌅 朝食")
-        self.tab_widget.addTab(tab_d_w, "🌆 ディナー")
+
+        self.tab_widget.addTab(tab_b, "🌅 朝食")
+        self.tab_widget.addTab(tab_d, "🌆 ディナー")
         layout.addWidget(self.tab_widget)
 
         self.status_label = QLabel("")
@@ -104,11 +107,11 @@ class ScheduleView(QWidget):
         self._apply_styles()
 
     def _make_tab_widget(self, slot: TimeSlot):
-        """タブの中身 (QWidget, QTableWidget, toggle_btn, warn_label) を生成"""
+        """タブの中身を生成。(container, emp_table, sum_table, toggle_btn, warn_label) を返す"""
         container = QWidget()
         vbox = QVBoxLayout(container)
         vbox.setContentsMargins(0, 6, 0, 0)
-        vbox.setSpacing(4)
+        vbox.setSpacing(2)
 
         # 他スロット専任メンバー表示トグル
         other_label = "ディナー専任" if slot == TimeSlot.BREAKFAST else "朝食専任"
@@ -131,26 +134,60 @@ class ScheduleView(QWidget):
         )
         vbox.addWidget(warn_label)
 
-        table = QTableWidget()
-        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        table.verticalHeader().setVisible(False)
-        table.setShowGrid(True)
-        table.setAlternatingRowColors(False)
-        table.cellClicked.connect(
-            lambda r, c, s=slot, t=table: self._on_cell_clicked(r, c, t, s))
-        # 日付ヘッダークリック → タイムライン表示
-        table.horizontalHeader().sectionClicked.connect(
-            lambda col, s=slot, t=table: self._on_date_header_clicked(col, s, t))
-        vbox.addWidget(table)
+        # 従業員テーブル（スクロール可）
+        emp_table = QTableWidget()
+        emp_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        emp_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        emp_table.verticalHeader().setVisible(False)
+        emp_table.setShowGrid(True)
+        emp_table.setAlternatingRowColors(False)
+        # 垂直スクロールバーを常に表示して幅を一定に保つ
+        emp_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        emp_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        emp_table.cellClicked.connect(
+            lambda r, c, s=slot, t=emp_table: self._on_cell_clicked(r, c, t, s))
+        emp_table.horizontalHeader().sectionClicked.connect(
+            lambda col, s=slot, t=emp_table: self._on_date_header_clicked(col, s, t))
+        emp_table.horizontalHeader().sectionResized.connect(
+            lambda idx, old, new, s=slot: self._sync_col_width(idx, new, s))
+        vbox.addWidget(emp_table, stretch=1)
 
-        return container, table, btn, warn_label
+        # 集計テーブル（常に下部に固定・スクロール非表示）
+        sum_table = QTableWidget()
+        sum_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        sum_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        sum_table.verticalHeader().setVisible(False)
+        sum_table.horizontalHeader().setVisible(False)
+        sum_table.setShowGrid(True)
+        sum_table.setAlternatingRowColors(False)
+        sum_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sum_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sum_table.setFixedHeight(60)  # 2行 × 28px + 余白
+        vbox.addWidget(sum_table)
+
+        # 水平スクロール同期
+        emp_table.horizontalScrollBar().valueChanged.connect(
+            sum_table.horizontalScrollBar().setValue)
+
+        # 区切り線（集計テーブル上部）
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        vbox.insertWidget(vbox.count() - 1, sep)  # sum_tableの直前に挿入
+
+        return container, emp_table, sum_table, btn, warn_label
+
+    def _sync_col_width(self, col_idx: int, new_width: int, slot: TimeSlot):
+        """従業員テーブルの列幅変更を集計テーブルに反映"""
+        sum_t = self.sum_table_b if slot == TimeSlot.BREAKFAST else self.sum_table_d
+        if col_idx < sum_t.columnCount():
+            sum_t.setColumnWidth(col_idx, new_width)
 
     def _on_toggle_other(self, slot: TimeSlot, checked: bool):
         self._show_other[slot] = checked
-        table = self.table_b if slot == TimeSlot.BREAKFAST else self.table_d
-        warn = self._warn_label_b if slot == TimeSlot.BREAKFAST else self._warn_label_d
-        self._render_slot_table(table, slot, warn)
+        emp_t = self.emp_table_b if slot == TimeSlot.BREAKFAST else self.emp_table_d
+        sum_t = self.sum_table_b if slot == TimeSlot.BREAKFAST else self.sum_table_d
+        warn  = self._warn_label_b if slot == TimeSlot.BREAKFAST else self._warn_label_d
+        self._render_slot_table(emp_t, sum_t, slot, warn)
 
     def _apply_styles(self):
         c = theme.c
@@ -174,6 +211,8 @@ class ScheduleView(QWidget):
         self._apply_styles()
         self._render_table()
 
+    # ── データ読み込み ─────────────────────────────────────────────────────
+
     def _load_periods(self):
         periods = repo.get_all_periods()
         self.period_combo.blockSignals(True)
@@ -196,7 +235,8 @@ class ScheduleView(QWidget):
     def _on_period_changed(self, idx):
         self._period = self.period_combo.currentData()
         if not self._period:
-            for t in (self.table_b, self.table_d):
+            for t in (self.emp_table_b, self.emp_table_d,
+                      self.sum_table_b, self.sum_table_d):
                 t.setRowCount(0)
                 t.setColumnCount(0)
             return
@@ -208,7 +248,7 @@ class ScheduleView(QWidget):
         assignments = repo.get_assignments(self._period.id)
         requests = repo.get_shift_requests(self._period.id)
         self._assignments = {
-            (a.employee_id, a.date, a.time_slot.value): a.position.value
+            (a.employee_id, a.date, a.time_slot.value): (a.position.value, a.is_reinforcement)
             for a in assignments
         }
         self._requests = {
@@ -220,13 +260,18 @@ class ScheduleView(QWidget):
             for r in requests
         }
 
+    # ── 描画 ──────────────────────────────────────────────────────────────
+
     def _render_table(self):
         if not self._period or not self._employees:
             return
-        self._render_slot_table(self.table_b, TimeSlot.BREAKFAST, self._warn_label_b)
-        self._render_slot_table(self.table_d, TimeSlot.DINNER, self._warn_label_d)
+        self._render_slot_table(
+            self.emp_table_b, self.sum_table_b, TimeSlot.BREAKFAST, self._warn_label_b)
+        self._render_slot_table(
+            self.emp_table_d, self.sum_table_d, TimeSlot.DINNER,    self._warn_label_d)
 
-    def _render_slot_table(self, table: QTableWidget, slot: TimeSlot, warn_label: QLabel):
+    def _render_slot_table(self, emp_table: QTableWidget, sum_table: QTableWidget,
+                           slot: TimeSlot, warn_label: QLabel):
         dates = self._period.date_range()
 
         col_headers = ["氏名"]
@@ -241,20 +286,20 @@ class ScheduleView(QWidget):
         # 従業員フィルタリング
         primary_emps = [e for e in self._employees
                         if e.primary_timeslot is None or e.primary_timeslot == slot]
-        other_emps = [e for e in self._employees
-                      if e.primary_timeslot is not None and e.primary_timeslot != slot]
+        other_emps   = [e for e in self._employees
+                        if e.primary_timeslot is not None and e.primary_timeslot != slot]
         other_ids = {e.id for e in other_emps}
         show_other = self._show_other.get(slot, False)
         display_emps = primary_emps + (other_emps if show_other else [])
 
-        # ポジション別グループ分け
+        # ポジション別グループ
         hall_emps = [e for e in display_emps
                      if e.primary_position is not None and e.primary_position.value == "hall"]
         any_emps  = [e for e in display_emps if e.primary_position is None]
         kit_emps  = [e for e in display_emps
                      if e.primary_position is not None and e.primary_position.value == "kitchen"]
 
-        rows_data: list[tuple] = []
+        emp_rows: list[tuple] = []
         for group_label, group_emps in [
             ("ホール専任", hall_emps),
             ("どちらでも", any_emps),
@@ -262,25 +307,14 @@ class ScheduleView(QWidget):
         ]:
             if not group_emps:
                 continue
-            rows_data.append(("divider", group_label))
+            emp_rows.append(("divider", group_label))
             for emp in group_emps:
-                rows_data.append(("employee", emp))
-        for pos in Position:
-            rows_data.append(("summary", pos))
-
-        table.setRowCount(len(rows_data))
-        table.setColumnCount(len(col_headers))
-        table.setHorizontalHeaderLabels(col_headers)
-        table.setColumnWidth(0, 95)
-        for c_idx in range(1, len(col_headers) - 1):
-            table.setColumnWidth(c_idx, 50)
-        table.setColumnWidth(len(col_headers) - 1, 36)
-        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+                emp_rows.append(("employee", emp))
 
         # 集計
-        count_map: dict[tuple[str, str], int] = defaultdict(int)
+        count_map:  dict[tuple[str, str], int] = defaultdict(int)
         leader_map: dict[tuple[str, str], int] = defaultdict(int)
-        for (emp_id, ds, slot_v), pos_v in self._assignments.items():
+        for (emp_id, ds, slot_v), (pos_v, _) in self._assignments.items():
             if slot_v != slot.value:
                 continue
             count_map[(ds, pos_v)] += 1
@@ -288,24 +322,43 @@ class ScheduleView(QWidget):
             if emp and emp.is_leader(pos_v):
                 leader_map[(ds, pos_v)] += 1
 
-        for row_idx, (row_type, row_data) in enumerate(rows_data):
-            if row_type == "employee":
-                self._fill_emp_slot_row(
-                    table, row_idx, row_data, slot, col_date_strs, other_ids)
-                table.setRowHeight(row_idx, 28)
-            elif row_type == "divider":
-                self._fill_divider_row(table, row_idx, row_data, len(col_headers))
-                table.setRowHeight(row_idx, 18)
-            else:
-                self._fill_summary_slot_row(
-                    table, row_idx, row_data, slot, col_date_strs, count_map, leader_map)
-                table.setRowHeight(row_idx, 28)
+        n_cols = len(col_headers)
 
-        # 制約違反の警告更新
+        # ── 従業員テーブル ────────────────────────────────────────────────
+        emp_table.setRowCount(len(emp_rows))
+        emp_table.setColumnCount(n_cols)
+        emp_table.setHorizontalHeaderLabels(col_headers)
+        emp_table.setColumnWidth(0, 95)
+        for c_i in range(1, n_cols - 1):
+            emp_table.setColumnWidth(c_i, 50)
+        emp_table.setColumnWidth(n_cols - 1, 36)
+        emp_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+
+        for row_idx, (row_type, row_data) in enumerate(emp_rows):
+            if row_type == "employee":
+                self._fill_emp_row(emp_table, row_idx, row_data, slot, col_date_strs, other_ids)
+                emp_table.setRowHeight(row_idx, 28)
+            else:
+                self._fill_divider_row(emp_table, row_idx, row_data, n_cols)
+                emp_table.setRowHeight(row_idx, 18)
+
+        # ── 集計テーブル ──────────────────────────────────────────────────
+        n_pos = len(list(Position))
+        sum_table.setRowCount(n_pos)
+        sum_table.setColumnCount(n_cols)
+        sum_table.setColumnWidth(0, 95)
+        for c_i in range(1, n_cols - 1):
+            sum_table.setColumnWidth(c_i, 50)
+        sum_table.setColumnWidth(n_cols - 1, 36)
+
+        for pi, pos in enumerate(Position):
+            self._fill_summary_row(sum_table, pi, pos, slot, col_date_strs, count_map, leader_map)
+            sum_table.setRowHeight(pi, 28)
+
+        # 警告更新
         self._update_constraint_warnings(warn_label, slot, dates, count_map, leader_map)
 
     def _fill_divider_row(self, table: QTableWidget, row: int, label: str, col_count: int):
-        """ポジショングループの区切り行"""
         c = theme.c
         bg = QBrush(QColor(c["surface2"]))
         for col in range(col_count):
@@ -313,22 +366,21 @@ class ScheduleView(QWidget):
             item.setBackground(bg)
             item.setFont(QFont("", 8, QFont.Weight.Bold))
             item.setForeground(QBrush(QColor(c["text3"])))
-            item.setFlags(Qt.ItemFlag.ItemIsEnabled)  # 選択・編集不可
+            item.setFlags(Qt.ItemFlag.ItemIsEnabled)
             table.setItem(row, col, item)
 
-    def _fill_emp_slot_row(self, table: QTableWidget, row: int, emp: Employee,
-                           slot: TimeSlot, col_date_strs: list, other_ids: set = None):
+    def _fill_emp_row(self, table: QTableWidget, row: int, emp: Employee,
+                      slot: TimeSlot, col_date_strs: list, other_ids: set):
         skill_b = SKILL_BADGE.get(emp.hall_skill, "")
         skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
         pp = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
-        is_other = other_ids and emp.id in other_ids
+        is_other = emp.id in other_ids
         other_slot = TimeSlot.DINNER if slot == TimeSlot.BREAKFAST else TimeSlot.BREAKFAST
         suffix = f" ↔{other_slot.short_label()}" if is_other else ""
         name_item = QTableWidgetItem(f"{emp.name}{pp}{suffix}\nH:{skill_b} K:{skill_k}")
         name_item.setFont(QFont("", 9))
         name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
 
-        # ポジション専任で背景色を区別
         c = theme.c
         if is_other:
             name_item.setBackground(QBrush(QColor(c["cell_other_slot"])))
@@ -343,7 +395,9 @@ class ScheduleView(QWidget):
         for col_idx, ds in enumerate(col_date_strs):
             if ds is None:
                 continue
-            pos_v = self._assignments.get((emp.id, ds, slot_v))
+            result = self._assignments.get((emp.id, ds, slot_v))
+            pos_v = result[0] if result else None
+            is_reinf = result[1] if result else False
             req = self._requests.get((emp.id, ds))
             can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
 
@@ -351,8 +405,10 @@ class ScheduleView(QWidget):
                 skill = emp.hall_skill if pos_v == "hall" else emp.kitchen_skill
                 badge = SKILL_BADGE.get(skill, "")
                 pos_label = "H" if pos_v == "hall" else "K"
-                item = QTableWidgetItem(f"{pos_label}{badge}")
-                item.setBackground(QBrush(QColor(c["cell_assigned"])))
+                prefix = "+" if is_reinf else ""
+                item = QTableWidgetItem(f"{prefix}{pos_label}{badge}")
+                bg_color = c["cell_reinforcement"] if is_reinf else c["cell_assigned"]
+                item.setBackground(QBrush(QColor(bg_color)))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 item.setData(Qt.ItemDataRole.UserRole, ("assigned", emp.id, ds, slot_v))
                 total += 1
@@ -374,9 +430,9 @@ class ScheduleView(QWidget):
         total_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         table.setItem(row, len(col_date_strs) - 1, total_item)
 
-    def _fill_summary_slot_row(self, table: QTableWidget, row: int, pos: Position,
-                               slot: TimeSlot, col_date_strs: list,
-                               count_map: dict, leader_map: dict):
+    def _fill_summary_row(self, table: QTableWidget, row: int, pos: Position,
+                          slot: TimeSlot, col_date_strs: list,
+                          count_map: dict, leader_map: dict):
         label_item = QTableWidgetItem(pos.label())
         label_item.setFont(QFont("", 8, QFont.Weight.Bold))
         label_item.setBackground(QBrush(QColor(theme.c["surface2"])))
@@ -384,16 +440,15 @@ class ScheduleView(QWidget):
         table.setItem(row, 0, label_item)
 
         constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
-        min_req = constraint.get("min", 0)
+        min_req    = constraint.get("min", 0)
         min_leader = constraint.get("min_leader", 0)
 
         for col_idx, ds in enumerate(col_date_strs):
             if ds is None:
                 continue
             cnt = count_map[(ds, pos.value)]
-            ld = leader_map[(ds, pos.value)]
-            text = f"{cnt}名\n★{ld}"
-            item = QTableWidgetItem(text)
+            ld  = leader_map[(ds, pos.value)]
+            item = QTableWidgetItem(f"{cnt}名\n★{ld}")
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             item.setFont(QFont("", 8))
             item.setFlags(Qt.ItemFlag.ItemIsEnabled)
@@ -410,48 +465,38 @@ class ScheduleView(QWidget):
 
     def _update_constraint_warnings(self, warn_label: QLabel, slot: TimeSlot,
                                     dates: list, count_map: dict, leader_map: dict):
-        """制約違反を集計してタブの警告ラベルに表示"""
         violations = []
         for d in dates:
             ds = d.isoformat()
             d_label = f"{d.month}/{d.day}({DAY_OF_WEEK_LABELS[d.weekday()]})"
             for pos in Position:
                 cnt = count_map[(ds, pos.value)]
-                ld = leader_map[(ds, pos.value)]
+                ld  = leader_map[(ds, pos.value)]
                 constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
-                min_req = constraint.get("min", 0)
+                min_req    = constraint.get("min", 0)
                 min_leader = constraint.get("min_leader", 0)
                 if cnt < min_req:
-                    violations.append(
-                        f"❌ {d_label} {pos.label()}: {cnt}/{min_req}名不足"
-                    )
+                    violations.append(f"❌ {d_label} {pos.label()}: {cnt}/{min_req}名不足")
                 elif ld < min_leader:
-                    violations.append(
-                        f"⚠️ {d_label} {pos.label()}: リーダー{ld}/{min_leader}名不足"
-                    )
-
+                    violations.append(f"⚠️ {d_label} {pos.label()}: ★{ld}/{min_leader}名不足")
         if violations:
             warn_label.setText("　".join(violations))
             warn_label.setVisible(True)
         else:
             warn_label.setVisible(False)
 
+    # ── イベント ──────────────────────────────────────────────────────────
+
     def _on_date_header_clicked(self, col: int, slot: TimeSlot, table: QTableWidget):
-        """日付列ヘッダークリック → その日のタイムライン表示"""
         if col == 0 or col >= table.columnCount() - 1:
-            return  # 氏名列・計列は無視
-        header_text = table.horizontalHeaderItem(col)
-        if not header_text:
             return
         dates = self._period.date_range()
-        date_idx = col - 1  # col=1 が dates[0]
+        date_idx = col - 1
         if date_idx < 0 or date_idx >= len(dates):
             return
         ds = dates[date_idx].isoformat()
         dlg = DayTimetableDialog(
-            ds, self._employees, self._assignments,
-            self._raw_requests, parent=self
-        )
+            ds, self._employees, self._assignments, self._raw_requests, parent=self)
         dlg.exec()
 
     def _on_cell_clicked(self, row: int, col: int, table: QTableWidget, slot: TimeSlot):
@@ -459,7 +504,7 @@ class ScheduleView(QWidget):
         if not item:
             return
         data = item.data(Qt.ItemDataRole.UserRole)
-        if not data or not isinstance(data, tuple) or data[0] not in ("assigned", "available"):
+        if not data or not isinstance(data, tuple):
             return
 
         state, emp_id, ds, slot_v = data
@@ -468,9 +513,11 @@ class ScheduleView(QWidget):
             emp = next((e for e in self._employees if e.id == emp_id), None)
             if not emp:
                 return
+            _, is_reinf = self._assignments.get((emp_id, ds, slot_v), ("", False))
+            reinf_note = "（応援要員）" if is_reinf else ""
             reply = QMessageBox.question(
                 self, "シフト削除",
-                f"{emp.name} の {ds} {slot.short_label()} のアサインを削除しますか？",
+                f"{emp.name}{reinf_note} の {ds} {slot.short_label()} のアサインを削除しますか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             if reply == QMessageBox.StandardButton.Yes:
@@ -484,13 +531,37 @@ class ScheduleView(QWidget):
                 return
             dlg = PositionSelectDialog(
                 emp, ds, slot, self._employees, self._assignments,
-                self._period.id, parent=self
+                self._period.id, is_reinforcement=False, parent=self
             )
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected_position:
-                from models.schedule import ShiftAssignment
-                assignment = ShiftAssignment(emp_id, ds, slot, dlg.selected_position)
+                assignment = ShiftAssignment(emp_id, ds, slot, dlg.selected_position,
+                                             is_reinforcement=False)
                 repo.add_assignment(self._period.id, assignment)
-                self._assignments[(emp_id, ds, slot_v)] = dlg.selected_position.value
+                self._assignments[(emp_id, ds, slot_v)] = (dlg.selected_position.value, False)
+                self._render_table()
+
+        elif state == "unavailable":
+            # 応援要員として追加
+            emp = next((e for e in self._employees if e.id == emp_id), None)
+            if not emp:
+                return
+            reply = QMessageBox.question(
+                self, "応援要員追加",
+                f"「{emp.name}」はこの時間帯の希望を出していませんが、\n"
+                f"応援要員として {ds} {slot.short_label()} に追加しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            dlg = PositionSelectDialog(
+                emp, ds, slot, self._employees, self._assignments,
+                self._period.id, is_reinforcement=True, parent=self
+            )
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected_position:
+                assignment = ShiftAssignment(emp_id, ds, slot, dlg.selected_position,
+                                             is_reinforcement=True)
+                repo.add_assignment(self._period.id, assignment)
+                self._assignments[(emp_id, ds, slot_v)] = (dlg.selected_position.value, True)
                 self._render_table()
 
     def _on_output(self):
@@ -504,8 +575,6 @@ class ScheduleView(QWidget):
 # ── タイムラインダイアログ ─────────────────────────────────────────────
 
 class DayTimetableDialog(QDialog):
-    """1日分の希望シフトをタイムライン形式で表示するダイアログ"""
-
     def __init__(self, date_str: str, employees: list[Employee],
                  assignments: dict, raw_requests: dict, parent=None):
         super().__init__(parent)
@@ -515,27 +584,24 @@ class DayTimetableDialog(QDialog):
         self.setMinimumWidth(750)
         self.setMinimumHeight(400)
 
-        layout = QVBoxLayout(self)
+        from PyQt6.QtWidgets import QScrollArea
+        layout = __import__("PyQt6.QtWidgets", fromlist=["QVBoxLayout"]).QVBoxLayout(self)
         layout.setSpacing(8)
 
-        # 説明ラベル
         info = QLabel(
-            "■ 朝食帯(6-11時)  ■ ディナー帯(17-23時)  　"
-            "濃色=アサイン済 / 薄色=希望のみ / 赤背景=不足時間帯"
+            "■ 朝食帯(6-11時)  ■ ディナー帯(17-23時)　"
+            "濃色=アサイン済 / 薄色=希望のみ / 赤バー=不足時間帯"
         )
         info.setStyleSheet("font-size:11px; color:#6b7280;")
         layout.addWidget(info)
 
-        # タイムラインウィジェット（スクロール可）
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
         tl = _TimetableWidget(date_str, employees, assignments, raw_requests)
         scroll.setWidget(tl)
         layout.addWidget(scroll)
 
-        # 凡例
         legend_row = QHBoxLayout()
         for color, text in [
             ("#3b82f6", "朝食アサイン"), ("#93c5fd", "朝食希望"),
@@ -555,25 +621,21 @@ class DayTimetableDialog(QDialog):
 
 
 class _TimetableWidget(QWidget):
-    """1日分のシフトをタイムラインとして描画するカスタムウィジェット"""
-
-    TIME_START = 5.0   # 5:00
-    TIME_END   = 24.0  # 24:00
-    MARGIN_LEFT = 110
-    MARGIN_TOP  = 28
+    TIME_START = 5.0
+    TIME_END   = 24.0
+    MARGIN_LEFT  = 110
+    MARGIN_TOP   = 28
     MARGIN_RIGHT = 12
-    ROW_H = 22
-    COVERAGE_H = 48
+    ROW_H       = 22
+    COVERAGE_H  = 52
 
-    def __init__(self, date_str: str, employees: list[Employee],
-                 assignments: dict, raw_requests: dict, parent=None):
+    def __init__(self, date_str, employees, assignments, raw_requests, parent=None):
         super().__init__(parent)
         self._date_str = date_str
         self._assignments = assignments
         self._rows = self._build_rows(employees, assignments, raw_requests, date_str)
         n = max(1, len(self._rows))
-        total_h = self.MARGIN_TOP + n * self.ROW_H + self.COVERAGE_H + 16
-        self.setMinimumHeight(total_h)
+        self.setMinimumHeight(self.MARGIN_TOP + n * self.ROW_H + self.COVERAGE_H + 20)
         self.setMinimumWidth(700)
 
     @staticmethod
@@ -587,6 +649,7 @@ class _TimetableWidget(QWidget):
     @classmethod
     def _build_rows(cls, employees, assignments, raw_requests, ds):
         from utils.shift_patterns import PATTERN_MAP
+        assigned_keys = {(eid, d2, s) for (eid, d2, s) in assignments if d2 == ds}
         rows = []
         for emp in employees:
             req = raw_requests.get((emp.id, ds))
@@ -594,216 +657,173 @@ class _TimetableWidget(QWidget):
                 continue
             if not req.breakfast and not req.dinner:
                 continue
-
             start_h, end_h = None, None
             force_both = False
-
             if req.pattern_id and req.pattern_id != "custom":
                 p = PATTERN_MAP.get(req.pattern_id)
                 if p:
                     if p.force_both:
                         force_both = True
-                        start_h = 6.0
-                        end_h = 23.0
+                        start_h, end_h = 6.0, 23.0
                     else:
                         start_h = p.start_hour()
-                        end_h = p.end_hour()
+                        end_h   = p.end_hour()
             elif req.pattern_id == "custom":
-                if req.custom_start:
-                    start_h = cls._parse_hour(req.custom_start)
-                if req.custom_end:
-                    end_h = cls._parse_hour(req.custom_end)
-
+                start_h = cls._parse_hour(req.custom_start) if req.custom_start else 6.0
+                end_h   = cls._parse_hour(req.custom_end)   if req.custom_end   else 23.0
             if start_h is None:
                 start_h = 6.0 if req.breakfast else 17.0
             if end_h is None:
                 end_h = 11.0 if not req.dinner else 23.0
-
-            assigned_b = (emp.id, ds, "breakfast") in {
-                (eid, d2, s) for (eid, d2, s) in assignments if d2 == ds
-            }
-            assigned_d = (emp.id, ds, "dinner") in {
-                (eid, d2, s) for (eid, d2, s) in assignments if d2 == ds
-            }
-
             rows.append({
                 "emp": emp,
-                "start_h": start_h,
-                "end_h": end_h,
-                "breakfast": req.breakfast,
-                "dinner": req.dinner,
+                "start_h": start_h, "end_h": end_h,
+                "breakfast": req.breakfast, "dinner": req.dinner,
                 "force_both": force_both,
-                "assigned_b": assigned_b,
-                "assigned_d": assigned_d,
+                "assigned_b": (emp.id, ds, "breakfast") in assigned_keys,
+                "assigned_d": (emp.id, ds, "dinner")    in assigned_keys,
             })
         return rows
 
     def _x(self, hour: float, width: int) -> int:
-        span = self.TIME_END - self.TIME_START
         usable = width - self.MARGIN_LEFT - self.MARGIN_RIGHT
-        return self.MARGIN_LEFT + int((hour - self.TIME_START) / span * usable)
+        return self.MARGIN_LEFT + int((hour - self.TIME_START) / (self.TIME_END - self.TIME_START) * usable)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         W = self.width()
         c = theme.c
+        painter.fillRect(self.rect(), QColor(c["bg"]))
 
-        bg = QColor(c["bg"])
-        painter.fillRect(self.rect(), bg)
-
-        # 時間帯ゾーン背景
-        b_start_x = self._x(6,  W)
-        b_end_x   = self._x(11, W)
-        d_start_x = self._x(17, W)
-        d_end_x   = self._x(23, W)
+        # ゾーン背景
         zone_h = self.MARGIN_TOP + len(self._rows) * self.ROW_H + self.COVERAGE_H
+        painter.fillRect(self._x(6,  W), 0, self._x(11, W) - self._x(6,  W), zone_h, QColor("#eff6ff"))
+        painter.fillRect(self._x(17, W), 0, self._x(23, W) - self._x(17, W), zone_h, QColor("#fdf2f8"))
 
-        painter.fillRect(b_start_x, 0, b_end_x - b_start_x, zone_h, QColor("#eff6ff"))
-        painter.fillRect(d_start_x, 0, d_end_x - d_start_x, zone_h, QColor("#fdf2f8"))
-
-        # 時間軸
-        painter.setPen(QPen(QColor(c["border"]), 1))
-        font_sm = QFont("", 8)
-        painter.setFont(font_sm)
+        # 時間グリッド
+        painter.setFont(QFont("", 8))
         for h in range(int(self.TIME_START), int(self.TIME_END) + 1):
             x = self._x(h, W)
-            painter.drawLine(x, self.MARGIN_TOP - 6, x, self.MARGIN_TOP + len(self._rows) * self.ROW_H + self.COVERAGE_H)
+            painter.setPen(QPen(QColor(c["border"]), 1))
+            painter.drawLine(x, self.MARGIN_TOP - 6, x, zone_h)
             painter.setPen(QColor(c["text2"]))
             painter.drawText(x - 10, self.MARGIN_TOP - 8, f"{h}:00")
-            painter.setPen(QPen(QColor(c["border"]), 1))
 
-        # 各従業員バー
+        # 従業員バー
         painter.setFont(QFont("", 9))
         for i, row in enumerate(self._rows):
-            y = self.MARGIN_TOP + i * self.ROW_H
+            y  = self.MARGIN_TOP + i * self.ROW_H
             cy = y + self.ROW_H // 2
-
-            # 名前
             painter.setPen(QColor(c["text"]))
             painter.drawText(4, cy + 5, row["emp"].name)
 
-            # バーの色決定
-            is_b = row["breakfast"]
-            is_d = row["dinner"]
-            is_both = row["force_both"] or (is_b and is_d)
+            is_both = row["force_both"] or (row["breakfast"] and row["dinner"])
             assigned = row["assigned_b"] or row["assigned_d"]
-
             if is_both:
                 bar_color = QColor("#22c55e") if assigned else QColor("#86efac")
-            elif is_b:
+            elif row["breakfast"]:
                 bar_color = QColor("#3b82f6") if row["assigned_b"] else QColor("#93c5fd")
             else:
                 bar_color = QColor("#ec4899") if row["assigned_d"] else QColor("#f9a8d4")
 
             x1 = self._x(row["start_h"], W)
-            x2 = self._x(row["end_h"], W)
-            bar_h = self.ROW_H - 4
-            painter.fillRect(x1, y + 2, max(2, x2 - x1), bar_h, bar_color)
-
-            # バー上に時刻テキスト
-            start_str = f"{int(row['start_h'])}:{int((row['start_h'] % 1) * 60):02d}"
-            end_str   = f"{int(row['end_h'])}:{int((row['end_h'] % 1) * 60):02d}"
-            painter.setPen(QColor("#ffffff") if assigned else QColor(c["text"]))
-            painter.setFont(QFont("", 8))
+            x2 = self._x(row["end_h"],   W)
+            painter.fillRect(x1, y + 2, max(2, x2 - x1), self.ROW_H - 4, bar_color)
             if x2 - x1 > 50:
-                painter.drawText(x1 + 3, cy + 4, f"{start_str}〜{end_str}")
-            painter.setFont(QFont("", 9))
+                sh = int(row["start_h"]); sm = int((row["start_h"] % 1) * 60)
+                eh = int(row["end_h"]);   em = int((row["end_h"]   % 1) * 60)
+                painter.setPen(QColor("#ffffff") if assigned else QColor(c["text"]))
+                painter.setFont(QFont("", 8))
+                painter.drawText(x1 + 3, cy + 4, f"{sh}:{sm:02d}〜{eh}:{em:02d}")
+                painter.setFont(QFont("", 9))
 
-        # カバレッジバー（下段）
+        # カバレッジバー
         cov_y = self.MARGIN_TOP + len(self._rows) * self.ROW_H + 4
         painter.setPen(QColor(c["text2"]))
         painter.setFont(QFont("", 8))
         painter.drawText(4, cov_y + 14, "人数")
 
-        # 1時間ごとの在籍人数を計算
         slot_hours = list(range(int(self.TIME_START), int(self.TIME_END)))
-        max_count = max(
-            sum(
-                1 for row in self._rows
-                if row["start_h"] <= h < row["end_h"]
-            )
+        all_counts = [
+            sum(1 for r in self._rows if r["start_h"] <= h < r["end_h"])
             for h in slot_hours
-        ) if self._rows else 1
-
-        # 朝食・ディナーの最小必要人数（ホール+キッチン合計）
+        ]
+        max_count = max(all_counts) if all_counts else 1
         b_min = sum(SHIFT_CONSTRAINTS.get((TimeSlot.BREAKFAST, pos), {}).get("min", 0) for pos in Position)
         d_min = sum(SHIFT_CONSTRAINTS.get((TimeSlot.DINNER,    pos), {}).get("min", 0) for pos in Position)
+        bar_h = self.COVERAGE_H - 22
 
-        bar_area_h = self.COVERAGE_H - 20
-        for h in slot_hours:
-            count = sum(
-                1 for row in self._rows
-                if row["start_h"] <= h < row["end_h"]
-            )
+        for h, count in zip(slot_hours, all_counts):
             x1 = self._x(h, W)
             x2 = self._x(h + 1, W)
-            bar_px = int(count / max(max_count, 1) * bar_area_h) if count > 0 else 0
-
-            # 不足判定
+            bar_px = int(count / max(max_count, 1) * bar_h) if count > 0 else 0
             is_b_zone = 6 <= h < 11
             is_d_zone = 17 <= h < 23
-            required = b_min if is_b_zone else (d_min if is_d_zone else 0)
-            shortage = required > 0 and count < required
-
-            color = QColor("#ef4444") if shortage else QColor("#60a5fa")
-            painter.fillRect(x1 + 1, cov_y + bar_area_h - bar_px + 4,
-                             max(1, x2 - x1 - 2), bar_px, color)
-
-            # 人数テキスト
+            required  = b_min if is_b_zone else (d_min if is_d_zone else 0)
+            color = QColor("#ef4444") if (required > 0 and count < required) else QColor("#60a5fa")
+            if bar_px > 0:
+                painter.fillRect(x1 + 1, cov_y + bar_h - bar_px + 4,
+                                 max(1, x2 - x1 - 2), bar_px, color)
             if count > 0:
                 painter.setPen(QColor(c["text"]))
-                painter.drawText(x1 + 2, cov_y + bar_area_h + 18, str(count))
+                painter.drawText(x1 + 2, cov_y + bar_h + 18, str(count))
 
         painter.end()
 
 
-# ── ポジション選択ダイアログ ─────────────────────────────────────────────
+# ── ポジション選択ダイアログ ──────────────────────────────────────────────
 
 class PositionSelectDialog(QDialog):
-    def __init__(self, emp: Employee, ds: str, slot: TimeSlot, all_employees, assignments, period_id, parent=None):
+    def __init__(self, emp: Employee, ds: str, slot: TimeSlot,
+                 all_employees, assignments: dict, period_id: int,
+                 is_reinforcement: bool = False, parent=None):
         super().__init__(parent)
         self.selected_position = None
-        self.setWindowTitle(f"{emp.name} のポジション選択")
-        self.setFixedWidth(320)
+        suffix = "（応援要員）" if is_reinforcement else ""
+        self.setWindowTitle(f"{emp.name} のポジション選択{suffix}")
+        self.setFixedWidth(340)
 
-        layout = QVBoxLayout(self)
+        layout = __import__("PyQt6.QtWidgets", fromlist=["QVBoxLayout"]).QVBoxLayout(self)
 
         d = date.fromisoformat(ds)
         dow = DAY_OF_WEEK_LABELS[d.weekday()]
         layout.addWidget(QLabel(f"日付: {d.month}/{d.day}({dow})  {slot.short_label()}"))
         layout.addWidget(QLabel(f"従業員: {emp.name}"))
+        if is_reinforcement:
+            warn = QLabel("⚠️ この従業員は希望を出していません（応援要員として追加）")
+            warn.setStyleSheet("color:#b45309; font-size:11px;")
+            layout.addWidget(warn)
         layout.addWidget(QLabel(""))
 
         for pos in Position:
-            key = (slot, pos)
-            constraint = SHIFT_CONSTRAINTS.get(key, {})
+            constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
             current = sum(
-                1 for (eid, d2, s2), p in assignments.items()
+                1 for (eid, d2, s2), (p, _) in assignments.items()
                 if d2 == ds and s2 == slot.value and p == pos.value
             )
             leaders = sum(
-                1 for (eid, d2, s2), p in assignments.items()
+                1 for (eid, d2, s2), (p, _) in assignments.items()
                 if d2 == ds and s2 == slot.value and p == pos.value
                 and any(x.id == eid and x.is_leader(pos.value) for x in all_employees)
             )
-
             emp_skill = emp.skill_for(pos.value)
             badge = SKILL_BADGE.get(emp_skill, "")
             btn = QPushButton(
                 f"{pos.label()}  [{current}/{constraint.get('max',3)}名]  "
                 f"★リーダー:{leaders}/{constraint.get('min_leader',1)}名  "
-                f"自分の習熟度:{emp_skill.label()}{badge}"
+                f"自分:{emp_skill.label()}{badge}"
             )
             btn.setFixedHeight(40)
             c = theme.c
-            if current >= constraint.get("max", 3):
+            if not is_reinforcement and current >= constraint.get("max", 3):
                 btn.setEnabled(False)
                 btn.setToolTip("上限人数に達しています")
                 btn.setStyleSheet(f"color:{c['text2']};")
             else:
                 btn.setStyleSheet(
-                    f"QPushButton {{ text-align:left; padding:0 12px; border:1px solid {c['border2']}; border-radius:5px; }}"
+                    f"QPushButton {{ text-align:left; padding:0 12px; "
+                    f"border:1px solid {c['border2']}; border-radius:5px; }}"
                     f" QPushButton:hover {{ background:{c['surface2']}; }}"
                 )
                 btn.clicked.connect(lambda _, p=pos: self._select(p))

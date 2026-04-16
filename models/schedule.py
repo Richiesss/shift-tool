@@ -58,6 +58,7 @@ class ShiftAssignment:
     date: str          # YYYY-MM-DD
     time_slot: TimeSlot
     position: Position
+    is_reinforcement: bool = False  # 応援要員として追加された場合 True
 
 
 @dataclass

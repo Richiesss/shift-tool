@@ -218,11 +218,16 @@ def get_assignments(period_id: int) -> list[ShiftAssignment]:
         (period_id,)
     ).fetchall()
     conn.close()
-    return [
-        ShiftAssignment(employee_id=r["employee_id"], date=r["date"],
-                        time_slot=TimeSlot(r["time_slot"]), position=Position(r["position"]))
-        for r in rows
-    ]
+    result = []
+    for r in rows:
+        keys = r.keys()
+        is_r = bool(r["is_reinforcement"]) if "is_reinforcement" in keys else False
+        result.append(ShiftAssignment(
+            employee_id=r["employee_id"], date=r["date"],
+            time_slot=TimeSlot(r["time_slot"]), position=Position(r["position"]),
+            is_reinforcement=is_r,
+        ))
+    return result
 
 
 def save_assignments(period_id: int, assignments: list[ShiftAssignment]):
@@ -230,8 +235,11 @@ def save_assignments(period_id: int, assignments: list[ShiftAssignment]):
     conn.execute("DELETE FROM shift_assignments WHERE period_id=?", (period_id,))
     for a in assignments:
         conn.execute(
-            "INSERT INTO shift_assignments (period_id, employee_id, date, time_slot, position) VALUES (?,?,?,?,?)",
-            (period_id, a.employee_id, a.date, a.time_slot.value, a.position.value)
+            "INSERT INTO shift_assignments "
+            "(period_id, employee_id, date, time_slot, position, is_reinforcement) "
+            "VALUES (?,?,?,?,?,?)",
+            (period_id, a.employee_id, a.date, a.time_slot.value,
+             a.position.value, int(a.is_reinforcement))
         )
     conn.commit()
     conn.close()
@@ -240,11 +248,15 @@ def save_assignments(period_id: int, assignments: list[ShiftAssignment]):
 def add_assignment(period_id: int, assignment: ShiftAssignment):
     conn = get_connection()
     conn.execute(
-        """INSERT INTO shift_assignments (period_id, employee_id, date, time_slot, position)
-           VALUES (?,?,?,?,?)
-           ON CONFLICT(period_id, employee_id, date, time_slot) DO UPDATE SET position=excluded.position""",
+        """INSERT INTO shift_assignments
+               (period_id, employee_id, date, time_slot, position, is_reinforcement)
+           VALUES (?,?,?,?,?,?)
+           ON CONFLICT(period_id, employee_id, date, time_slot) DO UPDATE SET
+               position=excluded.position,
+               is_reinforcement=excluded.is_reinforcement""",
         (period_id, assignment.employee_id, assignment.date,
-         assignment.time_slot.value, assignment.position.value)
+         assignment.time_slot.value, assignment.position.value,
+         int(assignment.is_reinforcement))
     )
     conn.commit()
     conn.close()

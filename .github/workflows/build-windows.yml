@@ -23,6 +23,11 @@ jobs:
       - name: 依存パッケージをインストール
         run: pip install -r requirements.txt
 
+      - name: バージョン情報を埋め込む
+        run: |
+          echo "APP_VERSION = 'build-${{ github.run_number }}'" > utils/_version.py
+        shell: pwsh
+
       - name: EXE をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm
 
@@ -79,6 +84,10 @@ jobs:
           subprocess.run(['iconutil', '-c', 'icns', str(iconset), '-o', 'assets/icon.icns'], check=True)
           print(f'icon.icns 生成完了: {os.path.getsize(\"assets/icon.icns\"):,} bytes')
           "
+
+      - name: バージョン情報を埋め込む
+        run: |
+          echo "APP_VERSION = 'build-${{ github.run_number }}'" > utils/_version.py
 
       - name: .app をビルド
         run: pyinstaller shift_tool.spec --clean --noconfirm

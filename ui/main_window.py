@@ -4,26 +4,42 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt6.QtGui import QFont, QDesktopServices
+from PyQt6.QtCore import QUrl
 
 from ui.employee_view import EmployeeView
 from ui.shift_input_view import ShiftInputView
 from ui.generate_view import GenerateView
 from ui.schedule_view import ScheduleView
 from ui.settings_view import SettingsView
+from ui.help_view import HelpDialog
 from utils.theme import theme
+from utils.version import APP_VERSION
 
 NAV_ITEMS = [
-    ("👥", "従業員管理", 0),
+    ("👥", "従業員管理",    0),
     ("📝", "希望シフト入力", 1),
     ("⚡", "シフト自動生成", 2),
     ("📅", "シフト表示・編集", 3),
-    ("⚙️", "設定", 4),
+    ("⚙️", "設定",          4),
 ]
 
 SIDEBAR_W = 160
 
+
+# ── アップデートチェッカー（バックグラウンドスレッド）──────────────────────
+
+class _UpdateChecker(QThread):
+    result = pyqtSignal(bool, str, str)  # (is_newer, tag, url)
+
+    def run(self):
+        from utils.version import check_for_update
+        is_newer, tag, url = check_for_update()
+        self.result.emit(is_newer, tag, url)
+
+
+# ── サイドバーボタン ──────────────────────────────────────────────────────
 
 class SidebarButton(QPushButton):
     def __init__(self, icon: str, text: str, parent=None):
@@ -38,7 +54,7 @@ class SidebarButton(QPushButton):
 
     def _update_style(self):
         c = theme.c
-        bg = c["sidebar_active"] if self._active else "transparent"
+        bg    = c["sidebar_active"] if self._active else "transparent"
         hover = c["sidebar_active"] if self._active else c["sidebar_hover"]
         self.setStyleSheet(f"""
             QPushButton {{
@@ -61,6 +77,8 @@ class SidebarButton(QPushButton):
         self._update_style()
 
 
+# ── メインウィンドウ ──────────────────────────────────────────────────────
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -69,6 +87,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._nav_to(0)
         theme.changed.connect(self._on_theme_changed)
+        self._start_update_check()
 
     def _build_ui(self):
         central = QWidget()
@@ -77,7 +96,7 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # サイドバー
+        # ── サイドバー ───────────────────────────────────────────────────
         self._sidebar = QWidget()
         self._sidebar.setFixedWidth(SIDEBAR_W)
         sb_layout = QVBoxLayout(self._sidebar)
@@ -99,7 +118,24 @@ class MainWindow(QMainWindow):
 
         sb_layout.addStretch()
 
-        self._ver_label = QLabel("v1.0.0")
+        # ヘルプボタン
+        self._btn_help = QPushButton(" ❓\n ヘルプ")
+        self._btn_help.setFixedHeight(56)
+        self._btn_help.setFixedWidth(SIDEBAR_W)
+        self._btn_help.setFont(QFont("", 10))
+        self._btn_help.clicked.connect(self._on_help)
+        sb_layout.addWidget(self._btn_help)
+
+        # アップデート通知ラベル（初期非表示）
+        self._update_label = QLabel("")
+        self._update_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._update_label.setWordWrap(True)
+        self._update_label.setVisible(False)
+        self._update_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._update_label.mousePressEvent = self._on_update_label_clicked
+        sb_layout.addWidget(self._update_label)
+
+        self._ver_label = QLabel(APP_VERSION)
         self._ver_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sb_layout.addWidget(self._ver_label)
 
@@ -110,14 +146,14 @@ class MainWindow(QMainWindow):
         self._sep.setFrameShape(QFrame.Shape.VLine)
         root.addWidget(self._sep)
 
-        # コンテンツエリア
+        # ── コンテンツエリア ─────────────────────────────────────────────
         self.stack = QStackedWidget()
 
-        self._employee_view = EmployeeView()
+        self._employee_view   = EmployeeView()
         self._shift_input_view = ShiftInputView()
-        self._generate_view = GenerateView()
-        self._schedule_view = ScheduleView()
-        self._settings_view = SettingsView()
+        self._generate_view   = GenerateView()
+        self._schedule_view   = ScheduleView()
+        self._settings_view   = SettingsView()
 
         self.stack.addWidget(self._employee_view)
         self.stack.addWidget(self._shift_input_view)
@@ -142,6 +178,17 @@ class MainWindow(QMainWindow):
             f"color: {c['text2']}; font-size: 10px; padding: 8px; "
             f"background: {c['sidebar_bg']};"
         )
+        self._btn_help.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {c["sidebar_text"]};
+                border: none;
+                text-align: left;
+                padding-left: 16px;
+                border-radius: 0;
+            }}
+            QPushButton:hover {{ background: {c["sidebar_hover"]}; }}
+        """)
         self._sep.setStyleSheet(f"color: {c['border']};")
         self.stack.setStyleSheet(f"background: {c['bg']};")
 
@@ -149,7 +196,6 @@ class MainWindow(QMainWindow):
         self._apply_sidebar_style()
         for btn in self._nav_buttons:
             btn.apply_theme()
-        # 各ビューのテーマ更新
         for view in (self._employee_view, self._shift_input_view,
                      self._generate_view, self._schedule_view, self._settings_view):
             if hasattr(view, "apply_theme"):
@@ -159,7 +205,6 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_buttons):
             btn.setActive(i == idx)
-
         if idx == 2:
             self._generate_view.refresh()
         elif idx == 3:
@@ -170,8 +215,35 @@ class MainWindow(QMainWindow):
         self._nav_to(3)
 
     def _on_db_imported(self):
-        """DB入れ替え後、全ビューのデータを再読み込み"""
         self._employee_view.refresh()
         self._shift_input_view._load_periods()
         self._generate_view.refresh()
         self._schedule_view.refresh()
+
+    def _on_help(self):
+        dlg = HelpDialog(parent=self)
+        dlg.exec()
+
+    # ── アップデートチェック ─────────────────────────────────────────────
+
+    def _start_update_check(self):
+        self._updater = _UpdateChecker()
+        self._updater.result.connect(self._on_update_result)
+        self._updater.start()
+
+    def _on_update_result(self, is_newer: bool, tag: str, url: str):
+        self._update_url = url
+        if is_newer:
+            self._update_label.setText(
+                f"🆕 {tag} が\n利用可能です\nクリックして\nダウンロード"
+            )
+            self._update_label.setVisible(True)
+            self._update_label.setStyleSheet(
+                "background:#1d4ed8; color:white; font-size:10px; "
+                "padding:6px 4px; border-radius:4px; margin:4px;"
+            )
+
+    def _on_update_label_clicked(self, event):
+        url = getattr(self, "_update_url", "")
+        if url:
+            QDesktopServices.openUrl(QUrl(url))

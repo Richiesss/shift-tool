@@ -12,7 +12,9 @@ if getattr(sys, "frozen", False):
         DB_PATH = (Path.home() / "Library" / "Application Support"
                    / "SDU-Shift" / "shift_tool.db")
     else:
-        DB_PATH = Path(sys.executable).parent / "shift_tool.db"
+        # Windows: %APPDATA%\SDU-Shift\shift_tool.db
+        import os
+        DB_PATH = Path(os.environ.get("APPDATA", Path.home())) / "SDU-Shift" / "shift_tool.db"
 else:
     DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 
@@ -91,11 +93,12 @@ def initialize_db():
 
     # マイグレーション: 新カラムを既存テーブルへ追加
     migrations = [
-        ("shift_requests", "pattern_id",        "TEXT"),
-        ("shift_requests", "custom_start",       "TEXT"),
-        ("shift_requests", "custom_end",         "TEXT"),
-        ("employees",      "primary_position",   "TEXT DEFAULT NULL"),
-        ("employees",      "primary_timeslot",   "TEXT DEFAULT NULL"),
+        ("shift_requests",   "pattern_id",        "TEXT"),
+        ("shift_requests",   "custom_start",       "TEXT"),
+        ("shift_requests",   "custom_end",         "TEXT"),
+        ("employees",        "primary_position",   "TEXT DEFAULT NULL"),
+        ("employees",        "primary_timeslot",   "TEXT DEFAULT NULL"),
+        ("shift_assignments","is_reinforcement",   "INTEGER NOT NULL DEFAULT 0"),
     ]
     for table, col, definition in migrations:
         try:
