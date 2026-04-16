@@ -156,7 +156,7 @@ class EmployeeDialog(QDialog):
         form.setSpacing(10)
 
         self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("例：山田 太郎")
+        self.name_edit.setPlaceholderText("例：うおまん 太郎")
         form.addRow("氏名 *", self.name_edit)
 
         self.emp_type_combo = QComboBox()
@@ -185,8 +185,8 @@ class EmployeeDialog(QDialog):
 
         self.hall_skill_combo = QComboBox()
         self.kitchen_skill_combo = QComboBox()
-        for label, val in [("リーダー", SkillLevel.LEADER), ("ベテラン", SkillLevel.VETERAN),
-                            ("一般", SkillLevel.GENERAL), ("新人", SkillLevel.BEGINNER)]:
+        for label, val in [("⭐⭐⭐⭐", SkillLevel.LEADER), ("⭐⭐⭐", SkillLevel.VETERAN),
+                            ("⭐⭐", SkillLevel.GENERAL), ("⭐", SkillLevel.BEGINNER)]:
             self.hall_skill_combo.addItem(label, val)
             self.kitchen_skill_combo.addItem(label, val)
         self.hall_skill_combo.setCurrentIndex(3)

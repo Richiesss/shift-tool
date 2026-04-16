@@ -20,10 +20,10 @@ from utils.constants import (
 from utils.theme import theme
 
 SKILL_BADGE = {
-    SkillLevel.LEADER: "★★",
-    SkillLevel.VETERAN: "★",
-    SkillLevel.GENERAL: "",
-    SkillLevel.BEGINNER: "▼",
+    SkillLevel.LEADER: "⭐⭐⭐⭐",
+    SkillLevel.VETERAN: "⭐⭐⭐",
+    SkillLevel.GENERAL: "⭐⭐",
+    SkillLevel.BEGINNER: "⭐",
 }
 
 # _assignments value: (position_str, is_reinforcement_bool)
@@ -79,7 +79,7 @@ class ScheduleView(QWidget):
             self._status_legend_labels.append((lbl, color_key))
             legend.addWidget(lbl)
         legend.addStretch()
-        legend.addWidget(QLabel("習熟度: ★★リーダー ★ベテラン ▼新人　"))
+        legend.addWidget(QLabel("習熟度: ⭐⭐⭐⭐〜⭐（4〜1）　"))
         reinf_lbl = QLabel("■ 応援要員（希望外追加）")
         reinf_lbl.setStyleSheet("background:#fed7aa; border-radius:3px; padding:2px 6px; font-size:11px;")
         legend.addWidget(reinf_lbl)
@@ -811,7 +811,7 @@ class PositionSelectDialog(QDialog):
             badge = SKILL_BADGE.get(emp_skill, "")
             btn = QPushButton(
                 f"{pos.label()}  [{current}/{constraint.get('max',3)}名]  "
-                f"★リーダー:{leaders}/{constraint.get('min_leader',1)}名  "
+                f"⭐⭐⭐⭐:{leaders}/{constraint.get('min_leader',1)}名  "
                 f"自分:{emp_skill.label()}{badge}"
             )
             btn.setFixedHeight(40)
