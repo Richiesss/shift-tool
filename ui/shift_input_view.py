@@ -24,9 +24,16 @@ for _p in ALL_PATTERNS:
     _COMBO_ITEMS.append((_p.label, _p.id))
 
 
-def _make_pattern_combo() -> QComboBox:
+class _ShiftComboBox(QComboBox):
+    """マウスホイールで選択変更しないコンボボックス"""
+
+    def wheelEvent(self, event):
+        event.ignore()  # ホバー中のスクロールを無視
+
+
+def _make_pattern_combo() -> _ShiftComboBox:
     """シフトパターン選択用 QComboBox を生成"""
-    combo = QComboBox()
+    combo = _ShiftComboBox()
     combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     for label, pid in _COMBO_ITEMS:
         combo.addItem(label, pid)
@@ -237,7 +244,24 @@ class ShiftInputView(QWidget):
         return False
 
     def _select_pattern_by_key(self, combo_index: int):
-        """現在選択中の行のシフトパターンをコンボインデックスで設定"""
+        """現在フォーカスのある行（またはテーブル選択行）のシフトパターンをインデックスで設定"""
+        from PyQt6.QtWidgets import QApplication
+
+        # フォーカスがいずれかのコンボにある場合はそのセルを優先
+        focused = QApplication.focusWidget()
+        for date_str, cell in self._pattern_cells.items():
+            if cell.combo is focused:
+                if cell.combo.isEnabled() and combo_index < cell.combo.count():
+                    cell.combo.setCurrentIndex(combo_index)
+                    # 対応する行番号を探して色更新
+                    for r in range(self.table.rowCount()):
+                        it = self.table.item(r, 0)
+                        if it and it.data(Qt.ItemDataRole.UserRole) == date_str:
+                            self._apply_row_color(r, date_str, False)
+                            break
+                return
+
+        # フォーカスがコンボにない場合はテーブルの選択行を使用
         row = self.table.currentRow()
         if row < 0:
             return
