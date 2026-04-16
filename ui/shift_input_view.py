@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont, QColor, QBrush
+from PyQt6.QtGui import QFont, QColor, QBrush, QKeySequence, QShortcut
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.constants import DAY_OF_WEEK_LABELS
@@ -209,6 +209,33 @@ class ShiftInputView(QWidget):
         layout.addLayout(btn_row)
 
         self._apply_styles()
+        self._setup_shortcuts()
+
+    def _setup_shortcuts(self):
+        """キーボードショートカット設定"""
+        # 左右矢印キー: 従業員切り替え
+        QShortcut(QKeySequence(Qt.Key.Key_Left),  self).activated.connect(self._on_prev_employee)
+        QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(self._on_next_employee)
+        # 0〜9キー: シフトパターン選択（0=休み, 1〜=各パターン）
+        for i in range(min(10, len(_COMBO_ITEMS))):
+            key = getattr(Qt.Key, f"Key_{i}")
+            QShortcut(QKeySequence(key), self).activated.connect(
+                lambda _=False, idx=i: self._select_pattern_by_key(idx)
+            )
+
+    def _select_pattern_by_key(self, combo_index: int):
+        """現在選択中の行のシフトパターンをコンボインデックスで設定"""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        item = self.table.item(row, 0)
+        if not item:
+            return
+        date_str = item.data(Qt.ItemDataRole.UserRole)
+        cell = self._pattern_cells.get(date_str)
+        if cell and cell.combo.isEnabled() and combo_index < cell.combo.count():
+            cell.combo.setCurrentIndex(combo_index)
+            self._apply_row_color(row, date_str, False)
 
     def _apply_styles(self):
         c = theme.c

@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QGroupBox, QDialog, QListWidget, QListWidgetItem,
     QDialogButtonBox, QScrollArea, QSizePolicy, QFrame,
-    QMessageBox, QAbstractItemView
+    QMessageBox, QAbstractItemView, QTabWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush
@@ -82,21 +82,31 @@ class ScheduleView(QWidget):
         legend.addWidget(QLabel("習熟度: ★★リーダー ★ベテラン ▼新人"))
         layout.addLayout(legend)
 
-        # テーブル（スクロール可）
-        self.table = QTableWidget()
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.cellClicked.connect(self._on_cell_clicked)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(True)
-        self.table.setAlternatingRowColors(False)
-        layout.addWidget(self.table)
+        # タブ（朝食 / ディナー）
+        self.tab_widget = QTabWidget()
+        self.table_b = self._make_table()  # 朝食
+        self.table_d = self._make_table()  # ディナー
+        self.tab_widget.addTab(self.table_b, "🌅 朝食")
+        self.tab_widget.addTab(self.table_d, "🌆 ディナー")
+        self.table_b.cellClicked.connect(
+            lambda r, c: self._on_cell_clicked(r, c, self.table_b, TimeSlot.BREAKFAST))
+        self.table_d.cellClicked.connect(
+            lambda r, c: self._on_cell_clicked(r, c, self.table_d, TimeSlot.DINNER))
+        layout.addWidget(self.tab_widget)
 
-        # 凡例（人員数）
         self.status_label = QLabel("")
         layout.addWidget(self.status_label)
 
         self._apply_styles()
+
+    def _make_table(self) -> QTableWidget:
+        t = QTableWidget()
+        t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        t.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        t.verticalHeader().setVisible(False)
+        t.setShowGrid(True)
+        t.setAlternatingRowColors(False)
+        return t
 
     def _apply_styles(self):
         c = theme.c
@@ -134,8 +144,9 @@ class ScheduleView(QWidget):
     def _on_period_changed(self, idx):
         self._period = self.period_combo.currentData()
         if not self._period:
-            self.table.setRowCount(0)
-            self.table.setColumnCount(0)
+            for t in (self.table_b, self.table_d):
+                t.setRowCount(0)
+                t.setColumnCount(0)
             return
         self._load_data()
         self._render_table()
@@ -156,91 +167,77 @@ class ScheduleView(QWidget):
     def _render_table(self):
         if not self._period or not self._employees:
             return
+        self._render_slot_table(self.table_b, TimeSlot.BREAKFAST)
+        self._render_slot_table(self.table_d, TimeSlot.DINNER)
 
+    def _render_slot_table(self, table: QTableWidget, slot: TimeSlot):
         dates = self._period.date_range()
-        slots = list(TimeSlot)
 
-        # 列: 氏名列 + (日付×スロット) 列 + 合計列
+        # 列: 氏名 + 日付ごと + 合計
         col_headers = ["氏名"]
-        col_meta = [None]  # (date_str, slot)
+        col_date_strs: list[str | None] = [None]
         for d in dates:
-            for slot in slots:
-                dow = DAY_OF_WEEK_LABELS[d.weekday()]
-                col_headers.append(f"{d.month}/{d.day}\n({dow})\n{slot.short_label()}")
-                col_meta.append((d.isoformat(), slot.value))
-        col_headers.append("合計")
-        col_meta.append(None)
+            dow = DAY_OF_WEEK_LABELS[d.weekday()]
+            col_headers.append(f"{d.month}/{d.day}\n({dow})")
+            col_date_strs.append(d.isoformat())
+        col_headers.append("計")
+        col_date_strs.append(None)
 
-        # 行: ホールグループ + キッチングループ + 集計行
-        hall_emps = [e for e in self._employees if True]  # 全員表示
-        all_emps = self._employees
+        # 行: 全従業員 + 集計行（ポジション別）
+        rows_data: list[tuple] = [("employee", emp) for emp in self._employees]
+        for pos in Position:
+            rows_data.append(("summary", pos))
 
-        # 行構成: ホールヘッダー + 全従業員 + 人員数行×2スロット + キャチン区切り
-        # シンプルに: 全従業員行 + 日付ごとの集計行
-        rows_data = []  # (row_type, data)
-        for emp in all_emps:
-            rows_data.append(("employee", emp))
-        # 集計行: 朝食・ディナー別
-        for slot in slots:
-            for pos in Position:
-                rows_data.append(("summary", (slot, pos)))
-
-        self.table.setRowCount(len(rows_data))
-        self.table.setColumnCount(len(col_headers))
-        self.table.setHorizontalHeaderLabels(col_headers)
-
-        # 列幅
-        self.table.setColumnWidth(0, 100)
+        table.setRowCount(len(rows_data))
+        table.setColumnCount(len(col_headers))
+        table.setHorizontalHeaderLabels(col_headers)
+        table.setColumnWidth(0, 95)
         for c in range(1, len(col_headers) - 1):
-            self.table.setColumnWidth(c, 58)
-        self.table.setColumnWidth(len(col_headers) - 1, 50)
+            table.setColumnWidth(c, 50)
+        table.setColumnWidth(len(col_headers) - 1, 36)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
 
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-
-        # 集計計算
-        count_map: dict[tuple[str, str, str], int] = defaultdict(int)
-        skilled_map: dict[tuple[str, str, str], int] = defaultdict(int)
+        # 集計
+        count_map: dict[tuple[str, str], int] = defaultdict(int)
+        leader_map: dict[tuple[str, str], int] = defaultdict(int)
         for (emp_id, ds, slot_v), pos_v in self._assignments.items():
-            count_map[(ds, slot_v, pos_v)] += 1
+            if slot_v != slot.value:
+                continue
+            count_map[(ds, pos_v)] += 1
             emp = next((e for e in self._employees if e.id == emp_id), None)
-            if emp and emp.is_skilled(pos_v):
-                skilled_map[(ds, slot_v, pos_v)] += 1
+            if emp and emp.is_leader(pos_v):
+                leader_map[(ds, pos_v)] += 1
 
         for row_idx, (row_type, row_data) in enumerate(rows_data):
             if row_type == "employee":
-                emp = row_data
-                self._fill_employee_row(row_idx, emp, dates, slots, col_meta)
+                self._fill_emp_slot_row(table, row_idx, row_data, slot, col_date_strs)
             else:
-                slot, pos = row_data
-                self._fill_summary_row(row_idx, slot, pos, dates, col_meta, count_map, skilled_map)
+                self._fill_summary_slot_row(table, row_idx, row_data, slot, col_date_strs, count_map, leader_map)
+            table.setRowHeight(row_idx, 28)
 
-        # 行の高さ
-        for r in range(len(rows_data)):
-            self.table.setRowHeight(r, 28)
-
-    def _fill_employee_row(self, row, emp: Employee, dates, slots, col_meta):
-        # 氏名セル
+    def _fill_emp_slot_row(self, table: QTableWidget, row: int, emp: Employee,
+                           slot: TimeSlot, col_date_strs: list):
         skill_b = SKILL_BADGE.get(emp.hall_skill, "")
         skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
-        name_text = f"{emp.name}\nH:{skill_b} K:{skill_k}"
-        name_item = QTableWidgetItem(name_text)
+        pp = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
+        name_item = QTableWidgetItem(f"{emp.name}{pp}\nH:{skill_b} K:{skill_k}")
         name_item.setFont(QFont("", 9))
-        self.table.setItem(row, 0, name_item)
+        table.setItem(row, 0, name_item)
 
+        slot_v = slot.value
         total = 0
-        for col_idx, meta in enumerate(col_meta):
-            if meta is None:
+        for col_idx, ds in enumerate(col_date_strs):
+            if ds is None:
                 continue
-            ds, slot_v = meta
             pos_v = self._assignments.get((emp.id, ds, slot_v))
             req = self._requests.get((emp.id, ds))
-            can_work = (req[0] if slot_v == TimeSlot.BREAKFAST.value else req[1]) if req else False
+            can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
 
             c = theme.c
             if pos_v:
-                pos_label = "H" if pos_v == "hall" else "K"
                 skill = emp.hall_skill if pos_v == "hall" else emp.kitchen_skill
                 badge = SKILL_BADGE.get(skill, "")
+                pos_label = "H" if pos_v == "hall" else "K"
                 item = QTableWidgetItem(f"{pos_label}{badge}")
                 item.setBackground(QBrush(QColor(c["cell_assigned"])))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -256,61 +253,47 @@ class ScheduleView(QWidget):
                 item = QTableWidgetItem("")
                 item.setBackground(QBrush(QColor(c["cell_unavail"])))
                 item.setData(Qt.ItemDataRole.UserRole, ("unavailable", emp.id, ds, slot_v))
+            table.setItem(row, col_idx, item)
 
-            self.table.setItem(row, col_idx, item)
-
-        # 合計
         total_item = QTableWidgetItem(str(total))
         total_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         total_item.setFont(QFont("", 9, QFont.Weight.Bold))
-        self.table.setItem(row, len(col_meta) - 1, total_item)
+        table.setItem(row, len(col_date_strs) - 1, total_item)
 
-    def _fill_summary_row(self, row, slot: TimeSlot, pos: Position, dates, col_meta, count_map, skilled_map):
-        label = f"{slot.short_label()}\n{pos.label()}"
-        label_item = QTableWidgetItem(label)
+    def _fill_summary_slot_row(self, table: QTableWidget, row: int, pos: Position,
+                               slot: TimeSlot, col_date_strs: list,
+                               count_map: dict, leader_map: dict):
+        label_item = QTableWidgetItem(pos.label())
         label_item.setFont(QFont("", 8, QFont.Weight.Bold))
         label_item.setBackground(QBrush(QColor(theme.c["surface2"])))
-        self.table.setItem(row, 0, label_item)
+        table.setItem(row, 0, label_item)
 
-        key = (slot, pos)
-        constraint = SHIFT_CONSTRAINTS.get(key, {})
+        constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
+        min_req = constraint.get("min", 0)
+        min_leader = constraint.get("min_leader", 0)
 
-        for col_idx, meta in enumerate(col_meta):
-            if meta is None:
+        for col_idx, ds in enumerate(col_date_strs):
+            if ds is None:
                 continue
-            ds, slot_v = meta
-            if slot_v != slot.value:
-                item = QTableWidgetItem("")
-                item.setBackground(QBrush(QColor(theme.c["surface2"])))
-                self.table.setItem(row, col_idx, item)
-                continue
-
-            cnt = count_map[(ds, slot.value, pos.value)]
-            sk = skilled_map[(ds, slot.value, pos.value)]
-            min_req = constraint.get("min", 0)
-            max_req = constraint.get("max", 99)
-            min_sk = constraint.get("min_skilled", 0)
-
-            text = f"{cnt}名\n熟{sk}"
+            cnt = count_map[(ds, pos.value)]
+            ld = leader_map[(ds, pos.value)]
+            text = f"{cnt}名\n★{ld}"
             item = QTableWidgetItem(text)
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             item.setFont(QFont("", 8))
-
             c = theme.c
-            if cnt < min_req or sk < min_sk:
+            if cnt < min_req or ld < min_leader:
                 item.setBackground(QBrush(QColor(c["status_err"])))
-            elif cnt == min_req:
+            elif cnt == min_req or ld == min_leader:
                 item.setBackground(QBrush(QColor(c["status_warn"])))
             else:
                 item.setBackground(QBrush(QColor(c["status_ok"])))
+            table.setItem(row, col_idx, item)
 
-            self.table.setItem(row, col_idx, item)
+        table.setItem(row, len(col_date_strs) - 1, QTableWidgetItem(""))
 
-        # 合計欄は空白
-        self.table.setItem(row, len(col_meta) - 1, QTableWidgetItem(""))
-
-    def _on_cell_clicked(self, row, col):
-        item = self.table.item(row, col)
+    def _on_cell_clicked(self, row: int, col: int, table: QTableWidget, slot: TimeSlot):
+        item = table.item(row, col)
         if not item:
             return
         data = item.data(Qt.ItemDataRole.UserRole)
@@ -320,12 +303,9 @@ class ScheduleView(QWidget):
         state, emp_id, ds, slot_v = data
 
         if state == "assigned":
-            # クリックで削除確認
             emp = next((e for e in self._employees if e.id == emp_id), None)
             if not emp:
                 return
-            slot = TimeSlot(slot_v)
-            pos_v = self._assignments.get((emp_id, ds, slot_v))
             reply = QMessageBox.question(
                 self, "シフト削除",
                 f"{emp.name} の {ds} {slot.short_label()} のアサインを削除しますか？",
@@ -337,14 +317,13 @@ class ScheduleView(QWidget):
                 self._render_table()
 
         elif state == "available":
-            # クリックでポジション選択 → 追加
             emp = next((e for e in self._employees if e.id == emp_id), None)
             if not emp:
                 return
-            dlg = PositionSelectDialog(emp, ds, TimeSlot(slot_v), self._employees, self._assignments, self._period.id, parent=self)
+            dlg = PositionSelectDialog(emp, ds, slot, self._employees, self._assignments, self._period.id, parent=self)
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected_position:
                 from models.schedule import ShiftAssignment
-                assignment = ShiftAssignment(emp_id, ds, TimeSlot(slot_v), dlg.selected_position)
+                assignment = ShiftAssignment(emp_id, ds, slot, dlg.selected_position)
                 repo.add_assignment(self._period.id, assignment)
                 self._assignments[(emp_id, ds, slot_v)] = dlg.selected_position.value
                 self._render_table()
@@ -377,18 +356,18 @@ class PositionSelectDialog(QDialog):
             key = (slot, pos)
             constraint = SHIFT_CONSTRAINTS.get(key, {})
             current = sum(1 for (eid, d2, s2), p in assignments.items() if d2 == ds and s2 == slot.value and p == pos.value)
-            skilled = 0
+            leaders = 0
             for eid, d2, s2 in assignments:
                 if d2 == ds and s2 == slot.value and assignments.get((eid, d2, s2)) == pos.value:
                     e = next((x for x in all_employees if x.id == eid), None)
-                    if e and e.is_skilled(pos.value):
-                        skilled += 1
+                    if e and e.is_leader(pos.value):
+                        leaders += 1
 
             emp_skill = emp.skill_for(pos.value)
             badge = SKILL_BADGE.get(emp_skill, "")
             btn = QPushButton(
                 f"{pos.label()}  [{current}/{constraint.get('max',3)}名]  "
-                f"熟練:{skilled}/{constraint.get('min_skilled',1)}名  "
+                f"★リーダー:{leaders}/{constraint.get('min_leader',1)}名  "
                 f"自分の習熟度:{emp_skill.label()}{badge}"
             )
             btn.setFixedHeight(40)

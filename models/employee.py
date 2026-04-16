@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
-from utils.constants import EmploymentType, SkillLevel
+from utils.constants import EmploymentType, SkillLevel, PrimaryPosition
 
 
 @dataclass
@@ -17,6 +17,7 @@ class Employee:
     employment_type: EmploymentType
     hall_skill: SkillLevel = SkillLevel.BEGINNER
     kitchen_skill: SkillLevel = SkillLevel.BEGINNER
+    primary_position: Optional[PrimaryPosition] = None  # None = どちらでも可
     fixed_patterns: list[FixedPattern] = field(default_factory=list)
     fixed_unavailable_dates: list[str] = field(default_factory=list)  # YYYY-MM-DD
     is_active: bool = True
@@ -30,6 +31,10 @@ class Employee:
     def is_skilled(self, position: str) -> bool:
         """ベテラン以上かどうか"""
         return self.skill_for(position).rank() >= SkillLevel.VETERAN.rank()
+
+    def is_leader(self, position: str) -> bool:
+        """リーダーかどうか"""
+        return self.skill_for(position) == SkillLevel.LEADER
 
     def has_fixed_pattern(self) -> bool:
         return any(p.breakfast or p.dinner for p in self.fixed_patterns)

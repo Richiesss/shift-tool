@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo
 from models.employee import Employee, FixedPattern
-from utils.constants import EmploymentType, SkillLevel, DAY_OF_WEEK_LABELS
+from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, DAY_OF_WEEK_LABELS
 from utils.theme import theme
 
 
@@ -41,13 +41,14 @@ class EmployeeView(QWidget):
 
         # テーブル
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "氏名", "ポジション習熟度", "雇用形態", "操作"])
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["ID", "氏名", "所属ポジション", "習熟度", "雇用形態", "操作"])
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setColumnWidth(0, 50)
-        self.table.setColumnWidth(3, 100)
-        self.table.setColumnWidth(4, 130)
+        self.table.setColumnWidth(0, 40)
+        self.table.setColumnWidth(2, 110)
+        self.table.setColumnWidth(4, 90)
+        self.table.setColumnWidth(5, 130)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -71,11 +72,13 @@ class EmployeeView(QWidget):
         self.employees = repo.get_all_employees()
         self.table.setRowCount(len(self.employees))
         for row, emp in enumerate(self.employees):
-            skill_text = f"ホール:{emp.hall_skill.label()} / キッチン:{emp.kitchen_skill.label()}"
+            pp_text = emp.primary_position.label() if emp.primary_position else "どちらでも"
+            skill_text = f"H:{emp.hall_skill.label()} / K:{emp.kitchen_skill.label()}"
             self.table.setItem(row, 0, QTableWidgetItem(str(emp.id)))
             self.table.setItem(row, 1, QTableWidgetItem(emp.name))
-            self.table.setItem(row, 2, QTableWidgetItem(skill_text))
-            self.table.setItem(row, 3, QTableWidgetItem(emp.employment_type.label()))
+            self.table.setItem(row, 2, QTableWidgetItem(pp_text))
+            self.table.setItem(row, 3, QTableWidgetItem(skill_text))
+            self.table.setItem(row, 4, QTableWidgetItem(emp.employment_type.label()))
 
             # 操作ボタン
             btn_widget = QWidget()
@@ -104,7 +107,7 @@ class EmployeeView(QWidget):
 
             btn_layout.addWidget(btn_edit)
             btn_layout.addWidget(btn_del)
-            self.table.setCellWidget(row, 4, btn_widget)
+            self.table.setCellWidget(row, 5, btn_widget)
             self.table.setRowHeight(row, 40)
 
     def _on_new(self):
@@ -158,6 +161,12 @@ class EmployeeDialog(QDialog):
         self.emp_type_combo.addItem("アルバイト", EmploymentType.PART_TIME)
         self.emp_type_combo.currentIndexChanged.connect(self._on_type_changed)
         form.addRow("雇用形態 *", self.emp_type_combo)
+
+        self.primary_pos_combo = QComboBox()
+        self.primary_pos_combo.addItem("どちらでも（制限なし）", None)
+        self.primary_pos_combo.addItem("ホール専任", PrimaryPosition.HALL)
+        self.primary_pos_combo.addItem("キッチン専任", PrimaryPosition.KITCHEN)
+        form.addRow("所属ポジション", self.primary_pos_combo)
         layout.addWidget(basic_group)
 
         # 習熟度
@@ -229,6 +238,8 @@ class EmployeeDialog(QDialog):
         self.name_edit.setText(emp.name)
         idx = self.emp_type_combo.findData(emp.employment_type)
         self.emp_type_combo.setCurrentIndex(idx)
+        idx_pp = self.primary_pos_combo.findData(emp.primary_position)
+        self.primary_pos_combo.setCurrentIndex(idx_pp if idx_pp >= 0 else 0)
 
         idx_h = self.hall_skill_combo.findData(emp.hall_skill)
         self.hall_skill_combo.setCurrentIndex(idx_h)
@@ -247,6 +258,7 @@ class EmployeeDialog(QDialog):
             return
 
         emp_type = self.emp_type_combo.currentData()
+        primary_position = self.primary_pos_combo.currentData()
         hall_skill = self.hall_skill_combo.currentData()
         kitchen_skill = self.kitchen_skill_combo.currentData()
 
@@ -265,6 +277,7 @@ class EmployeeDialog(QDialog):
             employment_type=emp_type,
             hall_skill=hall_skill,
             kitchen_skill=kitchen_skill,
+            primary_position=primary_position,
             fixed_patterns=patterns,
             fixed_unavailable_dates=existing_unavail,
         )

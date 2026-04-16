@@ -6,7 +6,7 @@ from ortools.sat.python import cp_model
 from models.employee import Employee
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import (
-    TimeSlot, Position, SkillLevel, EmploymentType,
+    TimeSlot, Position, SkillLevel, EmploymentType, PrimaryPosition,
     SHIFT_CONSTRAINTS, LATE_NIGHT_START
 )
 
@@ -74,6 +74,16 @@ def solve(
 
     # ── 絶対制約 ─────────────────────────────────────────────────────────
 
+    # 0. 所属ポジション制約: primary_position が設定されている場合は担当外のポジションに入れない
+    for emp in active_employees:
+        if emp.primary_position is None:
+            continue
+        restricted = [p for p in positions if p.value != emp.primary_position.value]
+        for ds in date_strs:
+            for slot in slots:
+                for pos in restricted:
+                    model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+
     # 1. 従業員は希望していない時間帯には入れない
     for emp in active_employees:
         for ds in date_strs:
@@ -118,7 +128,7 @@ def solve(
                 model.add(sum(staff_vars) >= constraint["min"])
                 model.add(sum(staff_vars) <= constraint["max"])
 
-    # 5. スキルバランス制約（絶対制約：ベテラン以上の最低数）
+    # 5. リーダー配置制約（絶対制約：リーダーの最低配置数）
     for ds in date_strs:
         for slot in slots:
             for pos in positions:
@@ -126,15 +136,15 @@ def solve(
                 constraint = SHIFT_CONSTRAINTS.get(key)
                 if not constraint:
                     continue
-                min_skilled = constraint.get("min_skilled", 0)
-                if min_skilled <= 0:
+                min_leader = constraint.get("min_leader", 0)
+                if min_leader <= 0:
                     continue
-                skilled_vars = [
+                leader_vars = [
                     assign[emp.id][ds][slot.value][pos.value]
                     for emp in active_employees
-                    if emp.is_skilled(pos.value)
+                    if emp.is_leader(pos.value)
                 ]
-                model.add(sum(skilled_vars) >= min_skilled)
+                model.add(sum(leader_vars) >= min_leader)
 
     # 6. 正社員の両時間帯掛け持ちは最小化（ソフト制約で対応）
     # 両時間帯掛け持ち変数
@@ -328,26 +338,25 @@ def _diagnose_infeasible(
                 if not constraint:
                     continue
 
-                # 希望者数
+                # 所属ポジションを考慮した希望者数
                 available = [
                     e for e in employees
                     if req_map.get((e.id, ds, slot.value), False)
+                    and (e.primary_position is None or e.primary_position.value == pos.value)
                 ]
-                available_for_pos = available  # ポジション横断あり
-
-                skilled = [e for e in available_for_pos if e.is_skilled(pos.value)]
+                leaders = [e for e in available if e.is_leader(pos.value)]
                 min_req = constraint["min"]
-                min_skilled = constraint.get("min_skilled", 0)
+                min_leader = constraint.get("min_leader", 0)
 
-                if len(available_for_pos) < min_req:
+                if len(available) < min_req:
                     errors.append(
                         f"❌ {label} {slot.short_label()} {pos.label()}: "
-                        f"希望者が{len(available_for_pos)}名（必要: {min_req}名以上）"
+                        f"希望者が{len(available)}名（必要: {min_req}名以上）"
                     )
-                elif len(skilled) < min_skilled:
+                elif len(leaders) < min_leader:
                     errors.append(
                         f"❌ {label} {slot.short_label()} {pos.label()}: "
-                        f"ベテラン以上が{len(skilled)}名（必要: {min_skilled}名以上）"
+                        f"リーダーが{len(leaders)}名（必要: {min_leader}名以上）"
                     )
 
     if not errors:

@@ -50,12 +50,21 @@ class Position(str, Enum):
         return {"hall": "ホール", "kitchen": "キッチン"}[self.value]
 
 
+class PrimaryPosition(str, Enum):
+    HALL = "hall"
+    KITCHEN = "kitchen"
+
+    def label(self):
+        return {"hall": "ホール専任", "kitchen": "キッチン専任"}[self.value]
+
+
 # シフト制約定数
+# min_leader: リーダー（最高習熟度）の最低配置人数
 SHIFT_CONSTRAINTS = {
-    (TimeSlot.BREAKFAST, Position.HALL):    {"min": 1, "max": 8, "min_skilled": 0},
-    (TimeSlot.BREAKFAST, Position.KITCHEN): {"min": 0, "max": 4, "min_skilled": 0},
-    (TimeSlot.DINNER, Position.HALL):       {"min": 2, "max": 8, "min_skilled": 0},
-    (TimeSlot.DINNER, Position.KITCHEN):    {"min": 1, "max": 5, "min_skilled": 0},
+    (TimeSlot.BREAKFAST, Position.HALL):    {"min": 3, "max": 4, "min_leader": 1},
+    (TimeSlot.BREAKFAST, Position.KITCHEN): {"min": 3, "max": 3, "min_leader": 1},
+    (TimeSlot.DINNER, Position.HALL):       {"min": 2, "max": 3, "min_leader": 1},
+    (TimeSlot.DINNER, Position.KITCHEN):    {"min": 3, "max": 3, "min_leader": 2},
 }
 
 # 法令関連定数

@@ -104,14 +104,16 @@ def initialize_db():
         );
     """)
 
-    # shift_requests テーブルにパターン関連カラムを追加（マイグレーション）
-    for col, definition in [
-        ("pattern_id",   "TEXT"),
-        ("custom_start", "TEXT"),
-        ("custom_end",   "TEXT"),
-    ]:
+    # マイグレーション: 新カラムを既存テーブルへ追加
+    migrations = [
+        ("shift_requests", "pattern_id",        "TEXT"),
+        ("shift_requests", "custom_start",       "TEXT"),
+        ("shift_requests", "custom_end",         "TEXT"),
+        ("employees",      "primary_position",   "TEXT DEFAULT NULL"),
+    ]
+    for table, col, definition in migrations:
         try:
-            cur.execute(f"ALTER TABLE shift_requests ADD COLUMN {col} {definition}")
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
         except Exception:
             pass  # 既に存在する場合は無視
 
