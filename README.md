@@ -112,12 +112,7 @@
 
 ### Windows (.exe)
 
-`SDU-Shift.exe` と `shift_tool.db` を**同じフォルダに置いて**実行してください。
-
-| ファイル | 説明 |
-|---|---|
-| `SDU-Shift.exe` | アプリ本体 |
-| `shift_tool.db` | テストデータ入りDB（2024年3月1〜15日・38名） |
+`SDU-Shift.exe` をダウンロードして実行してください。DBは初回起動時に自動作成されます。
 
 > SmartScreen の警告が出た場合は「詳細情報」→「実行」で起動できます。
 
@@ -128,7 +123,7 @@
 | 実行方法 | 保存先 |
 |---|---|
 | macOS .app | `~/Library/Application Support/SDU-Shift/shift_tool.db` |
-| Windows EXE | EXEと同じフォルダの `shift_tool.db` |
+| Windows EXE | EXEと同じフォルダの `shift_tool.db`（初回起動時に自動作成） |
 | 開発環境（python main.py） | `~/.shift_tool/shift_tool.db` |
 
 設定画面のバックアップ機能を使うと、任意の場所にDBを保存・復元できます。
@@ -146,13 +141,13 @@ python main.py
 
 **動作確認済み環境**: Python 3.11以上 / macOS 13+ / Windows 10・11
 
-### テストデータの投入
+### テストデータの投入（任意）
 
 ```bash
 python scripts/seed_test_data.py --reset
 ```
 
-2024年3月1〜15日の実績シフト（38名）がDBに登録されます。
+2024年3月1〜15日のサンプルシフト（38名）がDBに登録されます。
 
 ---
 
