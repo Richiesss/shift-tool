@@ -9,21 +9,22 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo
-from optimizer.solver import solve, SolveResult
+from optimizer.solver import solve, SolveResult, SolverConfig, PRIORITY_SCALE
 from utils.theme import theme
 
 
 class SolverWorker(QObject):
     finished = pyqtSignal(object)  # SolveResult
 
-    def __init__(self, period, employees, requests):
+    def __init__(self, period, employees, requests, config: SolverConfig):
         super().__init__()
         self.period = period
         self.employees = employees
         self.requests = requests
+        self.config = config
 
     def run(self):
-        result = solve(self.period, self.employees, self.requests)
+        result = solve(self.period, self.employees, self.requests, self.config)
         self.finished.emit(result)
 
 
@@ -65,6 +66,48 @@ class GenerateView(QWidget):
         self.check_label.setWordWrap(True)
         check_layout.addWidget(self.check_label)
         layout.addWidget(check_group)
+
+        # 最適化設定
+        config_group = QGroupBox("最適化設定（優先度）")
+        config_vl = QVBoxLayout(config_group)
+        config_vl.setSpacing(8)
+
+        # 優先度設定行: (表示名, attr名, ツールチップ)
+        _CONFIG_ROWS = [
+            ("人件費最小化",        "cost_scale",          "人件費が低い人員配置を優先"),
+            ("アルバイト希望充当",   "pt_pref_scale",       "アルバイトの希望シフトを優先して通す"),
+            ("正社員両掛け持ち回避", "double_penalty_scale", "正社員が朝食・ディナー両方に入ることを抑制"),
+            ("人員バランス均等化",   "balance_scale",       "特定の人に勤務が偏らないよう均等化"),
+            ("深夜勤務分散",         "late_night_scale",    "ディナー（深夜枠）の担当を分散させる"),
+        ]
+
+        self._config_combos: dict[str, QComboBox] = {}
+        for display_name, attr, tooltip in _CONFIG_ROWS:
+            row = QHBoxLayout()
+            lbl = QLabel(display_name)
+            lbl.setToolTip(tooltip)
+            lbl.setMinimumWidth(160)
+            combo = QComboBox()
+            combo.addItem("低",  "低")
+            combo.addItem("中",  "中")
+            combo.addItem("高",  "高")
+            combo.setCurrentIndex(1)   # デフォルト「中」
+            combo.setFixedWidth(80)
+            self._config_combos[attr] = combo
+            row.addWidget(lbl)
+            row.addWidget(combo)
+            row.addStretch()
+            config_vl.addLayout(row)
+
+        # リセットボタン
+        reset_row = QHBoxLayout()
+        reset_row.addStretch()
+        self._btn_reset = QPushButton("デフォルトに戻す")
+        self._btn_reset.setFixedHeight(28)
+        self._btn_reset.clicked.connect(self._reset_config)
+        reset_row.addWidget(self._btn_reset)
+        config_vl.addLayout(reset_row)
+        layout.addWidget(config_group)
 
         # 生成ボタン
         btn_row = QHBoxLayout()
@@ -114,6 +157,11 @@ class GenerateView(QWidget):
             f"QPushButton {{ background:{c['success']}; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }}"
             f" QPushButton:hover {{ background:{c['success_hover']}; }}"
             f" QPushButton:disabled {{ background:{c['success_dis']}; }}"
+        )
+        self._btn_reset.setStyleSheet(
+            f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
+            f"border-radius:4px; color:{c['text']}; padding:0 12px; }}"
+            f" QPushButton:hover {{ background:{c['surface2']}; }}"
         )
 
     def apply_theme(self):
@@ -177,7 +225,7 @@ class GenerateView(QWidget):
         self.result_text.setPlainText("最適化中です。しばらくお待ちください…")
 
         self._thread = QThread()
-        self._worker = SolverWorker(self._period, employees, requests)
+        self._worker = SolverWorker(self._period, employees, requests, self._build_config())
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_finished)
@@ -217,6 +265,21 @@ class GenerateView(QWidget):
             lines.append("      手動でシフト表画面からアサインしてください。")
 
         self.result_text.setPlainText("\n".join(lines))
+
+    def _reset_config(self):
+        for combo in self._config_combos.values():
+            combo.setCurrentIndex(1)  # 「中」
+
+    def _build_config(self) -> SolverConfig:
+        scales = {attr: PRIORITY_SCALE[combo.currentData()]
+                  for attr, combo in self._config_combos.items()}
+        return SolverConfig(
+            cost_scale=scales["cost_scale"],
+            pt_pref_scale=scales["pt_pref_scale"],
+            double_penalty_scale=scales["double_penalty_scale"],
+            balance_scale=scales["balance_scale"],
+            late_night_scale=scales["late_night_scale"],
+        )
 
     def _on_go_to_edit(self):
         if self._period:

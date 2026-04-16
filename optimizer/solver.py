@@ -20,23 +20,41 @@ class SolveResult:
     solve_time_sec: float
 
 
+# スケール係数のプリセット
+PRIORITY_SCALE = {"低": 0.1, "中": 1.0, "高": 10.0}
+
+
+@dataclass
+class SolverConfig:
+    """最適化の優先度設定（各スケールは PRIORITY_SCALE の値を使用）"""
+    cost_scale: float = 1.0            # 人件費最小化
+    pt_pref_scale: float = 1.0         # アルバイト希望充当
+    double_penalty_scale: float = 1.0  # 正社員両掛け持ち回避
+    balance_scale: float = 1.0         # 人員バランス均等化
+    late_night_scale: float = 1.0      # 深夜勤務分散
+
+
 def solve(
     period: SchedulePeriod,
     employees: list[Employee],
     requests: list[ShiftRequest],
+    config: SolverConfig | None = None,
 ) -> SolveResult:
     """
     シフトを最適化して SolveResult を返す。
 
     優先順位（ソフト制約のペナルティ重み）:
-      1. 人件費最小化（総時間削減）         weight=1000
-      2. 残業・深夜の特定人物集中回避       weight=500
-      3a. 正社員希望を必ず通す             weight=200000（P1コストを上回り常に充当）
-      3b. アルバイト希望を通す             weight=100
-      4. 人員バランス均等化                 weight=10
+      1. 人件費最小化（総時間削減）         weight=1000 × cost_scale
+      2. 正社員両掛け持ち回避              weight=500 × double_penalty_scale
+      2b. 深夜勤務分散                     weight=500 × late_night_scale
+      3a. 正社員希望を必ず通す             weight=200000（固定）
+      3b. アルバイト希望を通す             weight=100 × pt_pref_scale
+      4. 人員バランス均等化                 weight=10 × balance_scale
     """
     import time
     t0 = time.time()
+    if config is None:
+        config = SolverConfig()
 
     warnings: list[str] = []
     errors: list[str] = []
@@ -194,34 +212,30 @@ def solve(
                         DEFAULT_SLOT_HOURS[slot]
                     )
                     # CP-SATは整数のみ → 時間×10で精度を保ちつつ整数化
-                    penalty_terms.append(int(1000 * hours * 10) * var)
+                    w = max(1, int(1000 * hours * 10 * config.cost_scale))
+                    penalty_terms.append(w * var)
 
     # P2: 正社員の両時間帯掛け持ちにペナルティ
+    double_w = max(1, int(500 * config.double_penalty_scale))
     for dv in double_vars.values():
-        penalty_terms.append(500 * dv)
+        penalty_terms.append(double_w * dv)
 
     # P2b: 深夜（ディナー22:00〜23:00）の集中を防ぐ
     # ディナー担当は全員深夜1時間が発生するが、特定人物への集中は偏差で管理
-    dinner_count: dict[int, list] = {emp.id: [] for emp in active_employees}
-    for emp in active_employees:
-        for ds in date_strs:
-            for pos in positions:
-                v = assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
-                dinner_count[emp.id].append(v)
-
     # 深夜掛け持ちペナルティ: 個人のディナー合計の2乗を最小化（凸的分散）
     # ※ CP-SATは2次項不可のため、線形近似（合計に重み）
+    late_night_w = max(1, int(500 * config.late_night_scale))
     for emp in active_employees:
         for ds in date_strs:
             for pos in positions:
                 v = assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
-                penalty_terms.append(500 * v)  # ディナー1回ごとにペナルティ
+                penalty_terms.append(late_night_w * v)  # ディナー1回ごとにペナルティ
 
     # P3: 希望を通す = 希望があるのに入れない場合ペナルティ
     # 正社員優先充当ルール: 正社員の未充当は最高優先でペナルティを課す
     # → 正社員が希望した枠には必ず入れ、余りをアルバイトで補完する
-    FT_NOT_WORKED_PENALTY = 200_000  # 正社員: P1コスト（最大〜100000）を上回る重み
-    PT_NOT_WORKED_PENALTY = 100      # アルバイト: 従来通り
+    FT_NOT_WORKED_PENALTY = 200_000  # 正社員: P1コスト（最大〜100000）を上回る重み（固定）
+    PT_NOT_WORKED_PENALTY = max(1, int(100 * config.pt_pref_scale))
     for emp in active_employees:
         penalty = (FT_NOT_WORKED_PENALTY
                    if emp.employment_type == EmploymentType.FULL_TIME
@@ -238,13 +252,14 @@ def solve(
     # P4: 人員バランス = ポジション毎の総シフト数の偏差を最小化
     # 各日の各（スロット×ポジション）の担当人数を均等にするため、
     # 1日の担当数の最大・最小差をペナルティに
+    balance_w = max(1, int(10 * config.balance_scale))
     for emp in active_employees:
         total_worked = sum(
             assign[emp.id][ds][slot.value][pos.value]
             for ds in date_strs for slot in slots for pos in positions
         )
         # ダミーで総勤務回数の二乗偏差を線形近似
-        penalty_terms.append(10 * total_worked)
+        penalty_terms.append(balance_w * total_worked)
 
     model.minimize(sum(penalty_terms))
 
@@ -274,7 +289,7 @@ def solve(
         # ベストエフォート生成: 人数・リーダー制約をソフト化して再実行
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
-            req_map, req_hours
+            req_map, req_hours, config
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
 
@@ -303,10 +318,12 @@ def _extract_assignments(solver, assign, active_employees, date_strs, slots, pos
 
 def _solve_best_effort(
     active_employees, date_strs, slots, positions,
-    req_map, req_hours
+    req_map, req_hours, config: SolverConfig | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     import time
+    if config is None:
+        config = SolverConfig()
     model = cp_model.CpModel()
 
     assign: dict = {}
@@ -395,10 +412,11 @@ def _solve_best_effort(
                 for pos in positions:
                     var = assign[emp.id][ds][slot.value][pos.value]
                     hours = req_hours.get((emp.id, ds, slot.value), DEFAULT_SLOT_HOURS[slot])
-                    penalty_terms.append(int(1000 * hours * 10) * var)
+                    w = max(1, int(1000 * hours * 10 * config.cost_scale))
+                    penalty_terms.append(w * var)
 
     FT_PENALTY = 200_000
-    PT_PENALTY = 100
+    PT_PENALTY = max(1, int(100 * config.pt_pref_scale))
     for emp in active_employees:
         penalty = FT_PENALTY if emp.employment_type.value == "full_time" else PT_PENALTY
         for ds in date_strs:
