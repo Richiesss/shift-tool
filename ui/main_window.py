@@ -11,6 +11,7 @@ from ui.employee_view import EmployeeView
 from ui.shift_input_view import ShiftInputView
 from ui.generate_view import GenerateView
 from ui.schedule_view import ScheduleView
+from ui.settings_view import SettingsView
 from utils.theme import theme
 
 NAV_ITEMS = [
@@ -18,6 +19,7 @@ NAV_ITEMS = [
     ("📝", "希望シフト入力", 1),
     ("⚡", "シフト自動生成", 2),
     ("📅", "シフト表示・編集", 3),
+    ("⚙️", "設定", 4),
 ]
 
 SIDEBAR_W = 160
@@ -115,13 +117,16 @@ class MainWindow(QMainWindow):
         self._shift_input_view = ShiftInputView()
         self._generate_view = GenerateView()
         self._schedule_view = ScheduleView()
+        self._settings_view = SettingsView()
 
         self.stack.addWidget(self._employee_view)
         self.stack.addWidget(self._shift_input_view)
         self.stack.addWidget(self._generate_view)
         self.stack.addWidget(self._schedule_view)
+        self.stack.addWidget(self._settings_view)
 
         self._generate_view.schedule_generated.connect(self._on_schedule_generated)
+        self._settings_view.db_imported.connect(self._on_db_imported)
         root.addWidget(self.stack)
 
         self._apply_sidebar_style()
@@ -146,7 +151,7 @@ class MainWindow(QMainWindow):
             btn.apply_theme()
         # 各ビューのテーマ更新
         for view in (self._employee_view, self._shift_input_view,
-                     self._generate_view, self._schedule_view):
+                     self._generate_view, self._schedule_view, self._settings_view):
             if hasattr(view, "apply_theme"):
                 view.apply_theme()
 
@@ -163,3 +168,10 @@ class MainWindow(QMainWindow):
     def _on_schedule_generated(self, period_id: int):
         self._schedule_view.refresh(period_id)
         self._nav_to(3)
+
+    def _on_db_imported(self):
+        """DB入れ替え後、全ビューのデータを再読み込み"""
+        self._employee_view.refresh()
+        self._shift_input_view._load_periods()
+        self._generate_view.refresh()
+        self._schedule_view.refresh()
