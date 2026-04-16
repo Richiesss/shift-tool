@@ -58,7 +58,7 @@ _CREDITS_HTML = """
 <h2>クレジット</h2>
 
 <h3>開発</h3>
-<p>Richiesss</p>
+<p>Richiesss(島野 凌)</p>
 
 <h3>使用ライブラリ</h3>
 <table border="1" cellpadding="4" cellspacing="0">
@@ -75,7 +75,7 @@ _CREDITS_HTML = """
 _BUG_HTML = """
 <h2>バグ報告・フィードバック</h2>
 
-<p>バグの報告・機能リクエストは GitHub Issues からお願いします。</p>
+<p>バグの報告・機能リクエストは GitHub Issues(LINEでもいいよ)からお願いします。</p>
 
 <h3>報告時に含めてほしい情報</h3>
 <ul>
