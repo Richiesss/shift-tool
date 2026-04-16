@@ -128,7 +128,7 @@ class EmployeeView(QWidget):
     def _on_delete(self, emp: Employee):
         reply = QMessageBox.question(
             self, "削除確認",
-            f"「{emp.name}」を削除しますか？\n（過去のシフトデータは保持されます）",
+            f"「{emp.name}さん」を削除しますか？\n（過去のシフトデータは保持されます）",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:

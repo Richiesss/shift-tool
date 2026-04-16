@@ -2,7 +2,8 @@
 from __future__ import annotations
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy
+    QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy,
+    QDialog
 )
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QDesktopServices
@@ -26,6 +27,66 @@ NAV_ITEMS = [
 ]
 
 SIDEBAR_W = 160
+
+
+# ── アップデートダイアログ ────────────────────────────────────────────────
+
+class _UpdateDialog(QDialog):
+    def __init__(self, tag: str, url: str, parent=None):
+        super().__init__(parent)
+        self._url = url
+        self.setWindowTitle("アップデートのお知らせ")
+        self.setFixedWidth(460)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        # タイトル
+        title = QLabel(f"🆕  新しいバージョン {tag} が利用可能です")
+        from PyQt6.QtGui import QFont
+        title.setFont(QFont("", 12, QFont.Weight.Bold))
+        layout.addWidget(title)
+
+        # 手順説明
+        steps = QLabel(
+            "ダウンロード・インストール前に以下の手順を必ず守ってください。\n\n"
+            "　① 「設定」画面の「バックアップ」ボタンでデータを保存する\n"
+            "　② 旧バージョンの EXE ファイルを削除する\n"
+            "　③ 新しい EXE をダウンロードして起動する\n\n"
+            "※ バックアップを取らずに更新すると、まれにデータが引き継げない場合があります。"
+        )
+        steps.setWordWrap(True)
+        steps.setStyleSheet(
+            "background:#fffbeb; border:1px solid #fcd34d; "
+            "border-radius:6px; padding:10px; line-height:1.6;"
+        )
+        layout.addWidget(steps)
+
+        # ボタン行
+        btn_row = QHBoxLayout()
+        btn_later = QPushButton("後で")
+        btn_later.setFixedHeight(34)
+        btn_later.clicked.connect(self.reject)
+
+        btn_open = QPushButton("ダウンロードページを開く →")
+        btn_open.setFixedHeight(34)
+        btn_open.setStyleSheet(
+            "QPushButton { background:#2563eb; color:white; border-radius:5px; "
+            "padding:0 16px; font-weight:bold; }"
+            " QPushButton:hover { background:#1d4ed8; }"
+        )
+        btn_open.clicked.connect(self._open_and_close)
+
+        btn_row.addWidget(btn_later)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_open)
+        layout.addLayout(btn_row)
+
+    def _open_and_close(self):
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(self._url))
+        self.accept()
 
 
 # ── アップデートチェッカー（バックグラウンドスレッド）──────────────────────
@@ -233,17 +294,25 @@ class MainWindow(QMainWindow):
 
     def _on_update_result(self, is_newer: bool, tag: str, url: str):
         self._update_url = url
-        if is_newer:
-            self._update_label.setText(
-                f"🆕 {tag} が\n利用可能です\nクリックして\nダウンロード"
-            )
-            self._update_label.setVisible(True)
-            self._update_label.setStyleSheet(
-                "background:#1d4ed8; color:white; font-size:10px; "
-                "padding:6px 4px; border-radius:4px; margin:4px;"
-            )
+        self._update_tag = tag
+        if not is_newer:
+            return
+
+        # サイドバーに常駐バナーを表示
+        self._update_label.setText(f"🆕 {tag}\n利用可能\nクリックで開く")
+        self._update_label.setVisible(True)
+        self._update_label.setStyleSheet(
+            "background:#1d4ed8; color:white; font-size:10px; "
+            "padding:6px 4px; border-radius:4px; margin:4px;"
+        )
+
+        # 初回通知ダイアログを表示
+        dlg = _UpdateDialog(tag, url, parent=self)
+        dlg.exec()
 
     def _on_update_label_clicked(self, event):
         url = getattr(self, "_update_url", "")
         if url:
-            QDesktopServices.openUrl(QUrl(url))
+            tag = getattr(self, "_update_tag", "")
+            dlg = _UpdateDialog(tag, url, parent=self)
+            dlg.exec()

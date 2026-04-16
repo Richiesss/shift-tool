@@ -481,4 +481,4 @@ class ShiftInputView(QWidget):
 
         repo.save_shift_requests(self._period.id, requests)
         self._update_progress()
-        QMessageBox.information(self, "保存完了", f"「{emp.name}」の希望シフトを保存しました")
+        QMessageBox.information(self, "保存完了", f"「{emp.name}さん」の希望シフトを保存しました")

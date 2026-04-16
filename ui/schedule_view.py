@@ -517,7 +517,7 @@ class ScheduleView(QWidget):
             reinf_note = "（応援要員）" if is_reinf else ""
             reply = QMessageBox.question(
                 self, "シフト削除",
-                f"{emp.name}{reinf_note} の {ds} {slot.short_label()} のアサインを削除しますか？",
+                f"{emp.name}さん{reinf_note} の {ds} {slot.short_label()} のアサインを削除しますか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             if reply == QMessageBox.StandardButton.Yes:
@@ -547,7 +547,7 @@ class ScheduleView(QWidget):
                 return
             reply = QMessageBox.question(
                 self, "応援要員追加",
-                f"「{emp.name}」はこの時間帯の希望を出していませんが、\n"
+                f"「{emp.name}さん」はこの時間帯の希望を出していませんが、\n"
                 f"応援要員として {ds} {slot.short_label()} に追加しますか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
@@ -781,7 +781,7 @@ class PositionSelectDialog(QDialog):
         super().__init__(parent)
         self.selected_position = None
         suffix = "（応援要員）" if is_reinforcement else ""
-        self.setWindowTitle(f"{emp.name} のポジション選択{suffix}")
+        self.setWindowTitle(f"{emp.name}さんのポジション選択{suffix}")
         self.setFixedWidth(340)
 
         layout = __import__("PyQt6.QtWidgets", fromlist=["QVBoxLayout"]).QVBoxLayout(self)
@@ -789,7 +789,7 @@ class PositionSelectDialog(QDialog):
         d = date.fromisoformat(ds)
         dow = DAY_OF_WEEK_LABELS[d.weekday()]
         layout.addWidget(QLabel(f"日付: {d.month}/{d.day}({dow})  {slot.short_label()}"))
-        layout.addWidget(QLabel(f"従業員: {emp.name}"))
+        layout.addWidget(QLabel(f"従業員: {emp.name}さん"))
         if is_reinforcement:
             warn = QLabel("⚠️ この従業員は希望を出していません（応援要員として追加）")
             warn.setStyleSheet("color:#b45309; font-size:11px;")
