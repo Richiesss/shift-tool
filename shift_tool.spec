@@ -34,6 +34,8 @@ added_datas = [
     (str(ORTOOLS_DIR),   "ortools"),
     (str(REPORTLAB_DIR), "reportlab"),
     (str(OPENPYXL_DIR),  "openpyxl"),
+    # アイコンをランタイムでも読み込めるよう同梱（タスクバー表示用）
+    ("assets/icon.ico",  "assets"),
 ]
 
 # macOS: Qt6 フレームワーク・プラグインを明示的に含める
