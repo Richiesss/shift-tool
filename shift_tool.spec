@@ -47,6 +47,7 @@ if os.path.exists("assets/shift_tool_seed.db"):
 
 # ── 非表示インポート ───────────────────────────────────────────────────
 hidden_imports = [
+    "utils.theme",
     "ortools.sat.python.cp_model",
     "ortools.sat",
     "ortools.sat.python",
