@@ -67,12 +67,13 @@ def launch_windows_updater(old_exe: str, new_exe: str) -> bool:
     バッチスクリプトを生成して現プロセス終了後に:
       1. 旧 EXE を削除
       2. 新 EXE を旧 EXE のパスに移動
-      3. 新 EXE を起動
-      4. バッチ自己削除
+      3. バッチ自己削除
     を行う。失敗時は False を返す。
 
-    注意: このメソッド呼び出し後は os._exit(0) で即時終了すること。
-    バッチは 6 秒待機してから置換するため、アプリが確実に終了している。
+    ※ 自動再起動は行わない。
+       PyInstaller one-file モードは起動時に %TEMP%/_MEIxxxxxx を展開するが、
+       バッチ経由で start した場合に DLL 検索パスが正しく設定されずクラッシュする。
+       ユーザーが手動でアプリを起動することで確実に動作する。
     """
     import tempfile
     import subprocess
@@ -91,7 +92,6 @@ chcp 932 > nul
 ping -n 12 127.0.0.1 > nul
 del /f /q "{old_exe}"
 move /Y "{new_exe}" "{old_exe}"
-start "" "{old_exe}"
 del "%~f0"
 """)
         subprocess.Popen(

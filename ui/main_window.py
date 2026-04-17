@@ -199,7 +199,8 @@ class _UpdateDialog(QDialog):
             self, "アップデート適用",
             "ダウンロードが完了しました。\n"
             "アプリを終了してアップデートを適用しますか？\n\n"
-            "（アプリが自動的に再起動されます）",
+            "※ アプリ終了後、EXE ファイルが自動的に置き換えられます。\n"
+            "  完了後はアプリを手動で起動してください。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -217,10 +218,12 @@ class _UpdateDialog(QDialog):
             QMessageBox.critical(self, "エラー", "アップデーターの起動に失敗しました。\n手動でアップデートしてください。")
             return
 
-        # QApplication.quit() で正常終了させる。
-        # PyInstaller は atexit で一時ディレクトリ(_MEIxxxxxx)を削除するため、
-        # os._exit() のような強制終了は使わない（DLL の残骸で新 EXE がクラッシュする）。
-        # バッチ側は ping による固定待機なので、アプリが数秒以内に終了すれば問題ない。
+        QMessageBox.information(
+            self, "アップデート準備完了",
+            "アプリを終了します。\n\n"
+            "約10秒後に EXE ファイルが新しいバージョンに置き換えられます。\n"
+            "完了後、アプリを手動で起動してください。"
+        )
         QApplication.instance().quit()
 
     def _on_download_error(self, msg: str):
