@@ -222,6 +222,16 @@ class ShiftInputView(QWidget):
         copy_row.addWidget(self._prev_period_combo)
         copy_row.addWidget(self._btn_copy)
         copy_row.addStretch()
+
+        self._btn_forms_import = QPushButton("Google Forms CSV をインポート")
+        self._btn_forms_import.setFixedHeight(28)
+        self._btn_forms_import.setEnabled(False)
+        self._btn_forms_import.setToolTip(
+            "Google Forms の回答 CSV を読み込んで全スタッフの希望を一括入力します\n"
+            "「Google Forms 設定方法」タブでフォームのテンプレートを確認できます"
+        )
+        self._btn_forms_import.clicked.connect(self._on_forms_import)
+        copy_row.addWidget(self._btn_forms_import)
         layout.addLayout(copy_row)
 
         # パターン凡例
@@ -336,6 +346,12 @@ class ShiftInputView(QWidget):
             f"padding:0 10px; color:{c['text']}; background:{c['surface']}; }}"
             f" QPushButton:hover {{ background:{c['surface2']}; }}"
             f" QPushButton:disabled {{ opacity:0.4; }}"
+        )
+        self._btn_forms_import.setStyleSheet(
+            f"QPushButton {{ border:1px solid {c['primary']}; border-radius:4px; "
+            f"padding:0 10px; color:{c['primary']}; background:{c['surface']}; }}"
+            f" QPushButton:hover {{ background:{c['surface2']}; }}"
+            f" QPushButton:disabled {{ color:{c['text2']}; border-color:{c['border2']}; }}"
         )
         self._btn_del_period.setStyleSheet(
             f"QPushButton {{ background:{c['danger_bg']}; border:1px solid {c['danger_border']}; "
@@ -488,8 +504,10 @@ class ShiftInputView(QWidget):
 
     def _load_employees(self):
         if not self._period:
+            self._btn_forms_import.setEnabled(False)
             return
         self._employees = repo.get_all_employees()
+        self._btn_forms_import.setEnabled(bool(self._employees))
         if not self._employees:
             # item 4: 空状態ガイダンス
             self.progress_label.setText(
@@ -727,3 +745,13 @@ class ShiftInputView(QWidget):
         self._update_progress()
         from utils.toast import show_toast  # item 5
         show_toast(f"「{emp.name}さん」の希望シフトを保存しました")
+
+    # ── Google Forms CSV インポート ────────────────────────────────────────
+
+    def _on_forms_import(self):
+        if not self._period or not self._employees:
+            return
+        from ui.forms_import_dialog import FormsImportDialog
+        dlg = FormsImportDialog(self._period, self._employees, parent=self)
+        if dlg.exec():
+            self._load_employees()
