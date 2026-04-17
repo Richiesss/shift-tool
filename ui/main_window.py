@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy,
-    QDialog
+    QDialog, QProgressBar, QMessageBox
 )
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QDesktopServices
@@ -34,59 +34,180 @@ SIDEBAR_W = 160
 class _UpdateDialog(QDialog):
     def __init__(self, tag: str, url: str, parent=None):
         super().__init__(parent)
-        self._url = url
+        self._url  = url
+        self._tag  = tag
         self.setWindowTitle("アップデートのお知らせ")
-        self.setFixedWidth(460)
+        self.setFixedWidth(480)
+        self._build_ui()
 
+    def _build_ui(self):
+        import sys
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        # タイトル
-        title = QLabel(f"🆕  新しいバージョン {tag} が利用可能です")
-        from PyQt6.QtGui import QFont
+        title = QLabel(f"🆕  新しいバージョン {self._tag} が利用可能です")
         title.setFont(QFont("", 12, QFont.Weight.Bold))
         layout.addWidget(title)
 
-        # 手順説明
-        steps = QLabel(
-            "ダウンロード・インストール前に以下の手順を必ず守ってください。\n\n"
-            "　① 「設定」画面の「バックアップ」ボタンでデータを保存する\n"
-            "　② 旧バージョンの EXE ファイルを削除する\n"
-            "　③ 新しい EXE をダウンロードして起動する\n\n"
-            "※ バックアップを取らずに更新すると、まれにデータが引き継げない場合があります。"
+        warn = QLabel(
+            "⚠️ アップデート前に必ずバックアップを取ってください。\n"
+            "「設定」→「バックアップを保存...」からデータをバックアップできます。"
         )
-        steps.setWordWrap(True)
-        steps.setStyleSheet(
+        warn.setWordWrap(True)
+        warn.setStyleSheet(
             "background:#fffbeb; border:1px solid #fcd34d; "
-            "border-radius:6px; padding:10px; line-height:1.6;"
+            "border-radius:6px; padding:10px;"
         )
-        layout.addWidget(steps)
+        layout.addWidget(warn)
+
+        # 進捗エリア（ダウンロード中のみ表示）
+        self._progress_label = QLabel("")
+        self._progress_label.setVisible(False)
+        layout.addWidget(self._progress_label)
+
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setVisible(False)
+        self._progress_bar.setRange(0, 100)
+        layout.addWidget(self._progress_bar)
 
         # ボタン行
         btn_row = QHBoxLayout()
-        btn_later = QPushButton("後で")
-        btn_later.setFixedHeight(34)
-        btn_later.clicked.connect(self.reject)
+        self._btn_later = QPushButton("後で")
+        self._btn_later.setFixedHeight(34)
+        self._btn_later.clicked.connect(self.reject)
 
-        btn_open = QPushButton("ダウンロードページを開く →")
-        btn_open.setFixedHeight(34)
-        btn_open.setStyleSheet(
-            "QPushButton { background:#2563eb; color:white; border-radius:5px; "
-            "padding:0 16px; font-weight:bold; }"
-            " QPushButton:hover { background:#1d4ed8; }"
+        self._btn_browser = QPushButton("ブラウザで開く")
+        self._btn_browser.setFixedHeight(34)
+        self._btn_browser.setStyleSheet(
+            "QPushButton { border:1px solid #d1d5db; border-radius:5px; padding:0 14px; }"
+            " QPushButton:hover { background:#f3f4f6; }"
         )
-        btn_open.clicked.connect(self._open_and_close)
+        self._btn_browser.clicked.connect(self._open_browser)
 
-        btn_row.addWidget(btn_later)
+        btn_row.addWidget(self._btn_later)
         btn_row.addStretch()
-        btn_row.addWidget(btn_open)
+        btn_row.addWidget(self._btn_browser)
+
+        # Windows 凍結アプリのみ自動アップデートボタンを表示
+        is_frozen_windows = (
+            getattr(sys, "frozen", False) and sys.platform == "win32"
+        )
+        if is_frozen_windows:
+            self._btn_auto = QPushButton("⬇ 自動アップデート")
+            self._btn_auto.setFixedHeight(34)
+            self._btn_auto.setStyleSheet(
+                "QPushButton { background:#2563eb; color:white; border-radius:5px; "
+                "padding:0 16px; font-weight:bold; }"
+                " QPushButton:hover { background:#1d4ed8; }"
+            )
+            self._btn_auto.clicked.connect(self._start_auto_update)
+            btn_row.addWidget(self._btn_auto)
+
         layout.addLayout(btn_row)
 
-    def _open_and_close(self):
-        from PyQt6.QtGui import QDesktopServices
-        from PyQt6.QtCore import QUrl
+    def _open_browser(self):
         QDesktopServices.openUrl(QUrl(self._url))
         self.accept()
+
+    def _start_auto_update(self):
+        """ダウンロードスレッドを起動してプログレスバーを表示する"""
+        self._btn_auto.setEnabled(False)
+        self._btn_browser.setEnabled(False)
+        self._btn_later.setEnabled(False)
+
+        self._progress_label.setText("リリース情報を取得中...")
+        self._progress_label.setVisible(True)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setVisible(True)
+
+        self._dl_thread = _DownloadThread()
+        self._dl_thread.progress.connect(self._on_progress)
+        self._dl_thread.finished_ok.connect(self._on_download_done)
+        self._dl_thread.finished_err.connect(self._on_download_error)
+        self._dl_thread.start()
+
+    def _on_progress(self, downloaded: int, total: int, label: str):
+        self._progress_label.setText(label)
+        if total > 0:
+            self._progress_bar.setValue(int(downloaded * 100 / total))
+        else:
+            self._progress_bar.setRange(0, 0)  # indeterminate
+
+    def _on_download_done(self, new_exe: str):
+        self._progress_bar.setValue(100)
+        self._progress_bar.setRange(0, 100)
+        self._progress_label.setText("✅ ダウンロード完了")
+
+        reply = QMessageBox.question(
+            self, "アップデート適用",
+            "ダウンロードが完了しました。\n"
+            "アプリを終了してアップデートを適用しますか？\n\n"
+            "（アプリが自動的に再起動されます）",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            self._btn_later.setEnabled(True)
+            self._btn_browser.setEnabled(True)
+            return
+
+        from utils.updater import get_current_exe, launch_windows_updater
+        old_exe = get_current_exe()
+        if not old_exe:
+            QMessageBox.critical(self, "エラー", "現在の EXE パスを取得できませんでした。")
+            return
+
+        if not launch_windows_updater(old_exe, new_exe):
+            QMessageBox.critical(self, "エラー", "アップデーターの起動に失敗しました。\n手動でアップデートしてください。")
+            return
+
+        from PyQt6.QtWidgets import QApplication
+        QApplication.instance().quit()
+
+    def _on_download_error(self, msg: str):
+        self._progress_bar.setVisible(False)
+        self._progress_label.setText(f"❌ エラー: {msg}")
+        self._btn_later.setEnabled(True)
+        self._btn_browser.setEnabled(True)
+        self._btn_auto.setEnabled(True)
+
+
+# ── ダウンロードスレッド ───────────────────────────────────────────────────
+
+class _DownloadThread(QThread):
+    progress    = pyqtSignal(int, int, str)   # (downloaded, total, label)
+    finished_ok  = pyqtSignal(str)             # new_exe_path
+    finished_err = pyqtSignal(str)             # error message
+
+    def run(self):
+        import tempfile
+        try:
+            from utils.updater import fetch_latest_release_info, download_file
+            self.progress.emit(0, 0, "リリース情報を取得中...")
+            info = fetch_latest_release_info()
+            exe_url = info.get("exe_url", "")
+            if not exe_url:
+                self.finished_err.emit("ダウンロード URL が見つかりませんでした。")
+                return
+
+            fd, tmp_path = tempfile.mkstemp(suffix=".exe", prefix="SDU-Shift_new_")
+            import os
+            os.close(fd)
+
+            def progress_cb(downloaded, total):
+                if total:
+                    mb_dl = downloaded / 1_048_576
+                    mb_tot = total / 1_048_576
+                    label = f"ダウンロード中... {mb_dl:.1f} / {mb_tot:.1f} MB"
+                else:
+                    mb_dl = downloaded / 1_048_576
+                    label = f"ダウンロード中... {mb_dl:.1f} MB"
+                self.progress.emit(downloaded, total, label)
+
+            download_file(exe_url, tmp_path, progress_cb)
+            self.finished_ok.emit(tmp_path)
+
+        except Exception as e:
+            self.finished_err.emit(str(e))
 
 
 # ── アップデートチェッカー（バックグラウンドスレッド）──────────────────────
