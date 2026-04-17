@@ -51,6 +51,54 @@ def _parse_date_from_header(header: str, period: SchedulePeriod) -> Optional[str
     return None
 
 
+def _parse_numbered_shift_header(header: str, period: SchedulePeriod) -> Optional[str]:
+    """
+    「希望シフト [N]」形式のヘッダーから YYYY-MM-DD を返す。
+    N は 1 始まりで period.start_date から N-1 日後に対応する。
+    例: 「希望シフト [3]」→ period.start_date + 2 days
+    """
+    m = re.search(r'\[(\d+)\]', header)
+    if not m:
+        return None
+    n = int(m.group(1))
+    dates = list(period.date_range())
+    if 1 <= n <= len(dates):
+        return dates[n - 1].isoformat()
+    return None
+
+
+def _time_range_to_pattern(time_str: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    「6:00~10:00」などの時刻範囲文字列を (pattern_id, custom_start, custom_end) に変換する。
+
+    - 既存パターンの start/end と完全一致 → (pattern_id, None, None)
+    - 一致なし                            → ("custom", start, end)
+    - 解析不能                            → (None, None, None)
+
+    対応フォーマット: HH:MM ~ HH:MM（半角・全角どちらも可）
+    """
+    import unicodedata
+    s = unicodedata.normalize('NFKC', time_str.strip())
+    m = re.match(r'^(\d{1,2}:\d{2})\s*[~〜～\-–—]+\s*(\d{1,2}:\d{2})$', s)
+    if not m:
+        return None, None, None
+
+    def _norm(t: str) -> str:
+        h, mn = t.split(':')
+        return f"{int(h):02d}:{mn}"
+
+    start = _norm(m.group(1))
+    end   = _norm(m.group(2))
+
+    for p in ALL_PATTERNS:
+        if p.start and p.end:
+            if _norm(p.start) == start and _norm(p.end) == end:
+                return p.id, None, None
+
+    # 既存パターンに一致しない → カスタムとして時刻を保持
+    return "custom", start, end
+
+
 def _parse_custom_times(raw: str, period: SchedulePeriod) -> dict[str, tuple[str, str]]:
     """
     「4/1: 10:00〜16:00, 4/5: 11:00〜20:00」などを解析して
@@ -137,6 +185,8 @@ def parse_forms_csv(
             date_cols: dict[str, dict[str, str]] = {}
             for h in headers:
                 ds = _parse_date_from_header(h, period)
+                if not ds:
+                    ds = _parse_numbered_shift_header(h, period)  # 「希望シフト [N]」形式
                 if not ds:
                     continue
                 if ds not in date_cols:
@@ -304,17 +354,26 @@ def _resolve_time_value(
             pattern_id="custom", custom_start=custom_start, custom_end=custom_end, note=note,
         )
 
-    pattern_id = _LABEL_TO_ID.get(value)
-    if pattern_id is None and value not in _LABEL_TO_ID:
-        result.warnings.append(
-            f"「{name}」{date_str}: 選択値「{value}」が不明です（スキップ）"
+    # ラベルで直接一致を試みる
+    if value in _LABEL_TO_ID:
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id=_LABEL_TO_ID[value], custom_start=None, custom_end=None, note=note,
         )
-        return None
 
-    return ShiftRequest(
-        employee_id=emp.id, date=date_str,
-        pattern_id=pattern_id, custom_start=None, custom_end=None, note=note,
+    # 「HH:MM~HH:MM」形式の時刻範囲を試みる（例: 6:00~10:00）
+    if re.match(r'^\d{1,2}:\d{2}', value):
+        pid, cs, ce = _time_range_to_pattern(value)
+        if pid is not None:
+            return ShiftRequest(
+                employee_id=emp.id, date=date_str,
+                pattern_id=pid, custom_start=cs, custom_end=ce, note=note,
+            )
+
+    result.warnings.append(
+        f"「{name}」{date_str}: 選択値「{value}」が不明です（スキップ）"
     )
+    return None
 
 
 # Google Forms 設問テンプレート文字列
