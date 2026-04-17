@@ -84,10 +84,11 @@ def launch_windows_updater(old_exe: str, new_exe: str) -> bool:
         fd, bat_path = tempfile.mkstemp(suffix=".bat")
         os.close(fd)
         with open(bat_path, "w", encoding="cp932") as f:
-            # ping -n 7 = 約6秒待機（旧プロセスが os._exit で終了するのに十分な時間）
+            # ping -n 12 = 約11秒待機
+            # QApplication.quit() → atexit → PyInstaller が _MEIxxxxxx を削除するまでの時間を確保
             f.write(f"""@echo off
 chcp 932 > nul
-ping -n 7 127.0.0.1 > nul
+ping -n 12 127.0.0.1 > nul
 del /f /q "{old_exe}"
 move /Y "{new_exe}" "{old_exe}"
 start "" "{old_exe}"

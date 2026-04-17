@@ -217,11 +217,11 @@ class _UpdateDialog(QDialog):
             QMessageBox.critical(self, "エラー", "アップデーターの起動に失敗しました。\n手動でアップデートしてください。")
             return
 
-        # os._exit(0) でプロセスを即時強制終了する。
-        # QApplication.quit() は Qt の cleanup を待つため、バッチが旧 EXE を削除する
-        # 前にプロセスが残り続けることがある。_exit はその問題を回避する。
-        import os as _os
-        _os._exit(0)
+        # QApplication.quit() で正常終了させる。
+        # PyInstaller は atexit で一時ディレクトリ(_MEIxxxxxx)を削除するため、
+        # os._exit() のような強制終了は使わない（DLL の残骸で新 EXE がクラッシュする）。
+        # バッチ側は ping による固定待機なので、アプリが数秒以内に終了すれば問題ない。
+        QApplication.instance().quit()
 
     def _on_download_error(self, msg: str):
         self._progress_bar.setVisible(False)
