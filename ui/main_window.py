@@ -21,7 +21,7 @@ from utils.period_fmt import fmt as _fmt_period
 from utils.toast import Toast
 
 NAV_ITEMS = [
-    ("👥", "従業員管理",    0),
+    ("👥", "スタッフ管理",    0),
     ("📝", "希望シフト入力", 1),
     ("⚡", "シフト自動生成", 2),
     ("📅", "シフト表示・編集", 3),
@@ -36,7 +36,7 @@ SIDEBAR_W = 160
 class _StepBar(QWidget):
     """①〜④のワークフロー進捗を表示するバー"""
 
-    STEPS = ["① 従業員登録", "② 希望シフト入力", "③ 自動生成", "④ 確認・編集"]
+    STEPS = ["① スタッフ登録", "② 希望シフト入力", "③ 自動生成", "④ 確認・編集"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
