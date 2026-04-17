@@ -70,24 +70,24 @@ def launch_windows_updater(old_exe: str, new_exe: str) -> bool:
       3. 新 EXE を起動
       4. バッチ自己削除
     を行う。失敗時は False を返す。
+
+    注意: このメソッド呼び出し後は os._exit(0) で即時終了すること。
+    バッチは 6 秒待機してから置換するため、アプリが確実に終了している。
     """
     import tempfile
     import subprocess
 
-    pid = os.getpid()
+    # CREATE_NO_WINDOW: ターミナルウィンドウを非表示にする
+    CREATE_NO_WINDOW = 0x08000000
+
     try:
         fd, bat_path = tempfile.mkstemp(suffix=".bat")
         os.close(fd)
         with open(bat_path, "w", encoding="cp932") as f:
+            # ping -n 7 = 約6秒待機（旧プロセスが os._exit で終了するのに十分な時間）
             f.write(f"""@echo off
 chcp 932 > nul
-:wait
-tasklist /fi "PID eq {pid}" 2>nul | find "{pid}" >nul
-if not errorlevel 1 (
-    timeout /t 1 /nobreak > nul
-    goto wait
-)
-timeout /t 1 /nobreak > nul
+ping -n 7 127.0.0.1 > nul
 del /f /q "{old_exe}"
 move /Y "{new_exe}" "{old_exe}"
 start "" "{old_exe}"
@@ -96,7 +96,7 @@ del "%~f0"
         subprocess.Popen(
             ["cmd.exe", "/c", bat_path],
             creationflags=(
-                subprocess.DETACHED_PROCESS |
+                CREATE_NO_WINDOW |
                 subprocess.CREATE_NEW_PROCESS_GROUP
             ),
             close_fds=True,

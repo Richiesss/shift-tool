@@ -217,8 +217,11 @@ class _UpdateDialog(QDialog):
             QMessageBox.critical(self, "エラー", "アップデーターの起動に失敗しました。\n手動でアップデートしてください。")
             return
 
-        from PyQt6.QtWidgets import QApplication
-        QApplication.instance().quit()
+        # os._exit(0) でプロセスを即時強制終了する。
+        # QApplication.quit() は Qt の cleanup を待つため、バッチが旧 EXE を削除する
+        # 前にプロセスが残り続けることがある。_exit はその問題を回避する。
+        import os as _os
+        _os._exit(0)
 
     def _on_download_error(self, msg: str):
         self._progress_bar.setVisible(False)
