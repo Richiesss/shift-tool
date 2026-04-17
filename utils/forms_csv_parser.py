@@ -59,12 +59,23 @@ def _parse_custom_times(raw: str, period: SchedulePeriod) -> dict[str, tuple[str
     対応フォーマット:
       - 4/1: 10:00〜16:00
       - 4月1日: 10:00〜16:00
+      - 4.1 10:00〜16:00
       - 4/1 10:00-16:00
       - 4/1 10:00～16:00
+      - 4/1 10:00–16:00  （en dash）
+      - 全角数字・全角コロン（自動で半角に変換）
     """
+    import unicodedata
+    # 全角英数記号を半角に統一（１→1、：→: など）
+    raw = unicodedata.normalize('NFKC', raw)
+
     result: dict[str, tuple[str, str]] = {}
     pattern = re.findall(
-        r'(\d{1,2})[/月](\d{1,2})[日]?\s*[:\s]\s*(\d{1,2}:\d{2})\s*[〜~～\-]+\s*(\d{1,2}:\d{2})',
+        r'(\d{1,2})[/月.\-](\d{1,2})[日]?'   # 日付: 4/1 4月1日 4.1 4-1
+        r'[\s:：]*'                             # 区切り (コロン・スペース・なし)
+        r'(\d{1,2}:\d{2})'                     # 開始時刻
+        r'\s*[〜~～\-–—]+\s*'                  # 範囲記号
+        r'(\d{1,2}:\d{2})',                    # 終了時刻
         raw,
     )
     for month_s, day_s, start, end in pattern:
@@ -216,9 +227,14 @@ def parse_forms_csv(
 # Google Forms 設問テンプレート文字列
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_form_guide(period: SchedulePeriod) -> str:
+def build_form_guide(period: SchedulePeriod, employees=None) -> str:
     """
     指定期間用の Google Forms 設問テンプレートを人間が読める文字列で返す。
+
+    Parameters
+    ----------
+    period    : 対象シフト期間
+    employees : 登録済みスタッフ一覧（Noneの場合は「登録済みスタッフ名」と表記）
     """
     from utils.constants import DAY_OF_WEEK_LABELS
 
@@ -227,35 +243,97 @@ def build_form_guide(period: SchedulePeriod) -> str:
         f"  Google Forms テンプレート  （対象期間: {period.start_date} ～ {period.end_date}）",
         "═══════════════════════════════════════════════════════",
         "",
-        "【Q1】お名前  ← 記述式（短文）・必須",
-        "  ヒント: 「スタッフ登録名と完全に一致させてください」",
-        "",
-        "【Q2〜】各日付の出勤希望  ← プルダウン・必須",
+        "┌─────────────────────────────────────────────────────",
+        "│ 【Q1】お名前  ← プルダウン（任意）",
+        "│",
+        "│  作成手順: 「プルダウン」を選択 → 選択肢に以下を追加",
+        "│",
     ]
 
-    for d in period.date_range():
-        dow = DAY_OF_WEEK_LABELS[d.weekday()]
-        lines.append(f"  質問文: 「{d.month}月{d.day}日({dow})の出勤希望」")
+    if employees:
+        for emp in employees:
+            lines.append(f"│    {emp.name}")
+    else:
+        lines.append("│    （登録済みスタッフ名を1名ずつ追加してください）")
 
     lines += [
+        "│",
+        "│  ※ 「必須」はオフ（未回答 = スキップ扱い）",
+        "└─────────────────────────────────────────────────────",
         "",
-        "  ↑ 全日付の選択肢（この文字列をそのままコピー）:",
-        "    休み（出勤不可）",
     ]
+
+    # 日付を週ごとに分割
+    all_dates = list(period.date_range())
+    weeks: list[list] = []
+    chunk: list = []
+    for d in all_dates:
+        chunk.append(d)
+        if d.weekday() == 6 or d == all_dates[-1]:  # 日曜 or 最終日
+            weeks.append(chunk)
+            chunk = []
+
+    # 選択肢（グリッドの列）
+    choice_lines = ["    休み（出勤不可）"]
     for p in ALL_PATTERNS:
         if p.id != "custom":
-            lines.append(f"    {p.label}")
+            choice_lines.append(f"    {p.label}")
+    choice_lines.append("    カスタム（備考に時刻を記入）")
+
+    for week_idx, week_dates in enumerate(weeks):
+        start_d = week_dates[0]
+        end_d   = week_dates[-1]
+        label   = f"第{week_idx+1}週（{start_d.month}/{start_d.day}〜{end_d.month}/{end_d.day}）の出勤希望"
+
+        lines += [
+            "┌─────────────────────────────────────────────────────",
+            f"│ 【グリッドQ{week_idx+2}】{label}",
+            "│     ← 選択式グリッド（任意）",
+            "│",
+            "│  作成手順:",
+            "│    1. 「選択式グリッド」を選択",
+            f"│    2. 質問文: 「{label}」",
+            "│    3. 「各行に回答を必須にする」は オフ",
+            "│",
+            "│  ▼ 行（日付）をこの順に追加:",
+        ]
+        for d in week_dates:
+            dow = DAY_OF_WEEK_LABELS[d.weekday()]
+            lines.append(f"│    {d.month}月{d.day}日({dow})")
+
+        lines += [
+            "│",
+            "│  ▼ 列（シフト選択肢）をこの順に追加:",
+        ]
+        lines += [f"│  {c}" for c in choice_lines]
+        lines += [
+            "│",
+            "│  ※ グリッドの列選択肢は全週で共通（コピー＆ペーストで作成可）",
+            "└─────────────────────────────────────────────────────",
+            "",
+        ]
+
     lines += [
-        "    カスタム（備考に時刻を記入）",
+        "┌─────────────────────────────────────────────────────",
+        "│ 【最終Q】カスタム入力の時刻  ← 記述式（長文）・任意",
+        "│",
+        "│  質問文: 「カスタムを選んだ日の時刻を入力してください」",
+        "│  説明文: 「日付と時刻をセットで記入してください",
+        "│           例: 4/1 10:00〜16:00  4/5 13:00〜22:00",
+        "│           （カンマ・改行・スペース区切り、どれでも可）」",
+        "└─────────────────────────────────────────────────────",
         "",
-        "【最終Q】カスタム入力の時刻  ← 記述式（長文）・任意",
-        "  ヒント: 「カスタムを選んだ日の時刻を記入してください",
-        "           例: 4/1: 10:00〜16:00, 4/5: 13:00〜22:00」",
-        "",
-        "【任意】その他備考  ← 記述式（長文）・任意",
+        "┌─────────────────────────────────────────────────────",
+        "│ 【任意Q】その他備考  ← 記述式（長文）・任意",
+        "│  質問文: 「その他、シフトに関する連絡事項があれば記入してください」",
+        "└─────────────────────────────────────────────────────",
         "",
         "═══════════════════════════════════════════════════════",
-        "  回答収集後: スプレッドシート → ファイル → ダウンロード → CSV",
+        "  【CSV 取り込み手順】",
+        "  1. フォームの回答タブ → スプレッドシートにリンク",
+        "  2. スプレッドシートを開く",
+        "  3. ファイル → ダウンロード → CSV（.csv）",
+        "  4. このアプリの「希望シフト入力」画面で「Google Forms CSV をインポート」",
         "═══════════════════════════════════════════════════════",
     ]
     return "\n".join(lines)

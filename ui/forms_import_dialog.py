@@ -155,7 +155,7 @@ class FormsImportDialog(QDialog):
 
     def _build_guide_text(self) -> str:
         from utils.forms_csv_parser import build_form_guide
-        return build_form_guide(self._period)
+        return build_form_guide(self._period, self._employees)
 
     def _copy_guide(self):
         from PyQt6.QtWidgets import QApplication
