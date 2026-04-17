@@ -756,7 +756,7 @@ class DayTimetableDialog(QDialog):
         self.setMinimumHeight(400)
 
         from PyQt6.QtWidgets import QScrollArea
-        layout = __import__("PyQt6.QtWidgets", fromlist=["QVBoxLayout"]).QVBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
         info = QLabel(
@@ -805,6 +805,10 @@ class _TimetableWidget(QWidget):
         self._date_str = date_str
         self._assignments = assignments
         self._rows = self._build_rows(employees, assignments, raw_requests, date_str)
+        # paintEvent から DB アクセスしないようコンストラクタでキャッシュ
+        _sc = repo.get_shift_constraints()
+        self._b_min = sum(_sc.get((TimeSlot.BREAKFAST, pos), {}).get("min", 0) for pos in Position)
+        self._d_min = sum(_sc.get((TimeSlot.DINNER,    pos), {}).get("min", 0) for pos in Position)
         n = max(1, len(self._rows))
         self.setMinimumHeight(self.MARGIN_TOP + n * self.ROW_H + self.COVERAGE_H + 20)
         self.setMinimumWidth(700)
@@ -921,8 +925,8 @@ class _TimetableWidget(QWidget):
             for h in slot_hours
         ]
         max_count = max(all_counts) if all_counts else 1
-        b_min = sum(SHIFT_CONSTRAINTS.get((TimeSlot.BREAKFAST, pos), {}).get("min", 0) for pos in Position)
-        d_min = sum(SHIFT_CONSTRAINTS.get((TimeSlot.DINNER,    pos), {}).get("min", 0) for pos in Position)
+        b_min = self._b_min
+        d_min = self._d_min
         bar_h = self.COVERAGE_H - 22
 
         for h, count in zip(slot_hours, all_counts):
@@ -955,7 +959,7 @@ class PositionSelectDialog(QDialog):
         self.setWindowTitle(f"{emp.name}さんのポジション選択{suffix}")
         self.setFixedWidth(340)
 
-        layout = __import__("PyQt6.QtWidgets", fromlist=["QVBoxLayout"]).QVBoxLayout(self)
+        layout = QVBoxLayout(self)
 
         d = date.fromisoformat(ds)
         dow = DAY_OF_WEEK_LABELS[d.weekday()]
@@ -967,8 +971,9 @@ class PositionSelectDialog(QDialog):
             layout.addWidget(warn)
         layout.addWidget(QLabel(""))
 
+        _shift_constraints = repo.get_shift_constraints()
         for pos in Position:
-            constraint = SHIFT_CONSTRAINTS.get((slot, pos), {})
+            constraint = _shift_constraints.get((slot, pos), {})
             current = sum(
                 1 for (eid, d2, s2), (p, _) in assignments.items()
                 if d2 == ds and s2 == slot.value and p == pos.value

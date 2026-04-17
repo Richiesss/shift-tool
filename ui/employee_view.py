@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
     QCalendarWidget, QDialogButtonBox, QSizePolicy, QFrame,
     QScrollArea, QGridLayout, QListWidget, QDateEdit
 )
-from PyQt6.QtCore import Qt, QDate, QSortFilterProxyModel
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo

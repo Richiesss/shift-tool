@@ -4,7 +4,7 @@ from typing import Optional
 from db.database import get_connection
 from models.employee import Employee, FixedPattern
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
-from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition, TimeSlot
+from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition
 
 
 # ── 従業員 ──────────────────────────────────────────────────────────────

@@ -240,6 +240,9 @@ class GenerateView(QWidget):
     def _on_generate(self):
         if not self._period:
             return
+        # 前回のスレッドがまだ動いている場合は新規起動しない（二重起動防止）
+        if self._thread is not None and self._thread.isRunning():
+            return
 
         employees = repo.get_all_employees()
         requests = repo.get_shift_requests(self._period.id)
@@ -259,6 +262,9 @@ class GenerateView(QWidget):
         self._thread.start()
 
     def _on_finished(self, result: SolveResult):
+        # ウィジェットが既に破棄されている場合は何もしない
+        if not self.isVisible():
+            return
         self.progress_bar.setVisible(False)
         self.btn_generate.setEnabled(True)
 
