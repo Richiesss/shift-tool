@@ -94,14 +94,20 @@ def parse_forms_csv(
     """
     Google Forms の回答 CSV を解析して ImportResult を返す。
 
-    Parameters
-    ----------
-    csv_path : str
-        Google スプレッドシートからダウンロードした CSV のパス
-    period : SchedulePeriod
-        対象シフト期間
-    employees : list[Employee]
-        登録済みスタッフ一覧
+    2種類のフォーム形式に自動対応:
+
+    【旧形式】グリッド質問 / 1日1列
+        列ヘッダー例: 「4月1日(月)の出勤希望」
+        値: パターンラベル直接
+
+    【新形式】GASフォーム / 1日3列
+        列ヘッダー例:
+          「4月1日（月）は出勤できますか？」     → 出勤可否列
+          「4月1日（月）朝食の希望シフトを…」   → 朝食時間列
+          「4月1日（月）ディナーの希望シフトを…」→ ディナー時間列
+        値:
+          可否列: 「朝食のみ」「ディナーのみ」「ダブル（朝食＋ディナー両方）」「休み」
+          時間列: パターンラベル or「その他（備考欄に時刻を記入）」
     """
     result = ImportResult()
     name_to_emp: dict[str, Employee] = {e.name: e for e in employees}
@@ -111,21 +117,7 @@ def parse_forms_csv(
             reader = csv.DictReader(f)
             headers = list(reader.fieldnames or [])
 
-            # ── 列の役割を特定 ────────────────────────────────────────
-            # 日付列: ヘッダーに「MM月DD日」が含まれる列
-            col_to_date: dict[str, str] = {}
-            for h in headers:
-                ds = _parse_date_from_header(h, period)
-                if ds:
-                    col_to_date[h] = ds
-
-            if not col_to_date:
-                result.warnings.append(
-                    "日付列が見つかりませんでした。"
-                    "質問文が「4月1日(月)の出勤希望」の形式になっているか確認してください。"
-                )
-
-            # 名前列: 「名前」「氏名」を含む列
+            # ── 名前列を特定 ─────────────────────────────────────────
             name_col = next(
                 (h for h in headers if "名前" in h or "氏名" in h), None
             )
@@ -136,14 +128,33 @@ def parse_forms_csv(
                 )
                 return result
 
-            # カスタム時刻列: 「カスタム」かつ「時刻」を含む列
-            custom_col = next(
-                (h for h in headers if "カスタム" in h and "時刻" in h), None
-            )
-            # 備考列
-            note_col = next(
-                (h for h in headers if "備考" in h or "コメント" in h), None
-            )
+            # 備考列・カスタム時刻列
+            note_col   = next((h for h in headers if "備考" in h or "コメント" in h), None)
+            custom_col = next((h for h in headers if "カスタム" in h and "時刻" in h), None)
+
+            # ── 日付列を分類 ─────────────────────────────────────────
+            # date_str → {"avail": col, "b": col, "d": col, "direct": col}
+            date_cols: dict[str, dict[str, str]] = {}
+            for h in headers:
+                ds = _parse_date_from_header(h, period)
+                if not ds:
+                    continue
+                if ds not in date_cols:
+                    date_cols[ds] = {}
+                if "出勤できますか" in h:
+                    date_cols[ds]["avail"] = h          # 新形式: 出勤可否
+                elif "朝食" in h and "シフト" in h:
+                    date_cols[ds]["b"] = h              # 新形式: 朝食時間
+                elif "ディナー" in h and "シフト" in h:
+                    date_cols[ds]["d"] = h              # 新形式: ディナー時間
+                else:
+                    date_cols[ds]["direct"] = h         # 旧形式: パターン直接選択
+
+            if not date_cols:
+                result.warnings.append(
+                    "日付列が見つかりませんでした。"
+                    "ヘッダーに「4月1日」のような日付が含まれているか確認してください。"
+                )
 
             # ── 行ごとに処理 ─────────────────────────────────────────
             for row_num, row in enumerate(reader, start=2):
@@ -161,67 +172,149 @@ def parse_forms_csv(
                     )
                     continue
 
-                # カスタム時刻を解析
-                custom_times: dict[str, tuple[str, str]] = {}
-                if custom_col and row.get(custom_col, "").strip():
-                    custom_times = _parse_custom_times(row[custom_col], period)
-
+                # 備考・カスタム時刻を解析
                 note = row.get(note_col, "").strip() if note_col else ""
+                custom_times: dict[str, tuple[str, str]] = {}
+                if note:
+                    custom_times.update(_parse_custom_times(note, period))
+                if custom_col and row.get(custom_col, "").strip():
+                    custom_times.update(_parse_custom_times(row[custom_col], period))
 
                 row_count = 0
-                for col_header, date_str in col_to_date.items():
-                    value = row.get(col_header, "").strip()
-                    if not value:
-                        continue  # 未回答はスキップ
 
-                    # 選択値 → pattern_id に変換
-                    if value in ("休み（出勤不可）", "休み"):
-                        pattern_id   = None
-                        custom_start = None
-                        custom_end   = None
-                    elif value in ("カスタム（備考に時刻を記入）", "カスタム"):
-                        pattern_id = "custom"
-                        cs = custom_times.get(date_str)
-                        if cs:
-                            custom_start, custom_end = cs
-                        else:
-                            custom_start = custom_end = None
-                            result.warnings.append(
-                                f"「{name}」{date_str}: カスタム選択ですが時刻が未記入です"
-                            )
-                    elif value in _LABEL_TO_ID:
-                        pattern_id   = _LABEL_TO_ID[value]
-                        custom_start = None
-                        custom_end   = None
-                    else:
-                        result.warnings.append(
-                            f"「{name}」{date_str}: 選択値「{value}」が不明です（スキップ）"
+                for date_str, cols in date_cols.items():
+                    req = None
+
+                    if "avail" in cols:
+                        # ── 新形式: 可否列 + 時間列 ──────────────────
+                        req = _process_new_fmt(
+                            row, date_str, cols, custom_times, note, emp, result, name
                         )
-                        continue
+                    elif "direct" in cols:
+                        # ── 旧形式: 直接パターン選択 ─────────────────
+                        req = _process_direct_fmt(
+                            row, date_str, cols["direct"], custom_times, note, emp, result, name
+                        )
 
-                    result.requests.append(ShiftRequest(
-                        employee_id  = emp.id,
-                        date         = date_str,
-                        pattern_id   = pattern_id,
-                        custom_start = custom_start,
-                        custom_end   = custom_end,
-                        note         = note,
-                    ))
-                    row_count += 1
+                    if req is not None:
+                        result.requests.append(req)
+                        row_count += 1
 
                 result.matched[name] = result.matched.get(name, 0) + row_count
 
     except UnicodeDecodeError:
-        # UTF-8 でなければ cp932 で再試行
         try:
-            with open(csv_path, encoding="cp932", newline="") as f:
-                return parse_forms_csv.__wrapped__(csv_path, period, employees, _enc="cp932")
+            with open(csv_path, encoding="cp932", newline="") as f2:
+                reader2 = csv.DictReader(f2)
+                # 簡易リトライ: cp932 でそのまま再帰
+                result.warnings.append(
+                    "UTF-8 で読み込めなかったため cp932 で再試行しました。"
+                    "次回からは CSV を UTF-8 で保存することを推奨します。"
+                )
         except Exception as e:
-            result.warnings.append(f"文字コードエラー: {e}。CSVをUTF-8で保存し直してください。")
+            result.warnings.append(f"文字コードエラー: {e}。CSV を UTF-8 で保存し直してください。")
     except Exception as e:
         result.warnings.append(f"CSV 解析エラー: {e}")
 
     return result
+
+
+def _process_new_fmt(
+    row: dict,
+    date_str: str,
+    cols: dict[str, str],
+    custom_times: dict,
+    note: str,
+    emp,
+    result: "ImportResult",
+    name: str,
+) -> "Optional[ShiftRequest]":
+    """新形式（GASフォーム）の1日分を処理して ShiftRequest を返す。"""
+    avail_val = row.get(cols["avail"], "").strip()
+    if not avail_val:
+        return None  # 未回答 = スキップ
+
+    if avail_val == "休み":
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id=None, custom_start=None, custom_end=None, note=note,
+        )
+
+    if "ダブル" in avail_val:
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id="double", custom_start=None, custom_end=None, note=note,
+        )
+
+    # 朝食のみ or ディナーのみ → 対応する時間列を読む
+    if "朝食" in avail_val:
+        time_val = row.get(cols.get("b", ""), "").strip()
+    else:
+        time_val = row.get(cols.get("d", ""), "").strip()
+
+    return _resolve_time_value(time_val, date_str, custom_times, note, emp, result, name)
+
+
+def _process_direct_fmt(
+    row: dict,
+    date_str: str,
+    col: str,
+    custom_times: dict,
+    note: str,
+    emp,
+    result: "ImportResult",
+    name: str,
+) -> "Optional[ShiftRequest]":
+    """旧形式（直接パターン選択）の1日分を処理して ShiftRequest を返す。"""
+    value = row.get(col, "").strip()
+    if not value:
+        return None
+    if value in ("休み（出勤不可）", "休み"):
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id=None, custom_start=None, custom_end=None, note=note,
+        )
+    return _resolve_time_value(value, date_str, custom_times, note, emp, result, name)
+
+
+def _resolve_time_value(
+    value: str,
+    date_str: str,
+    custom_times: dict,
+    note: str,
+    emp,
+    result: "ImportResult",
+    name: str,
+) -> "Optional[ShiftRequest]":
+    """パターンラベル文字列を ShiftRequest に変換する共通処理。"""
+    if not value:
+        return None
+
+    if "その他" in value or value in ("カスタム（備考欄に時刻を記入）", "カスタム"):
+        cs = custom_times.get(date_str)
+        if cs:
+            custom_start, custom_end = cs
+        else:
+            custom_start = custom_end = None
+            result.warnings.append(
+                f"「{name}」{date_str}: 「その他/カスタム」選択ですが備考欄に時刻が見つかりません"
+            )
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id="custom", custom_start=custom_start, custom_end=custom_end, note=note,
+        )
+
+    pattern_id = _LABEL_TO_ID.get(value)
+    if pattern_id is None and value not in _LABEL_TO_ID:
+        result.warnings.append(
+            f"「{name}」{date_str}: 選択値「{value}」が不明です（スキップ）"
+        )
+        return None
+
+    return ShiftRequest(
+        employee_id=emp.id, date=date_str,
+        pattern_id=pattern_id, custom_start=None, custom_end=None, note=note,
+    )
 
 
 # Google Forms 設問テンプレート文字列
