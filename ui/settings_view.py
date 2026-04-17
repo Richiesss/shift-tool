@@ -55,6 +55,7 @@ class SettingsView(QWidget):
 
         self._btn_backup = QPushButton("バックアップを保存...")
         self._btn_backup.setFixedHeight(36)
+        self._btn_backup.setToolTip("現在のDBファイルを任意の場所にコピーして保存します")
         self._btn_backup.clicked.connect(self._on_backup)
         backup_layout.addWidget(self._btn_backup)
         layout.addWidget(backup_group)
@@ -90,6 +91,9 @@ class SettingsView(QWidget):
             min_spin = QSpinBox(); min_spin.setRange(0, 20); min_spin.setFixedWidth(60)
             max_spin = QSpinBox(); max_spin.setRange(0, 20); max_spin.setFixedWidth(60)
             ldr_spin = QSpinBox(); ldr_spin.setRange(0, 20); ldr_spin.setFixedWidth(60)
+            min_spin.setToolTip(f"{label}: 1日あたりの最低必要人数\nこの人数を下回るとシフト表で警告が表示されます")
+            max_spin.setToolTip(f"{label}: 1日あたりの最大配置人数\nこれを超えるとアサインできません")
+            ldr_spin.setToolTip(f"{label}: 1日あたりのリーダー最低必要人数\nリーダー不足もシフト表で警告されます")
 
             row_layout.addWidget(QLabel("最低:"))
             row_layout.addWidget(min_spin)
@@ -106,6 +110,7 @@ class SettingsView(QWidget):
 
         self._btn_save_constraints = QPushButton("人員設定を保存")
         self._btn_save_constraints.setFixedHeight(36)
+        self._btn_save_constraints.setToolTip("シフト人員制約をDBに保存します。次回のシフト生成から反映されます。")
         self._btn_save_constraints.clicked.connect(self._on_save_constraints)
         constraint_layout.addWidget(self._btn_save_constraints)
         layout.addWidget(constraint_group)
@@ -124,6 +129,7 @@ class SettingsView(QWidget):
 
         self._btn_import = QPushButton("バックアップからインポート...")
         self._btn_import.setFixedHeight(36)
+        self._btn_import.setToolTip("バックアップファイルで現在のDBを上書き復元します\n⚠️ 現在のデータはすべて失われます")
         self._btn_import.clicked.connect(self._on_import)
         import_layout.addWidget(self._btn_import)
         layout.addWidget(import_group)

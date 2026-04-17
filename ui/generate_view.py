@@ -29,7 +29,9 @@ class SolverWorker(QObject):
 
 
 class GenerateView(QWidget):
-    schedule_generated = pyqtSignal(int)  # period_id
+    schedule_generated  = pyqtSignal(int)  # period_id
+    period_changed      = pyqtSignal(int)  # item 1
+    navigate_requested  = pyqtSignal(int)  # item 4
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -168,16 +170,30 @@ class GenerateView(QWidget):
         self._apply_btn_styles()
 
     def _load_periods(self):
+        from utils.period_fmt import fmt as _fmt
         periods = repo.get_all_periods()
         self.period_combo.blockSignals(True)
         self.period_combo.clear()
         self.period_combo.addItem("（期間を選択）", None)
         for p in periods:
-            self.period_combo.addItem(f"{p.start_date} 〜 {p.end_date}", p)
+            self.period_combo.addItem(_fmt(p.start_date, p.end_date), p)
         self.period_combo.blockSignals(False)
 
     def refresh(self):
         self._load_periods()
+
+    def set_period_by_id(self, period_id: int):
+        """グローバル期間セレクターから呼ばれる同期メソッド（item 1）"""
+        for i in range(self.period_combo.count()):
+            p = self.period_combo.itemData(i)
+            if p and p.id == period_id:
+                if self.period_combo.currentIndex() != i:
+                    self.period_combo.blockSignals(True)
+                    self.period_combo.setCurrentIndex(i)
+                    self.period_combo.blockSignals(False)
+                    self._period = p
+                    self._update_check()
+                return
 
     def _on_period_changed(self, idx):
         self._period = self.period_combo.currentData()
@@ -185,29 +201,39 @@ class GenerateView(QWidget):
             self.check_label.setText("期間を選択してください")
             self.btn_generate.setEnabled(False)
             return
+        self.period_changed.emit(self._period.id)  # item 1
         self._update_check()
 
     def _update_check(self):
         if not self._period:
             return
         employees = repo.get_all_employees()
-        requests = repo.get_shift_requests(self._period.id)
+        requests  = repo.get_shift_requests(self._period.id)
+
+        # item 4: 空状態ガイダンス
+        if not employees:
+            self.check_label.setText(
+                "⚠️ 従業員が登録されていません。\n"
+                "「従業員管理」画面で従業員を登録してからシフトを生成してください。"
+            )
+            self.btn_generate.setEnabled(False)
+            return
 
         filled_ids = set(r.employee_id for r in requests if r.breakfast or r.dinner)
-        total = len(employees)
+        total      = len(employees)
         not_filled = [e for e in employees if e.id not in filled_ids]
 
         lines = []
+        lines.append(f"✅ 従業員登録数: {total}名")
         if not_filled:
-            lines.append(f"⚠️  未入力の従業員: {len(not_filled)}名")
+            lines.append(f"⚠️  希望未入力: {len(not_filled)}名")
             for e in not_filled[:5]:
                 lines.append(f"   ・{e.name}")
             if len(not_filled) > 5:
                 lines.append(f"   … 他{len(not_filled)-5}名")
         else:
-            lines.append(f"✅ 希望シフト入力済: {total}/{total}名")
+            lines.append(f"✅ 希望シフト入力済: {total}/{total}名（全員完了）")
 
-        lines.append(f"✅ 従業員登録数: {total}名")
         self.check_label.setText("\n".join(lines))
         self.btn_generate.setEnabled(True)
 

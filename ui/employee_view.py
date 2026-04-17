@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QCalendarWidget, QDialogButtonBox, QSizePolicy, QFrame,
     QScrollArea, QGridLayout, QListWidget, QDateEdit
 )
+from PyQt6.QtCore import Qt, QDate, QSortFilterProxyModel
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo
@@ -31,6 +32,15 @@ class EmployeeView(QWidget):
         title = QLabel("従業員管理")
         title.setFont(QFont("", 16, QFont.Weight.Bold))
         header.addWidget(title)
+
+        # item 6: 検索ボックス
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("🔍 氏名で検索...")
+        self._search_edit.setFixedWidth(180)
+        self._search_edit.setFixedHeight(32)
+        self._search_edit.setToolTip("従業員名で絞り込みます")
+        self._search_edit.textChanged.connect(self._on_search_changed)
+        header.addWidget(self._search_edit)
         header.addStretch()
         self._btn_show_archive = QPushButton("アーカイブを表示")
         self._btn_show_archive.setFixedHeight(36)
@@ -45,11 +55,17 @@ class EmployeeView(QWidget):
         layout.addLayout(header)
 
         self._show_archive = False
+        self._search_text  = ""
 
         # テーブル
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(["ID", "氏名", "所属ポジション", "勤務時間帯", "習熟度", "雇用形態", "操作"])
+        # item 8: ツールチップ
+        self.table.horizontalHeaderItem(2).setToolTip("ホール専任 / キッチン専任 / どちらでも（制限なし）")
+        self.table.horizontalHeaderItem(3).setToolTip("朝食専任 / ディナー専任 / どちらでも")
+        self.table.horizontalHeaderItem(4).setToolTip("H=ホール習熟度、K=キッチン習熟度\nL:リーダー / V:ベテラン / 一般 / 初心者")
+        self.table.horizontalHeaderItem(5).setToolTip("正社員はシフト制約が異なります（希望入力不要）")
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setColumnWidth(0, 40)
@@ -89,8 +105,19 @@ class EmployeeView(QWidget):
         )
         self.refresh()
 
+    def _on_search_changed(self, text: str):
+        """item 6: 検索テキスト変更時に再描画"""
+        self._search_text = text.strip().lower()
+        self.refresh()
+
     def refresh(self):
-        self.employees = repo.get_all_employees(active_only=not self._show_archive)
+        all_employees = repo.get_all_employees(active_only=not self._show_archive)
+        # item 6: 検索フィルター
+        if self._search_text:
+            self.employees = [e for e in all_employees
+                              if self._search_text in e.name.lower()]
+        else:
+            self.employees = all_employees
         self.table.setRowCount(len(self.employees))
         for row, emp in enumerate(self.employees):
             pp_text = emp.primary_position.label() if emp.primary_position else "どちらでも"
@@ -125,6 +152,7 @@ class EmployeeView(QWidget):
                     f"border-radius:4px; color:{c['text']}; }} "
                     f"QPushButton:hover {{ background:{c['surface2']}; }}"
                 )
+                btn_edit.setToolTip("従業員情報を編集します")
                 btn_edit.clicked.connect(lambda _, e=emp: self._on_edit(e))
                 btn_layout.addWidget(btn_edit)
 
@@ -135,6 +163,7 @@ class EmployeeView(QWidget):
                     f"border-radius:4px; color:{c['danger_text']}; }} "
                     f"QPushButton:hover {{ background:{c['danger_bg']}; }}"
                 )
+                btn_del.setToolTip("論理削除します（過去のシフトデータは保持）")
                 btn_del.clicked.connect(lambda _, e=emp: self._on_delete(e))
                 btn_layout.addWidget(btn_del)
             else:
@@ -145,6 +174,7 @@ class EmployeeView(QWidget):
                     f"border-radius:4px; color:white; }} "
                     f"QPushButton:hover {{ background:{c['primary_hover']}; }}"
                 )
+                btn_restore.setToolTip("アクティブな従業員として復元します")
                 btn_restore.clicked.connect(lambda _, e=emp: self._on_restore(e))
                 btn_layout.addWidget(btn_restore)
 

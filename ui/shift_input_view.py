@@ -112,6 +112,9 @@ class _PatternCellWidget(QWidget):
 
 
 class ShiftInputView(QWidget):
+    period_changed    = pyqtSignal(int)   # 期間変更を MainWindow に通知 (item 1)
+    navigate_requested = pyqtSignal(int)  # 空状態ナビ要求 (item 4)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._period: SchedulePeriod | None = None
@@ -164,12 +167,14 @@ class ShiftInputView(QWidget):
 
         self._btn_set = QPushButton("期間確定")
         self._btn_set.setFixedHeight(32)
+        self._btn_set.setToolTip("入力した日付範囲で新しいシフト期間を作成します")
         self._btn_set.clicked.connect(self._on_set_period)
         period_layout.addWidget(self._btn_set)
 
         self._btn_del_period = QPushButton("期間削除")
         self._btn_del_period.setFixedHeight(32)
         self._btn_del_period.setEnabled(False)
+        self._btn_del_period.setToolTip("選択中の期間と関連するすべてのデータを削除します")
         self._btn_del_period.clicked.connect(self._on_delete_period)
         period_layout.addWidget(self._btn_del_period)
 
@@ -188,6 +193,8 @@ class ShiftInputView(QWidget):
 
         self._btn_prev = QPushButton("◀ 前の従業員")
         self._btn_next = QPushButton("次の従業員 ▶")
+        self._btn_prev.setToolTip("前の従業員に切り替えます（← キー）")
+        self._btn_next.setToolTip("次の従業員に切り替えます（→ キー）")
         self._btn_prev.clicked.connect(self._on_prev_employee)
         self._btn_next.clicked.connect(self._on_next_employee)
         for b in [self._btn_prev, self._btn_next]:
@@ -209,6 +216,7 @@ class ShiftInputView(QWidget):
         self._btn_copy = QPushButton("この従業員の希望をコピー")
         self._btn_copy.setFixedHeight(28)
         self._btn_copy.setEnabled(False)
+        self._btn_copy.setToolTip("選択した過去の期間から同じ従業員の希望シフトを現在の期間にコピーします")
         self._btn_copy.clicked.connect(self._on_copy_from_prev)
         copy_row.addWidget(copy_lbl)
         copy_row.addWidget(self._prev_period_combo)
@@ -235,6 +243,13 @@ class ShiftInputView(QWidget):
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["日付", "シフトパターン", "備考"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        # item 8: ツールチップ
+        self.table.horizontalHeaderItem(1).setToolTip(
+            "その日の出勤パターンを選択します。\n"
+            "数字キー(0〜9)でも選択できます。\n"
+            "「カスタム」を選ぶと時刻を直接入力できます。"
+        )
+        self.table.horizontalHeaderItem(2).setToolTip("メモを入力できます（任意）")
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self.table.setColumnWidth(2, 160)
@@ -248,6 +263,7 @@ class ShiftInputView(QWidget):
         btn_row.addStretch()
         self.btn_save = QPushButton("この従業員の希望を保存")
         self.btn_save.setFixedHeight(36)
+        self.btn_save.setToolTip("現在の従業員のシフト希望を保存します（Ctrl+S）")
         self.btn_save.clicked.connect(self._on_save)
         btn_row.addWidget(self.btn_save)
         layout.addLayout(btn_row)
@@ -260,6 +276,8 @@ class ShiftInputView(QWidget):
         # 左右矢印キー: 従業員切り替え
         QShortcut(QKeySequence(Qt.Key.Key_Left),  self).activated.connect(self._on_prev_employee)
         QShortcut(QKeySequence(Qt.Key.Key_Right), self).activated.connect(self._on_next_employee)
+        # Ctrl+S: 保存 (item 9)
+        QShortcut(QKeySequence("Ctrl+S"), self).activated.connect(self._on_save)
         # 0〜9キー:
         #   ・コンボにフォーカスがある場合 → _ShiftComboBox.keyPressEvent が直接処理
         #   ・日付セル等にフォーカスがある場合 → テーブルへのフィルタで処理
@@ -338,12 +356,13 @@ class ShiftInputView(QWidget):
     # ── 期間 ──────────────────────────────────────────────────────────────
 
     def _load_periods(self):
+        from utils.period_fmt import fmt as _fmt
         periods = repo.get_all_periods()
         self.period_combo.blockSignals(True)
         self.period_combo.clear()
         self.period_combo.addItem("（新規期間を入力）", None)
         for p in periods:
-            self.period_combo.addItem(f"{p.start_date} 〜 {p.end_date}", p)
+            self.period_combo.addItem(_fmt(p.start_date, p.end_date), p)
         self.period_combo.blockSignals(False)
 
         # コピー元コンボ: 現在の期間を除く
@@ -353,11 +372,24 @@ class ShiftInputView(QWidget):
         for p in periods:
             if self._period and p.id == self._period.id:
                 continue
-            self._prev_period_combo.addItem(f"{p.start_date} 〜 {p.end_date}", p)
+            self._prev_period_combo.addItem(_fmt(p.start_date, p.end_date), p)
         self._prev_period_combo.blockSignals(False)
         self._btn_copy.setEnabled(
             self._prev_period_combo.count() > 1 and bool(self._period)
         )
+
+    def set_period_by_id(self, period_id: int):
+        """グローバル期間セレクターから呼ばれる同期メソッド（item 1）"""
+        for i in range(self.period_combo.count()):
+            p = self.period_combo.itemData(i)
+            if p and p.id == period_id:
+                if self.period_combo.currentIndex() != i:
+                    self.period_combo.blockSignals(True)
+                    self.period_combo.setCurrentIndex(i)
+                    self.period_combo.blockSignals(False)
+                    self._period = p
+                    self._load_employees()
+                return
 
     def _on_period_changed(self, idx):
         p = self.period_combo.currentData()
@@ -365,6 +397,7 @@ class ShiftInputView(QWidget):
         if p:
             self._period = p
             self._load_employees()
+            self.period_changed.emit(p.id)  # item 1
 
     def _on_copy_from_prev(self):
         src_period = self._prev_period_combo.currentData()
@@ -444,9 +477,12 @@ class ShiftInputView(QWidget):
         for i in range(self.period_combo.count()):
             p = self.period_combo.itemData(i)
             if p and p.id == period.id:
+                self.period_combo.blockSignals(True)
                 self.period_combo.setCurrentIndex(i)
+                self.period_combo.blockSignals(False)
                 break
         self._load_employees()
+        self.period_changed.emit(period.id)  # item 1
 
     # ── 従業員 ────────────────────────────────────────────────────────────
 
@@ -454,6 +490,14 @@ class ShiftInputView(QWidget):
         if not self._period:
             return
         self._employees = repo.get_all_employees()
+        if not self._employees:
+            # item 4: 空状態ガイダンス
+            self.progress_label.setText(
+                "⚠️ 従業員が登録されていません。まず「従業員管理」画面で登録してください。"
+            )
+            self.progress_label.setStyleSheet("color:#b45309; font-weight:bold;")
+            self.table.setRowCount(0)
+            return
         existing = repo.get_shift_requests(self._period.id)
         self._requests = {(r.employee_id, r.date): r for r in existing}
         self.emp_combo.blockSignals(True)
@@ -469,11 +513,24 @@ class ShiftInputView(QWidget):
         if not self._period or not self._employees:
             self.progress_label.setText("")
             return
-        filled = set(
+        filled_ids = set(
             r.employee_id for r in self._requests.values() if r.has_shift
         )
-        total = len(self._employees)
-        self.progress_label.setText(f"入力済: {len(filled)} / {total} 名")
+        total  = len(self._employees)
+        filled = len(filled_ids)
+        # item 3: 詳細サマリー
+        not_filled = [e.name for e in self._employees if e.id not in filled_ids]
+        c = theme.c
+        if filled == total:
+            self.progress_label.setText(f"✅ 入力済: {filled} / {total} 名（全員完了）")
+            self.progress_label.setStyleSheet("color:#16a34a; font-weight:bold;")
+        else:
+            remaining = "、".join(not_filled[:3])
+            suffix = f" 他{len(not_filled)-3}名" if len(not_filled) > 3 else ""
+            self.progress_label.setText(
+                f"📝 入力済: {filled} / {total} 名　未入力: {remaining}{suffix}"
+            )
+            self.progress_label.setStyleSheet(f"color:{c['text2']};")
 
     def _current_snapshot(self) -> dict:
         """現在の入力状態をスナップショットとして返す"""
@@ -666,6 +723,7 @@ class ShiftInputView(QWidget):
                 self._requests[(emp.id, date_str)] = req
 
         repo.save_shift_requests(self._period.id, requests)
-        self._saved_snapshot = self._current_snapshot()  # 保存済み状態を更新
+        self._saved_snapshot = self._current_snapshot()
         self._update_progress()
-        QMessageBox.information(self, "保存完了", f"「{emp.name}さん」の希望シフトを保存しました")
+        from utils.toast import show_toast  # item 5
+        show_toast(f"「{emp.name}さん」の希望シフトを保存しました")

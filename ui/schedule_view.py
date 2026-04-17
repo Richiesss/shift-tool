@@ -31,6 +31,9 @@ AssignVal = tuple[str, bool]
 
 
 class ScheduleView(QWidget):
+    period_changed     = pyqtSignal(int)  # item 1
+    navigate_requested = pyqtSignal(int)  # item 4
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._period = None
@@ -64,11 +67,13 @@ class ScheduleView(QWidget):
         self._btn_confirm = QPushButton("✅ 確定する")
         self._btn_confirm.setFixedHeight(32)
         self._btn_confirm.setEnabled(False)
+        self._btn_confirm.setToolTip("シフト表を確定します。確定後は編集がロックされます。")
         self._btn_confirm.clicked.connect(self._on_toggle_confirm)
         header.addWidget(self._btn_confirm)
 
         self._btn_output = QPushButton("出力 →")
         self._btn_output.setFixedHeight(32)
+        self._btn_output.setToolTip("シフト表をCSV・PDF形式で出力します")
         self._btn_output.clicked.connect(self._on_output)
         header.addWidget(self._btn_output)
         layout.addLayout(header)
@@ -76,17 +81,19 @@ class ScheduleView(QWidget):
         # 凡例
         legend = QHBoxLayout()
         self._status_legend_labels: list[tuple[QLabel, str]] = []
-        for text, color_key in [
-            ("✅制約クリア", "status_ok"),
-            ("⚠️最低人数ちょうど", "status_warn"),
-            ("❌制約違反", "status_err"),
+        for text, color_key, tip in [
+            ("✅制約クリア", "status_ok",   "人数・リーダー数がともに最低基準を超えています"),
+            ("⚠️最低人数ちょうど", "status_warn", "人数またはリーダー数がちょうど最低基準です"),
+            ("❌制約違反", "status_err",  "人数またはリーダー数が最低基準を下回っています"),
         ]:
             lbl = QLabel(text)
+            lbl.setToolTip(tip)
             self._status_legend_labels.append((lbl, color_key))
             legend.addWidget(lbl)
         legend.addStretch()
         legend.addWidget(QLabel("習熟度: [L]リーダー [V]ベテラン　"))
         reinf_lbl = QLabel("■ 応援要員（希望外追加）")
+        reinf_lbl.setToolTip("希望シフトを出していない従業員を手動で追加したアサインです")
         reinf_lbl.setStyleSheet("background:#fed7aa; border-radius:3px; padding:2px 6px; font-size:11px;")
         legend.addWidget(reinf_lbl)
         layout.addLayout(legend)
@@ -138,6 +145,7 @@ class ScheduleView(QWidget):
         btn = QPushButton(f"　{other_label}メンバーも表示　")
         btn.setCheckable(True)
         btn.setFixedHeight(28)
+        btn.setToolTip(f"{other_label}の従業員をこのタブにも表示します（参考表示のみ）")
         btn.toggled.connect(lambda checked, s=slot: self._on_toggle_other(s, checked))
         row_btn = QHBoxLayout()
         row_btn.addWidget(btn)
@@ -235,12 +243,13 @@ class ScheduleView(QWidget):
     # ── データ読み込み ─────────────────────────────────────────────────────
 
     def _load_periods(self):
+        from utils.period_fmt import fmt as _fmt
         periods = repo.get_all_periods()
         self.period_combo.blockSignals(True)
         self.period_combo.clear()
         self.period_combo.addItem("（期間を選択）", None)
         for p in periods:
-            self.period_combo.addItem(f"{p.start_date} 〜 {p.end_date}", p)
+            self.period_combo.addItem(_fmt(p.start_date, p.end_date), p)
         self.period_combo.blockSignals(False)
 
     def refresh(self, period_id: int = None):
@@ -252,6 +261,21 @@ class ScheduleView(QWidget):
                     self.period_combo.setCurrentIndex(i)
                     return
         self._render_table()
+
+    def set_period_by_id(self, period_id: int):
+        """グローバル期間セレクターから呼ばれる同期メソッド（item 1）"""
+        for i in range(self.period_combo.count()):
+            p = self.period_combo.itemData(i)
+            if p and p.id == period_id:
+                if self.period_combo.currentIndex() != i:
+                    self.period_combo.blockSignals(True)
+                    self.period_combo.setCurrentIndex(i)
+                    self.period_combo.blockSignals(False)
+                    self._period = p
+                    self._load_data()
+                    self._render_table()
+                    self._update_confirm_button()
+                return
 
     def _on_period_changed(self, idx):
         self._period = self.period_combo.currentData()
@@ -265,6 +289,7 @@ class ScheduleView(QWidget):
         self._load_data()
         self._render_table()
         self._update_confirm_button()
+        self.period_changed.emit(self._period.id)  # item 1
 
     def _load_data(self):
         self._employees = repo.get_all_employees()
@@ -346,14 +371,20 @@ class ScheduleView(QWidget):
 
     def _render_slot_table(self, emp_table: QTableWidget, sum_table: QTableWidget,
                            slot: TimeSlot, warn_label: QLabel):
+        from datetime import date as _today_date
+        today_str = _today_date.today().isoformat()
+
         dates = self._period.date_range()
 
         col_headers = ["氏名"]
         col_date_strs: list[str | None] = [None]
         for d in dates:
             dow = DAY_OF_WEEK_LABELS[d.weekday()]
-            col_headers.append(f"{d.month}/{d.day}\n({dow})")
-            col_date_strs.append(d.isoformat())
+            ds  = d.isoformat()
+            # item 7: 今日ハイライト用マーカー
+            prefix = "★" if ds == today_str else ""
+            col_headers.append(f"{prefix}{d.month}/{d.day}\n({dow})")
+            col_date_strs.append(ds)
         col_headers.append("計")
         col_date_strs.append(None)
 
@@ -407,6 +438,17 @@ class ScheduleView(QWidget):
             emp_table.setColumnWidth(c_i, 50)
         emp_table.setColumnWidth(n_cols - 1, 36)
         emp_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+
+        # item 7: 今日の列ヘッダーをハイライト
+        c = theme.c
+        for c_i, ds in enumerate(col_date_strs):
+            if ds == today_str:
+                emp_table.horizontalHeaderItem(c_i).setBackground(
+                    QBrush(QColor(c["primary"]))
+                )
+                emp_table.horizontalHeaderItem(c_i).setForeground(
+                    QBrush(QColor("#ffffff"))
+                )
 
         for row_idx, (row_type, row_data) in enumerate(emp_rows):
             if row_type == "employee":
@@ -484,6 +526,8 @@ class ScheduleView(QWidget):
                 bg_color = c["cell_reinforcement"] if is_reinf else c["cell_assigned"]
                 item.setBackground(QBrush(QColor(bg_color)))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                reinf_note = "（応援要員）" if is_reinf else ""
+                item.setToolTip(f"クリックで削除　{pos_label}={('ホール' if pos_v=='hall' else 'キッチン')}{reinf_note}")
                 item.setData(Qt.ItemDataRole.UserRole, ("assigned", emp.id, ds, slot_v))
                 total += 1
             elif can_work:
@@ -491,10 +535,12 @@ class ScheduleView(QWidget):
                 item.setBackground(QBrush(QColor(c["cell_available"])))
                 item.setForeground(QBrush(QColor(c["cell_avail_text"])))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                item.setToolTip("クリックでアサイン（希望あり）")
                 item.setData(Qt.ItemDataRole.UserRole, ("available", emp.id, ds, slot_v))
             else:
                 item = QTableWidgetItem("")
                 item.setBackground(QBrush(QColor(c["cell_unavail"])))
+                item.setToolTip("クリックで応援要員として追加（希望なし）")
                 item.setData(Qt.ItemDataRole.UserRole, ("unavailable", emp.id, ds, slot_v))
             table.setItem(row, col_idx, item)
 
