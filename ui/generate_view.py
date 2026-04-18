@@ -89,15 +89,33 @@ class GenerateView(QWidget):
         ]
 
         self._config_combos: dict[str, QComboBox] = {}
-        for display_name, attr, description in _CONFIG_ROWS:
-            item_widget = QWidget()
-            item_vl = QVBoxLayout(item_widget)
-            item_vl.setContentsMargins(0, 0, 0, 4)
-            item_vl.setSpacing(2)
+        for i, (display_name, attr, description) in enumerate(_CONFIG_ROWS):
+            if i > 0:
+                sep = QFrame()
+                sep.setFrameShape(QFrame.Shape.HLine)
+                sep.setObjectName("config_sep")
+                config_vl.addWidget(sep)
 
-            row = QHBoxLayout()
-            lbl = QLabel(display_name)
-            lbl.setMinimumWidth(160)
+            outer_row = QHBoxLayout()
+            outer_row.setContentsMargins(0, 4, 0, 4)
+            outer_row.setSpacing(12)
+
+            # 左側: 項目名 + 説明文
+            left_vl = QVBoxLayout()
+            left_vl.setSpacing(2)
+            left_vl.setContentsMargins(0, 0, 0, 0)
+
+            name_lbl = QLabel(display_name)
+            name_lbl.setFont(QFont("", -1, QFont.Weight.Bold))
+
+            desc_lbl = QLabel(description)
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setObjectName("desc_label")
+
+            left_vl.addWidget(name_lbl)
+            left_vl.addWidget(desc_lbl)
+
+            # 右側: コンボボックス（上揃え）
             combo = QComboBox()
             combo.addItem("低",  "低")
             combo.addItem("中",  "中")
@@ -106,17 +124,10 @@ class GenerateView(QWidget):
             combo.setFixedWidth(80)
             combo.setMinimumHeight(28)
             self._config_combos[attr] = combo
-            row.addWidget(lbl)
-            row.addWidget(combo)
-            row.addStretch()
 
-            desc_lbl = QLabel(description)
-            desc_lbl.setWordWrap(True)
-            desc_lbl.setObjectName("desc_label")
-
-            item_vl.addLayout(row)
-            item_vl.addWidget(desc_lbl)
-            config_vl.addWidget(item_widget)
+            outer_row.addLayout(left_vl, 1)
+            outer_row.addWidget(combo, 0, Qt.AlignmentFlag.AlignTop)
+            config_vl.addLayout(outer_row)
 
         # リセットボタン
         reset_row = QHBoxLayout()
@@ -170,6 +181,8 @@ class GenerateView(QWidget):
         # 説明文ラベルをサブテキスト色で表示
         for w in self.findChildren(QLabel, "desc_label"):
             w.setStyleSheet(f"color: {c['text2']}; font-size: 9pt;")
+        for w in self.findChildren(QFrame, "config_sep"):
+            w.setStyleSheet(f"color: {c['border']};")
         self.btn_generate.setStyleSheet(
             f"QPushButton {{ background:{c['primary']}; color:white; border-radius:8px; padding:0 24px; }}"
             f" QPushButton:hover {{ background:{c['primary_hover']}; }}"
