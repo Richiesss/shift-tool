@@ -42,9 +42,20 @@ class GenerateView(QWidget):
         self._load_periods()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        # スクロールエリアでラップ（ウィンドウが小さくても潰れない）
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        outer.addWidget(scroll)
+
+        inner = QWidget()
+        scroll.setWidget(inner)
+        layout = QVBoxLayout(inner)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("シフト自動生成")
         title.setFont(QFont("", 16, QFont.Weight.Bold))
@@ -96,26 +107,22 @@ class GenerateView(QWidget):
                 sep.setObjectName("config_sep")
                 config_vl.addWidget(sep)
 
-            outer_row = QHBoxLayout()
-            outer_row.setContentsMargins(0, 4, 0, 4)
-            outer_row.setSpacing(12)
+            # QWidget コンテナ必須: 裸の QHBoxLayout をネストすると
+            # Qt がジオメトリを正しく計算できず、ウィジェットが重なる
+            container = QWidget()
+            cl = QVBoxLayout(container)
+            cl.setContentsMargins(0, 4, 0, 4)
+            cl.setSpacing(3)
 
-            # 左側: 項目名 + 説明文
-            left_vl = QVBoxLayout()
-            left_vl.setSpacing(2)
-            left_vl.setContentsMargins(0, 0, 0, 0)
+            # 項目名 + コンボを QWidget に収める（ここも QWidget 必須）
+            header_widget = QWidget()
+            hl = QHBoxLayout(header_widget)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(8)
 
             name_lbl = QLabel(display_name)
             name_lbl.setFont(QFont("", -1, QFont.Weight.Bold))
 
-            desc_lbl = QLabel(description)
-            desc_lbl.setWordWrap(True)
-            desc_lbl.setObjectName("desc_label")
-
-            left_vl.addWidget(name_lbl)
-            left_vl.addWidget(desc_lbl)
-
-            # 右側: コンボボックス（上揃え）
             combo = QComboBox()
             combo.addItem("低",  "低")
             combo.addItem("中",  "中")
@@ -125,9 +132,16 @@ class GenerateView(QWidget):
             combo.setMinimumHeight(28)
             self._config_combos[attr] = combo
 
-            outer_row.addLayout(left_vl, 1)
-            outer_row.addWidget(combo, 0, Qt.AlignmentFlag.AlignTop)
-            config_vl.addLayout(outer_row)
+            hl.addWidget(name_lbl, 1)
+            hl.addWidget(combo)
+
+            desc_lbl = QLabel(description)
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setObjectName("desc_label")
+
+            cl.addWidget(header_widget)
+            cl.addWidget(desc_lbl)
+            config_vl.addWidget(container)
 
         # リセットボタン
         reset_row = QHBoxLayout()

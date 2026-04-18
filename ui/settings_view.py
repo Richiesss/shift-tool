@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QGroupBox, QFileDialog, QMessageBox, QFormLayout, QSpinBox,
-    QScrollArea, QRadioButton, QButtonGroup
+    QScrollArea, QRadioButton, QButtonGroup, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -24,7 +24,17 @@ class SettingsView(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        # スクロールエリアでラップ（ウィンドウが小さくても潰れない）
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        outer.addWidget(scroll)
+
+        inner = QWidget()
+        scroll.setWidget(inner)
+        layout = QVBoxLayout(inner)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
