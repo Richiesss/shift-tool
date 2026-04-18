@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QGroupBox, QFileDialog, QMessageBox, QFormLayout, QSpinBox,
-    QScrollArea
+    QScrollArea, QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -43,6 +43,29 @@ class SettingsView(QWidget):
         path_layout.addWidget(self._path_label)
         layout.addWidget(path_group)
 
+        # ── 外観設定 ──────────────────────────────────────────────────
+        appearance_group = QGroupBox("外観")
+        appearance_layout = QHBoxLayout(appearance_group)
+        appearance_layout.setSpacing(16)
+
+        appearance_layout.addWidget(QLabel("テーマ:"))
+        self._theme_group = QButtonGroup(self)
+        self._rb_light  = QRadioButton("ライト")
+        self._rb_dark   = QRadioButton("ダーク")
+        self._rb_system = QRadioButton("システム設定に従う")
+        for rb in (self._rb_light, self._rb_dark, self._rb_system):
+            self._theme_group.addButton(rb)
+            appearance_layout.addWidget(rb)
+        appearance_layout.addStretch()
+
+        # 現在のテーマに応じてラジオを初期化
+        self._theme_mode = "system"  # "light" / "dark" / "system"
+        self._rb_system.setChecked(True)
+        self._rb_light.toggled.connect(lambda on: self._on_theme_radio(on, "light"))
+        self._rb_dark.toggled.connect(lambda on: self._on_theme_radio(on, "dark"))
+        self._rb_system.toggled.connect(lambda on: self._on_theme_radio(on, "system"))
+        layout.addWidget(appearance_group)
+
         # ── バックアップ ──────────────────────────────────────────────
         backup_group = QGroupBox("バックアップ")
         backup_layout = QVBoxLayout(backup_group)
@@ -59,6 +82,23 @@ class SettingsView(QWidget):
         self._btn_backup.clicked.connect(self._on_backup)
         backup_layout.addWidget(self._btn_backup)
         layout.addWidget(backup_group)
+
+        # ── インポート（復元）────────────────────────────────────────
+        import_group = QGroupBox("インポート（復元）")
+        import_layout = QVBoxLayout(import_group)
+        import_layout.setSpacing(8)
+
+        note_i = QLabel("バックアップファイルからデータを復元します。\n"
+                         "⚠️ 現在のデータはすべて上書きされます。")
+        note_i.setWordWrap(True)
+        import_layout.addWidget(note_i)
+
+        self._btn_import = QPushButton("バックアップからインポート...")
+        self._btn_import.setFixedHeight(36)
+        self._btn_import.setToolTip("バックアップファイルで現在のDBを上書き復元します\n⚠️ 現在のデータはすべて失われます")
+        self._btn_import.clicked.connect(self._on_import)
+        import_layout.addWidget(self._btn_import)
+        layout.addWidget(import_group)
 
         # ── シフト人員制約 ────────────────────────────────────────────
         constraint_group = QGroupBox("シフト人員設定")
@@ -88,9 +128,13 @@ class SettingsView(QWidget):
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(8)
 
-            min_spin = QSpinBox(); min_spin.setRange(0, 20); min_spin.setFixedWidth(60)
-            max_spin = QSpinBox(); max_spin.setRange(0, 20); max_spin.setFixedWidth(60)
-            ldr_spin = QSpinBox(); ldr_spin.setRange(0, 20); ldr_spin.setFixedWidth(60)
+            min_spin = QSpinBox()
+            max_spin = QSpinBox()
+            ldr_spin = QSpinBox()
+            for sp in (min_spin, max_spin, ldr_spin):
+                sp.setRange(0, 20)
+                sp.setFixedWidth(64)
+                sp.setMinimumHeight(28)   # 縦幅つぶれ防止
             min_spin.setToolTip(f"{label}: 1日あたりの最低必要人数\nこの人数を下回るとシフト表で警告が表示されます")
             max_spin.setToolTip(f"{label}: 1日あたりの最大配置人数\nこれを超えるとアサインできません")
             ldr_spin.setToolTip(f"{label}: 1日あたりのリーダー最低必要人数\nリーダー不足もシフト表で警告されます")
@@ -117,23 +161,6 @@ class SettingsView(QWidget):
 
         self._load_constraints()
 
-        # ── インポート（復元）────────────────────────────────────────
-        import_group = QGroupBox("インポート（復元）")
-        import_layout = QVBoxLayout(import_group)
-        import_layout.setSpacing(8)
-
-        note_i = QLabel("バックアップファイルからデータを復元します。\n"
-                         "⚠️ 現在のデータはすべて上書きされます。")
-        note_i.setWordWrap(True)
-        import_layout.addWidget(note_i)
-
-        self._btn_import = QPushButton("バックアップからインポート...")
-        self._btn_import.setFixedHeight(36)
-        self._btn_import.setToolTip("バックアップファイルで現在のDBを上書き復元します\n⚠️ 現在のデータはすべて失われます")
-        self._btn_import.clicked.connect(self._on_import)
-        import_layout.addWidget(self._btn_import)
-        layout.addWidget(import_group)
-
         self._apply_styles()
 
     def _load_constraints(self):
@@ -156,6 +183,17 @@ class SettingsView(QWidget):
             }
         repo.save_shift_constraints(constraints)
         QMessageBox.information(self, "保存完了", "シフト人員設定を保存しました。")
+
+    def _on_theme_radio(self, checked: bool, mode: str):
+        if not checked:
+            return
+        self._theme_mode = mode
+        if mode == "light":
+            theme.apply(dark=False)
+        elif mode == "dark":
+            theme.apply(dark=True)
+        else:
+            theme.apply(dark=None)  # システム設定を自動検出
 
     def _apply_styles(self):
         c = theme.c

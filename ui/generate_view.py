@@ -74,20 +74,29 @@ class GenerateView(QWidget):
         config_vl = QVBoxLayout(config_group)
         config_vl.setSpacing(8)
 
-        # 優先度設定行: (表示名, attr名, ツールチップ)
+        # 優先度設定行: (表示名, attr名, 説明文)
         _CONFIG_ROWS = [
-            ("人件費最小化",        "cost_scale",          "人件費が低い人員配置を優先"),
-            ("アルバイト希望充当",   "pt_pref_scale",       "アルバイトの希望シフトを優先して通す"),
-            ("正社員両掛け持ち回避", "double_penalty_scale", "正社員が朝食・ディナー両方に入ることを抑制"),
-            ("人員バランス均等化",   "balance_scale",       "特定の人に勤務が偏らないよう均等化"),
-            ("深夜勤務分散",         "late_night_scale",    "ディナー（深夜枠）の担当を分散させる"),
+            ("人件費最小化",        "cost_scale",
+             "コストが低いスタッフを優先してアサインします。人件費削減を重視する場合は「高」に設定してください。"),
+            ("アルバイト希望充当",   "pt_pref_scale",
+             "アルバイトの希望シフトをできるだけ尊重します。スタッフの満足度を重視する場合は「高」に設定してください。"),
+            ("正社員両掛け持ち回避", "double_penalty_scale",
+             "正社員が朝食とディナー両方に入ること（ダブル勤務）を抑制します。負担軽減を重視する場合は「高」に設定してください。"),
+            ("人員バランス均等化",   "balance_scale",
+             "特定のスタッフに勤務が偏らないよう、全員の出勤数を均等化します。公平なシフト分配を重視する場合は「高」に設定してください。"),
+            ("深夜勤務分散",         "late_night_scale",
+             "ディナーの遅い時間帯（深夜枠）の担当が一部のスタッフに集中しないよう分散させます。"),
         ]
 
         self._config_combos: dict[str, QComboBox] = {}
-        for display_name, attr, tooltip in _CONFIG_ROWS:
+        for display_name, attr, description in _CONFIG_ROWS:
+            item_widget = QWidget()
+            item_vl = QVBoxLayout(item_widget)
+            item_vl.setContentsMargins(0, 0, 0, 4)
+            item_vl.setSpacing(2)
+
             row = QHBoxLayout()
             lbl = QLabel(display_name)
-            lbl.setToolTip(tooltip)
             lbl.setMinimumWidth(160)
             combo = QComboBox()
             combo.addItem("低",  "低")
@@ -95,11 +104,19 @@ class GenerateView(QWidget):
             combo.addItem("高",  "高")
             combo.setCurrentIndex(1)   # デフォルト「中」
             combo.setFixedWidth(80)
+            combo.setMinimumHeight(28)
             self._config_combos[attr] = combo
             row.addWidget(lbl)
             row.addWidget(combo)
             row.addStretch()
-            config_vl.addLayout(row)
+
+            desc_lbl = QLabel(description)
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setObjectName("desc_label")
+
+            item_vl.addLayout(row)
+            item_vl.addWidget(desc_lbl)
+            config_vl.addWidget(item_widget)
 
         # リセットボタン
         reset_row = QHBoxLayout()
@@ -150,6 +167,9 @@ class GenerateView(QWidget):
 
     def _apply_btn_styles(self):
         c = theme.c
+        # 説明文ラベルをサブテキスト色で表示
+        for w in self.findChildren(QLabel, "desc_label"):
+            w.setStyleSheet(f"color: {c['text2']}; font-size: 9pt;")
         self.btn_generate.setStyleSheet(
             f"QPushButton {{ background:{c['primary']}; color:white; border-radius:8px; padding:0 24px; }}"
             f" QPushButton:hover {{ background:{c['primary_hover']}; }}"

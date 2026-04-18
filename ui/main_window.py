@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame, QSizePolicy,
-    QDialog, QProgressBar, QMessageBox, QComboBox
+    QDialog, QProgressBar, QMessageBox
 )
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QDesktopServices
@@ -17,7 +17,6 @@ from ui.settings_view import SettingsView
 from ui.help_view import HelpDialog
 from utils.theme import theme
 from utils.version import APP_VERSION
-from utils.period_fmt import fmt as _fmt_period
 from utils.toast import Toast
 
 NAV_ITEMS = [
@@ -397,21 +396,8 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
-        # グローバル期間バー（item 1・10）
-        self._period_bar = QWidget()
-        self._period_bar.setFixedHeight(40)
-        pb_lay = QHBoxLayout(self._period_bar)
-        pb_lay.setContentsMargins(16, 0, 16, 0)
-        pb_lay.setSpacing(8)
-        pb_lay.addWidget(QLabel("対象期間:"))
-        self._global_period_combo = QComboBox()
-        self._global_period_combo.setMinimumWidth(280)
-        self._global_period_combo.setToolTip("各画面で共通の対象期間です")
-        self._global_period_combo.currentIndexChanged.connect(self._on_global_period_changed)
-        pb_lay.addWidget(self._global_period_combo)
-        pb_lay.addStretch()
-        self._period_bar.setVisible(False)
-        content_layout.addWidget(self._period_bar)
+        # 現在選択中の期間IDを内部で管理（グローバルコンボの代替）
+        self._current_period_id: int | None = None
 
         # ステップバー（item 2）
         self._step_bar = _StepBar()
@@ -456,9 +442,6 @@ class MainWindow(QMainWindow):
 
         root.addWidget(content_widget)
 
-        # 起動時に期間コンボを読み込む
-        self._refresh_global_period_combo()
-
         self._apply_sidebar_style()
 
     def _apply_sidebar_style(self):
@@ -485,9 +468,6 @@ class MainWindow(QMainWindow):
         """)
         self._sep.setStyleSheet(f"color: {c['border']};")
         self.stack.setStyleSheet(f"background: {c['bg']};")
-        self._period_bar.setStyleSheet(
-            f"background:{c['surface']}; border-bottom:1px solid {c['border']};"
-        )
 
     def _on_theme_changed(self):
         self._apply_sidebar_style()
@@ -503,70 +483,28 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_buttons):
             btn.setActive(i == idx)
-        # 期間バーはシフト関連画面（1-3）のみ表示
-        self._period_bar.setVisible(1 <= idx <= 3)
         if idx == 2:
             self._generate_view.refresh()
         elif idx == 3:
             self._schedule_view.refresh()
         # 現在の期間を該当ビューに適用
-        p = self._global_period_combo.currentData()
-        if p:
+        if self._current_period_id is not None:
             if idx == 1:
-                self._shift_input_view.set_period_by_id(p.id)
+                self._shift_input_view.set_period_by_id(self._current_period_id)
             elif idx == 2:
-                self._generate_view.set_period_by_id(p.id)
+                self._generate_view.set_period_by_id(self._current_period_id)
             elif idx == 3:
-                self._schedule_view.set_period_by_id(p.id)
+                self._schedule_view.set_period_by_id(self._current_period_id)
         self._update_step_bar()
 
     def _on_schedule_generated(self, period_id: int):
-        self._refresh_global_period_combo(select_id=period_id)
+        self._current_period_id = period_id
         self._schedule_view.refresh(period_id)
         self._nav_to(3)
 
-    # ── グローバル期間セレクター（item 1）──────────────────────────────────
-
-    def _refresh_global_period_combo(self, select_id: int | None = None):
-        from db import repositories as repo
-        periods = repo.get_all_periods()
-        self._global_period_combo.blockSignals(True)
-        self._global_period_combo.clear()
-        self._global_period_combo.addItem("（期間を選択）", None)
-        for p in periods:
-            self._global_period_combo.addItem(
-                _fmt_period(p.start_date, p.end_date), p
-            )
-        if select_id is not None:
-            for i in range(self._global_period_combo.count()):
-                d = self._global_period_combo.itemData(i)
-                if d and d.id == select_id:
-                    self._global_period_combo.setCurrentIndex(i)
-                    break
-        self._global_period_combo.blockSignals(False)
-        self._update_step_bar()
-
-    def _on_global_period_changed(self, _idx: int):
-        p = self._global_period_combo.currentData()
-        pid = p.id if p else None
-        # 全ビューに同期
-        for view in (self._shift_input_view, self._generate_view, self._schedule_view):
-            if pid is not None:
-                view.set_period_by_id(pid)
-        self._update_step_bar()
-
     def _on_view_period_changed(self, period_id: int):
-        """各ビューのコンボ変更 → グローバルコンボを同期"""
-        self._global_period_combo.blockSignals(True)
-        for i in range(self._global_period_combo.count()):
-            d = self._global_period_combo.itemData(i)
-            if d and d.id == period_id:
-                self._global_period_combo.setCurrentIndex(i)
-                break
-        else:
-            # 新しく作られた期間はコンボに存在しない → 再読み込み
-            self._refresh_global_period_combo(select_id=period_id)
-        self._global_period_combo.blockSignals(False)
+        """各ビューのコンボ変更 → 内部の期間IDを更新して他ビューに反映"""
+        self._current_period_id = period_id
         self._update_step_bar()
 
     # ── ステップバー更新（item 2）──────────────────────────────────────────
@@ -576,7 +514,7 @@ class MainWindow(QMainWindow):
         nav_idx = self.stack.currentIndex()
         step_idx = min(nav_idx, 3)  # 設定（4）はステップ外
 
-        p = self._global_period_combo.currentData()
+        p = repo.get_period(self._current_period_id) if self._current_period_id else None
 
         employees_ok   = len(repo.get_all_employees()) > 0
         requests_ok    = False
@@ -586,8 +524,7 @@ class MainWindow(QMainWindow):
         if p:
             requests_ok    = len(repo.get_shift_requests(p.id)) > 0
             assignments_ok = len(repo.get_assignments(p.id)) > 0
-            period_obj     = repo.get_period(p.id)
-            confirmed_ok   = bool(period_obj and period_obj.status == "confirmed")
+            confirmed_ok   = bool(p.status == "confirmed")
 
         self._step_bar.update_state(
             step_idx, employees_ok, requests_ok, assignments_ok, confirmed_ok
@@ -598,7 +535,7 @@ class MainWindow(QMainWindow):
         self._shift_input_view._load_periods()
         self._generate_view.refresh()
         self._schedule_view.refresh()
-        self._refresh_global_period_combo()
+        self._current_period_id = None
         self._update_step_bar()
 
     def _on_help(self):
