@@ -143,74 +143,18 @@ def _slot_default(b_pos, d_pos) -> tuple[str, str]:
 
 # ── メイン出力 ────────────────────────────────────────────────────────────
 
-def export_pdf(
-    path: str,
-    period: SchedulePeriod,
-    employees: list[Employee],
-    assignments: dict,
+def _build_block_table(
+    block_emps, dates, assignments, req_map, col_widths,
+    font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
 ):
-    """
-    シフト表を PDF に出力する（横向き A4）。
+    """従業員グループ1ブロック分のテーブルを生成する。"""
+    n_block = len(block_emps)
 
-    フォーマット:
-      行: 従業員（1行1人）
-      列: 日付（1列1日）
-      両端に氏名列
-    """
-    from db import repositories as repo
-    requests = repo.get_shift_requests(period.id)
-    req_map  = {(r.employee_id, r.date): r for r in requests}
-
-    font_name = _register_font()
-
-    # ── ページ設定 ────────────────────────────────────────────────────
-    MARGIN = 5 * mm   # 余白を狭めてテーブル領域を最大化
-    doc = SimpleDocTemplate(
-        path,
-        pagesize=landscape(A4),
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=MARGIN,
-        bottomMargin=MARGIN,
-    )
-
-    dates = period.date_range()
-    n     = len(dates)
-    n_emp = len(employees)
-    n_sum = 4  # SLOT_ROWS の行数（固定）
-
-    # ── 使用可能幅から列幅を計算（最小幅なし・必ず1ページに収める） ──
-    page_w  = landscape(A4)[0] - 2 * MARGIN
-    name_w  = 16 * mm                          # 氏名列幅
-    data_w  = (page_w - 2 * name_w) / n        # 日付1列の幅（min 制限なし）
-    col_widths = [name_w] + [data_w] * n + [name_w]
-
-    font_size      = max(6, min(8, int(data_w / mm * 0.55)))
-    font_size_name = font_size
-
-    # ── 行高さを先に計算してコンストラクタへ渡す ─────────────────────
-    # ※ tbl._rowHeights を後付けしても doc.build() の _calc() でリセットされるため
-    #    必ず rowHeights= パラメータで渡すこと
-    TITLE_H   = 24          # タイトル段落の実質高さ（12pt行 + spaceAfter 3mm）
-    page_h    = landscape(A4)[1] - 2 * MARGIN - TITLE_H
-    row_h_hdr = 10
-    row_h_dow = 10
-    row_h_sum = 18
-    avail_emp = page_h - row_h_hdr - row_h_dow - n_sum * row_h_sum
-    row_h_emp = max(10, min(20, int(avail_emp / max(n_emp, 1))))
-    row_heights = [row_h_hdr, row_h_dow] + [row_h_emp] * n_emp + [row_h_sum] * n_sum
-
-    # ── テーブルデータ構築 ────────────────────────────────────────────
-    start_d = date.fromisoformat(period.start_date)
-
-    # 行 0: 日付番号
-    row_dates = ["氏名"] + [str(d.day) for d in dates] + ["氏名"]
-    # 行 1: 曜日
+    row_dates = [period_label] + [str(d.day) for d in dates] + [period_label]
     row_dows  = [""] + [DAY_JP[d.weekday()] for d in dates] + [""]
 
-    # 従業員データ行
     emp_rows = []
-    for emp in employees:
+    for emp in block_emps:
         row = [emp.name]
         for d in dates:
             text, _ = _get_shift_text(emp.id, d.isoformat(), assignments, req_map)
@@ -218,96 +162,63 @@ def export_pdf(
         row.append(emp.name)
         emp_rows.append(row)
 
-    # 集計行（ポジション×スロット）
-    count_map   = defaultdict(int)
-    skilled_map = defaultdict(int)
-    for (emp_id, ds, slot_v), pos_v in assignments.items():
-        count_map[(ds, slot_v, pos_v)] += 1
-        emp = next((e for e in employees if e.id == emp_id), None)
-        if emp and emp.is_skilled(pos_v):
-            skilled_map[(ds, slot_v, pos_v)] += 1
+    table_data  = [row_dates, row_dows] + emp_rows
+    row_heights = [hdr_h, dow_h] + [emp_h] * n_block
 
-    SLOT_ROWS = [
-        ("朝 ホール",  TimeSlot.BREAKFAST, Position.HALL),
-        ("朝 厨房",    TimeSlot.BREAKFAST, Position.KITCHEN),
-        ("夜 ホール",  TimeSlot.DINNER,    Position.HALL),
-        ("夜 厨房",    TimeSlot.DINNER,    Position.KITCHEN),
-    ]
-    sum_rows = []
-    for lbl, slot, pos in SLOT_ROWS:
-        row = [lbl]
-        for d in dates:
-            ds  = d.isoformat()
-            cnt = count_map[(ds, slot.value, pos.value)]
-            sk  = skilled_map[(ds, slot.value, pos.value)]
-            row.append(f"{cnt}\n熟{sk}")
-        row.append("")
-        sum_rows.append(row)
-
-    # 全行まとめ（rowHeights をコンストラクタに渡す）
-    table_data = [row_dates, row_dows] + emp_rows + sum_rows
-    tbl = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=2)
+    tbl = Table(table_data, colWidths=col_widths,
+                rowHeights=row_heights, repeatRows=0)
 
     cmds = [
-        # 基本
         ("FONTNAME",      (0, 0), (-1, -1), font_name),
         ("FONTSIZE",      (0, 0), (-1, -1), font_size),
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("GRID",          (0, 0), (-1, -1), 0.4, COL_GRID),
-        # セル余白を詰めて行を狭くしても文字が収まるようにする
         ("TOPPADDING",    (0, 0), (-1, -1), 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
         ("LEFTPADDING",   (0, 0), (-1, -1), 2),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
-        # 氏名列（左・右）
-        ("ALIGN",     (0, 0),  (0, -1),  "LEFT"),
-        ("ALIGN",     (-1, 0), (-1, -1), "LEFT"),
-        ("FONTSIZE",  (0, 2),  (0, -1),  font_size_name),
-        ("FONTSIZE",  (-1, 2), (-1, -1), font_size_name),
-        ("BACKGROUND", (0, 2), (0, -1),  COL_NAME),
-        ("BACKGROUND", (-1, 2), (-1, -1), COL_NAME),
-        ("FONTNAME",  (0, 2), (0, -1),  font_name),
-        ("FONTNAME",  (-1, 2), (-1, -1), font_name),
-        # ヘッダー行0,1 の氏名列
-        ("BACKGROUND", (0, 0),  (0, 1),  COL_NAME),
-        ("BACKGROUND", (-1, 0), (-1, 1), COL_NAME),
-        # ヘッダー全体（平日）
+        # 左右 氏名列
+        ("ALIGN",      (0, 0),  (0, -1),  "LEFT"),
+        ("ALIGN",      (-1, 0), (-1, -1), "LEFT"),
+        ("BACKGROUND", (0, 0),  (0, -1),  COL_NAME),
+        ("BACKGROUND", (-1, 0), (-1, -1), COL_NAME),
+        ("FONTNAME",   (0, 2),  (0, -1),  font_name),
+        ("FONTNAME",   (-1, 2), (-1, -1), font_name),
+        # ヘッダー行（日付・曜日）
         ("BACKGROUND", (1, 0), (n, 1), COL_HDR_WD),
         ("FONTSIZE",   (0, 0), (-1, 1), font_size + 1),
         ("FONTNAME",   (0, 0), (-1, 1), font_name),
+        # 期間ラベルセルは濃紺
+        ("BACKGROUND", (0, 0),  (0, 0),  COL_HDR_TITLE),
+        ("BACKGROUND", (-1, 0), (-1, 0), COL_HDR_TITLE),
+        ("TEXTCOLOR",  (0, 0),  (0, 0),  colors.white),
+        ("TEXTCOLOR",  (-1, 0), (-1, 0), colors.white),
+        ("FONTSIZE",   (0, 0),  (0, 0),  font_size),
+        ("FONTSIZE",   (-1, 0), (-1, 0), font_size),
     ]
 
-    # 土日ヘッダー色・文字色
+    # 土日ヘッダー着色
     for i, d in enumerate(dates):
         col = i + 1
         dow = d.weekday()
         if dow == 5:
-            cmds += [
-                ("BACKGROUND", (col, 0), (col, 1), COL_HDR_SAT),
-                ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SAT),
-            ]
+            cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SAT),
+                     ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SAT)]
         elif dow == 6:
-            cmds += [
-                ("BACKGROUND", (col, 0), (col, 1), COL_HDR_SUN),
-                ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SUN),
-            ]
+            cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SUN),
+                     ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SUN)]
 
-    # 従業員行の色
-    for row_idx, emp in enumerate(employees):
-        r     = 2 + row_idx
-        is_even = (row_idx % 2 == 1)
-        row_bg = COL_EVEN if is_even else COL_WHITE
-
-        # 行ベース色
+    # 従業員行の着色
+    for row_idx, emp in enumerate(block_emps):
+        r      = 2 + row_idx
+        row_bg = COL_EVEN if row_idx % 2 == 1 else COL_WHITE
         cmds.append(("BACKGROUND", (1, r), (n, r), row_bg))
-
         for i, d in enumerate(dates):
             col      = i + 1
             date_str = d.isoformat()
             dow      = d.weekday()
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
-
             if style == "leave":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_LEAVE))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_SAT))
@@ -317,20 +228,159 @@ def export_pdf(
                 elif dow == 6:
                     cmds.append(("BACKGROUND", (col, r), (col, r), COL_SUN_D))
                 cmds.append(("TEXTCOLOR", (col, r), (col, r), COL_TXT_OFF))
-            elif style == "assigned_note":
-                cmds.append(("FONTNAME", (col, r), (col, r), font_name))
 
-    # 集計行の色
+    tbl.setStyle(TableStyle(cmds))
+    return tbl
+
+
+def export_pdf(
+    path: str,
+    period: SchedulePeriod,
+    employees: list[Employee],
+    assignments: dict,
+):
+    """
+    シフト表を PDF に出力する（横向き A4・1ページ）。
+
+    レイアウト:
+      従業員を複数グループに分けて縦に積み重ねて表示し、
+      すべてが A4 横向き 1 枚に収まるよう行高さを自動調整する。
+      末尾に集計行（朝/夜 × ホール/厨房）を追加。
+    """
+    from db import repositories as repo
+    requests = repo.get_shift_requests(period.id)
+    req_map  = {(r.employee_id, r.date): r for r in requests}
+
+    font_name = _register_font()
+
+    MARGIN = 5 * mm
+    doc = SimpleDocTemplate(
+        path,
+        pagesize=landscape(A4),
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=MARGIN,  bottomMargin=MARGIN,
+    )
+
+    dates  = list(period.date_range())
+    n      = len(dates)
+    n_emp  = len(employees)
+    N_SUM  = 4   # 集計行数（固定）
+
+    # ── 列幅 ─────────────────────────────────────────────────────────
+    page_w = landscape(A4)[0] - 2 * MARGIN
+    name_w = 16 * mm
+    data_w = (page_w - 2 * name_w) / n
+    col_widths = [name_w] + [data_w] * n + [name_w]
+
+    font_size = max(6, min(9, int(data_w / mm * 0.6)))
+
+    start_d = date.fromisoformat(period.start_date)
+    period_label = f"{start_d.month}月"  # 左右ヘッダーセルのラベル
+
+    # ── 集計データ ────────────────────────────────────────────────────
+    count_map   = defaultdict(int)
+    skilled_map = defaultdict(int)
+    for (emp_id, ds, slot_v), pos_v in assignments.items():
+        count_map[(ds, slot_v, pos_v)] += 1
+        emp = next((e for e in employees if e.id == emp_id), None)
+        if emp and emp.is_skilled(pos_v):
+            skilled_map[(ds, slot_v, pos_v)] += 1
+
+    SLOT_ROWS = [
+        ("朝 ホール", TimeSlot.BREAKFAST, Position.HALL),
+        ("朝 厨房",   TimeSlot.BREAKFAST, Position.KITCHEN),
+        ("夜 ホール", TimeSlot.DINNER,    Position.HALL),
+        ("夜 厨房",   TimeSlot.DINNER,    Position.KITCHEN),
+    ]
+
+    # ── レイアウト計算 ────────────────────────────────────────────────
+    # タイトル段落の実高さ: fontSize=11, leading≈13pt, spaceAfter=3pt
+    TITLE_H  = 16
+    GAP      = 3    # ブロック間・ブロックと集計の隙間 (pt)
+    HDR_H    = 11   # 日付番号行高さ
+    DOW_H    = 10   # 曜日行高さ
+    SUM_H    = 13   # 集計行高さ
+
+    page_h = landscape(A4)[1] - 2 * MARGIN - TITLE_H
+
+    # ブロック数を 2〜5 で試して emp_h ≥ 9pt になる最小値を採用
+    best_nb, best_per, best_emp_h = 2, n_emp, 9
+    for nb in range(2, 6):
+        emps_per   = (n_emp + nb - 1) // nb
+        # ブロック間の gap + 集計前の gap
+        gap_total  = GAP * (nb + 1)
+        sum_total  = N_SUM * SUM_H
+        block_h    = (page_h - sum_total - gap_total) / nb
+        emp_h_calc = (block_h - HDR_H - DOW_H) / max(emps_per, 1)
+        if emp_h_calc >= 9:
+            best_nb, best_per, best_emp_h = nb, emps_per, emp_h_calc
+            break
+
+    n_blocks = best_nb
+    emps_per = best_per
+    emp_h    = max(9, min(20, int(best_emp_h)))
+
+    # 従業員をブロックに分割
+    blocks = [employees[i:i + emps_per] for i in range(0, n_emp, emps_per)]
+
+    # ── ストーリー構築 ────────────────────────────────────────────────
+    title_style = ParagraphStyle(
+        "Title",
+        fontName=font_name, fontSize=11,
+        alignment=TA_CENTER, textColor=COL_HDR_TITLE,
+        spaceAfter=3,
+    )
+    title_text = (
+        f"{start_d.month}月 シフト表　"
+        f"{period.start_date} 〜 {period.end_date}"
+    )
+
+    story = [Paragraph(title_text, title_style)]
+
+    for block_emps in blocks:
+        tbl = _build_block_table(
+            block_emps, dates, assignments, req_map,
+            col_widths, font_name, font_size, n,
+            emp_h, HDR_H, DOW_H, period_label,
+        )
+        story.append(tbl)
+        story.append(Spacer(1, GAP))
+
+    # ── 集計テーブル ──────────────────────────────────────────────────
+    sum_rows = []
+    for lbl, slot, pos in SLOT_ROWS:
+        row = [lbl]
+        for d in dates:
+            ds  = d.isoformat()
+            cnt = count_map[(ds, slot.value, pos.value)]
+            sk  = skilled_map[(ds, slot.value, pos.value)]
+            row.append(f"{cnt} 熟{sk}")
+        row.append("")
+        sum_rows.append(row)
+
+    sum_tbl = Table(sum_rows, colWidths=col_widths,
+                    rowHeights=[SUM_H] * N_SUM, repeatRows=0)
+
+    sum_cmds = [
+        ("FONTNAME",      (0, 0), (-1, -1), font_name),
+        ("FONTSIZE",      (0, 0), (-1, -1), max(5, font_size - 1)),
+        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",          (0, 0), (-1, -1), 0.4, COL_GRID),
+        ("TOPPADDING",    (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+        ("BACKGROUND",    (0, 0), (0, -1),  COL_SUM_BG),
+        ("BACKGROUND",    (-1, 0), (-1, -1), COL_SUM_BG),
+        ("ALIGN",         (0, 0), (0, -1),  "LEFT"),
+        ("FONTSIZE",      (0, 0), (0, -1),  max(5, font_size - 1)),
+    ]
     for rel, (lbl, slot, pos) in enumerate(SLOT_ROWS):
-        r   = 2 + n_emp + rel
-        key = (slot, pos)
-        c_  = SHIFT_CONSTRAINTS.get(key, {})
+        key     = (slot, pos)
+        c_      = SHIFT_CONSTRAINTS.get(key, {})
         min_req = c_.get("min", 0)
         min_sk  = c_.get("min_skilled", 0)
-
-        cmds.append(("BACKGROUND", (0, r), (0, r), COL_SUM_BG))
-        cmds.append(("FONTSIZE", (0, r), (-1, r), font_size - 1))
-
         for i, d in enumerate(dates):
             col = i + 1
             ds  = d.isoformat()
@@ -342,24 +392,9 @@ def export_pdf(
                 bg = COL_SUM_WARN
             else:
                 bg = COL_SUM_OK
-            cmds.append(("BACKGROUND", (col, r), (col, r), bg))
-        cmds.append(("BACKGROUND", (-1, r), (-1, r), COL_SUM_BG))
+            sum_cmds.append(("BACKGROUND", (col, rel), (col, rel), bg))
 
-    tbl.setStyle(TableStyle(cmds))
+    sum_tbl.setStyle(TableStyle(sum_cmds))
+    story.append(sum_tbl)
 
-    # ── ストーリー構築 ────────────────────────────────────────────────
-    title_style = ParagraphStyle(
-        "Title",
-        fontName=font_name,
-        fontSize=12,
-        alignment=TA_CENTER,
-        textColor=COL_HDR_TITLE,
-        spaceAfter=3 * mm,
-    )
-    title_text = (
-        f"{start_d.month}月 シフト表　　"
-        f"{period.start_date} 〜 {period.end_date}"
-    )
-
-    story = [Paragraph(title_text, title_style), tbl]
     doc.build(story)
