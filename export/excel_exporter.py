@@ -8,6 +8,7 @@ from collections import defaultdict
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.properties import PageSetupProperties
 from models.employee import Employee
 from models.schedule import SchedulePeriod
 from utils.constants import TimeSlot, Position, SHIFT_CONSTRAINTS
@@ -307,10 +308,13 @@ def export_excel(
         ws.column_dimensions[get_column_letter(C_DATA + i)].width = 12
 
     ws.freeze_panes = "B4"  # 名前列・ヘッダーを固定
+
+    # 印刷設定: A4横向き・1ページに収める
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
     ws.page_setup.orientation  = "landscape"
     ws.page_setup.paperSize    = 9   # A4
-    ws.page_setup.fitToWidth   = 1
-    ws.page_setup.fitToHeight  = 0
+    ws.page_setup.fitToWidth   = 1   # 横1ページ
+    ws.page_setup.fitToHeight  = 1   # 縦1ページ
     ws.print_title_rows        = "1:3"
 
     wb.save(path)

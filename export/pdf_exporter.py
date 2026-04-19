@@ -164,23 +164,23 @@ def export_pdf(
     font_name = _register_font()
 
     # ── ページ設定 ────────────────────────────────────────────────────
+    MARGIN = 5 * mm   # 余白を狭めてテーブル領域を最大化
     doc = SimpleDocTemplate(
         path,
         pagesize=landscape(A4),
-        leftMargin=8 * mm,
-        rightMargin=8 * mm,
-        topMargin=8 * mm,
-        bottomMargin=8 * mm,
+        leftMargin=MARGIN,
+        rightMargin=MARGIN,
+        topMargin=MARGIN,
+        bottomMargin=MARGIN,
     )
 
     dates = period.date_range()
     n     = len(dates)
 
-    # ── 使用可能幅から列幅を計算 ──────────────────────────────────────
-    page_w  = landscape(A4)[0] - 16 * mm  # 余白を引いた使用幅
-    name_w  = 18 * mm                     # 氏名列幅
-    data_w  = (page_w - 2 * name_w) / n  # 日付1列の幅
-    data_w  = max(data_w, 11 * mm)        # 最小幅保証
+    # ── 使用可能幅から列幅を計算（最小幅なし・必ず1ページに収める） ──
+    page_w  = landscape(A4)[0] - 2 * MARGIN
+    name_w  = 16 * mm                          # 氏名列幅（やや縮小）
+    data_w  = (page_w - 2 * name_w) / n        # 日付1列の幅（min 制限なし）
     col_widths = [name_w] + [data_w] * n + [name_w]
 
     # ── テーブルデータ構築 ────────────────────────────────────────────
@@ -330,11 +330,14 @@ def export_pdf(
             cmds.append(("BACKGROUND", (col, r), (col, r), bg))
         cmds.append(("BACKGROUND", (-1, r), (-1, r), COL_SUM_BG))
 
-    # 行の高さ
-    row_h_hdr = 14
-    row_h_dow = 12
-    row_h_emp = max(16, int(data_w / mm * 0.9))
+    # 行の高さ（使用可能高さから逆算して1ページに収める）
+    TITLE_H   = 16 * mm       # タイトル段落の概算高さ（余裕を持って確保）
+    page_h    = landscape(A4)[1] - 2 * MARGIN - TITLE_H
+    row_h_hdr = 10
+    row_h_dow = 10
     row_h_sum = 18
+    avail_emp = page_h - row_h_hdr - row_h_dow - n_sum * row_h_sum
+    row_h_emp = max(12, min(22, int(avail_emp / max(n_emp, 1))))
     row_heights = [row_h_hdr, row_h_dow] + [row_h_emp] * n_emp + [row_h_sum] * n_sum
 
     tbl.setStyle(TableStyle(cmds))
