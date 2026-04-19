@@ -176,12 +176,29 @@ def export_pdf(
 
     dates = period.date_range()
     n     = len(dates)
+    n_emp = len(employees)
+    n_sum = 4  # SLOT_ROWS の行数（固定）
 
     # ── 使用可能幅から列幅を計算（最小幅なし・必ず1ページに収める） ──
     page_w  = landscape(A4)[0] - 2 * MARGIN
-    name_w  = 16 * mm                          # 氏名列幅（やや縮小）
+    name_w  = 16 * mm                          # 氏名列幅
     data_w  = (page_w - 2 * name_w) / n        # 日付1列の幅（min 制限なし）
     col_widths = [name_w] + [data_w] * n + [name_w]
+
+    font_size      = max(6, min(8, int(data_w / mm * 0.55)))
+    font_size_name = font_size
+
+    # ── 行高さを先に計算してコンストラクタへ渡す ─────────────────────
+    # ※ tbl._rowHeights を後付けしても doc.build() の _calc() でリセットされるため
+    #    必ず rowHeights= パラメータで渡すこと
+    TITLE_H   = 24          # タイトル段落の実質高さ（12pt行 + spaceAfter 3mm）
+    page_h    = landscape(A4)[1] - 2 * MARGIN - TITLE_H
+    row_h_hdr = 10
+    row_h_dow = 10
+    row_h_sum = 18
+    avail_emp = page_h - row_h_hdr - row_h_dow - n_sum * row_h_sum
+    row_h_emp = max(10, min(20, int(avail_emp / max(n_emp, 1))))
+    row_heights = [row_h_hdr, row_h_dow] + [row_h_emp] * n_emp + [row_h_sum] * n_sum
 
     # ── テーブルデータ構築 ────────────────────────────────────────────
     start_d = date.fromisoformat(period.start_date)
@@ -227,24 +244,22 @@ def export_pdf(
         row.append("")
         sum_rows.append(row)
 
-    # 全行まとめ
+    # 全行まとめ（rowHeights をコンストラクタに渡す）
     table_data = [row_dates, row_dows] + emp_rows + sum_rows
-    n_emp = len(emp_rows)
-    n_sum = len(sum_rows)
-
-    # ── テーブル生成 ──────────────────────────────────────────────────
-    tbl = Table(table_data, colWidths=col_widths, repeatRows=2)
-
-    font_size      = max(6, min(8, int(data_w / mm * 0.55)))  # 幅に応じてサイズ調整
-    font_size_name = font_size
+    tbl = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=2)
 
     cmds = [
         # 基本
-        ("FONTNAME",  (0, 0), (-1, -1), font_name),
-        ("FONTSIZE",  (0, 0), (-1, -1), font_size),
-        ("ALIGN",     (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",    (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID",      (0, 0), (-1, -1), 0.4, COL_GRID),
+        ("FONTNAME",      (0, 0), (-1, -1), font_name),
+        ("FONTSIZE",      (0, 0), (-1, -1), font_size),
+        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",          (0, 0), (-1, -1), 0.4, COL_GRID),
+        # セル余白を詰めて行を狭くしても文字が収まるようにする
+        ("TOPPADDING",    (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
         # 氏名列（左・右）
         ("ALIGN",     (0, 0),  (0, -1),  "LEFT"),
         ("ALIGN",     (-1, 0), (-1, -1), "LEFT"),
@@ -330,18 +345,7 @@ def export_pdf(
             cmds.append(("BACKGROUND", (col, r), (col, r), bg))
         cmds.append(("BACKGROUND", (-1, r), (-1, r), COL_SUM_BG))
 
-    # 行の高さ（使用可能高さから逆算して1ページに収める）
-    TITLE_H   = 16 * mm       # タイトル段落の概算高さ（余裕を持って確保）
-    page_h    = landscape(A4)[1] - 2 * MARGIN - TITLE_H
-    row_h_hdr = 10
-    row_h_dow = 10
-    row_h_sum = 18
-    avail_emp = page_h - row_h_hdr - row_h_dow - n_sum * row_h_sum
-    row_h_emp = max(12, min(22, int(avail_emp / max(n_emp, 1))))
-    row_heights = [row_h_hdr, row_h_dow] + [row_h_emp] * n_emp + [row_h_sum] * n_sum
-
     tbl.setStyle(TableStyle(cmds))
-    tbl._rowHeights = row_heights
 
     # ── ストーリー構築 ────────────────────────────────────────────────
     title_style = ParagraphStyle(
