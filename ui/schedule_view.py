@@ -397,20 +397,15 @@ class ScheduleView(QWidget):
         show_other = self._show_other.get(slot, False)
         display_emps = primary_emps + (other_emps if show_other else [])
 
-        # ポジション別グループ
-        hall_emps = [e for e in display_emps
-                     if e.primary_position is not None and e.primary_position.value == "hall"
-                     and not e.can_work_both_positions]
-        both_emps = [e for e in display_emps
-                     if e.can_work_both_positions or e.primary_position is None]
+        # ポジション別グループ（ホール / キッチン）
+        # 兼務可・未設定はホールグループに含める
         kit_emps  = [e for e in display_emps
-                     if e.primary_position is not None and e.primary_position.value == "kitchen"
-                     and not e.can_work_both_positions]
+                     if e.primary_position is not None and e.primary_position.value == "kitchen"]
+        hall_emps = [e for e in display_emps if e not in kit_emps]
 
         emp_rows: list[tuple] = []
         for group_label, group_emps in [
             ("ホール", hall_emps),
-            ("兼務可", both_emps),
             ("キッチン", kit_emps),
         ]:
             if not group_emps:
