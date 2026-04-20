@@ -346,7 +346,7 @@ class ScheduleView(QWidget):
             e.id: {"bh": 0, "bk": 0, "dh": 0, "dk": 0, "reinf": 0}
             for e in self._employees
         }
-        for (emp_id, ds, slot_v), (pos_v, is_reinf) in self._assignments.items():
+        for (emp_id, ds, slot_v), (pos_v, is_reinf, *_) in self._assignments.items():
             if emp_id not in counts:
                 continue
             key = ("b" if slot_v == "breakfast" else "d") + ("h" if pos_v == "hall" else "k")
@@ -426,7 +426,7 @@ class ScheduleView(QWidget):
         # 集計
         count_map:  dict[tuple[str, str], int] = defaultdict(int)
         leader_map: dict[tuple[str, str], int] = defaultdict(int)
-        for (emp_id, ds, slot_v), (pos_v, _) in self._assignments.items():
+        for (emp_id, ds, slot_v), (pos_v, *_) in self._assignments.items():
             if slot_v != slot.value:
                 continue
             count_map[(ds, pos_v)] += 1
