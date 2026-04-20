@@ -451,6 +451,12 @@ class ScheduleView(QWidget):
             for emp in group_emps:
                 emp_rows.append(("employee", emp))
 
+        # 応援要員として登録されている emp_id の集合（名前セルの色分けに使用）
+        reinf_emp_ids: set[int] = {
+            eid for (eid, _, sv), v in self._assignments.items()
+            if sv == slot.value and v[1]
+        }
+
         # 集計
         shift_constraints = repo.get_shift_constraints()
         count_map:  dict[tuple[str, str], int] = defaultdict(int)
@@ -488,7 +494,7 @@ class ScheduleView(QWidget):
 
         for row_idx, (row_type, row_data) in enumerate(emp_rows):
             if row_type == "employee":
-                self._fill_emp_row(emp_table, row_idx, row_data, slot, col_date_strs, other_ids)
+                self._fill_emp_row(emp_table, row_idx, row_data, slot, col_date_strs, other_ids, reinf_emp_ids)
                 emp_table.setRowHeight(row_idx, 28)
             else:
                 self._fill_divider_row(emp_table, row_idx, row_data, n_cols)
@@ -527,12 +533,14 @@ class ScheduleView(QWidget):
             table.setItem(row, col, item)
 
     def _fill_emp_row(self, table: QTableWidget, row: int, emp: Employee,
-                      slot: TimeSlot, col_date_strs: list, other_ids: set):
+                      slot: TimeSlot, col_date_strs: list, other_ids: set,
+                      reinf_emp_ids: set | None = None):
         skill_b = SKILL_BADGE.get(emp.hall_skill, "")
         skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
         pp_base = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
         pp = f"{pp_base}[兼]" if emp.can_work_both_positions else pp_base
         is_other = emp.id in other_ids
+        is_reinf_emp = bool(reinf_emp_ids and emp.id in reinf_emp_ids)
         other_slot = TimeSlot.DINNER if slot == TimeSlot.BREAKFAST else TimeSlot.BREAKFAST
         suffix = f" ↔{other_slot.short_label()}" if is_other else ""
         name_item = QTableWidgetItem(f"{emp.name}{pp}{suffix}\nH:{skill_b} K:{skill_k}")
@@ -540,7 +548,9 @@ class ScheduleView(QWidget):
         name_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
 
         c = theme.c
-        if is_other:
+        if is_reinf_emp:
+            name_item.setBackground(QBrush(QColor(c["cell_reinforcement"])))
+        elif is_other:
             name_item.setBackground(QBrush(QColor(c["cell_other_slot"])))
         elif emp.primary_position and emp.primary_position.value == "hall":
             name_item.setBackground(QBrush(QColor(c["cell_breakfast"])))
@@ -967,29 +977,44 @@ class _TimetableWidget(QWidget):
             })
             added_ids.add(emp.id)
 
-        # 応援要員（ShiftRequest なし）をスロット別に個別行として追加
+        # 応援要員（ShiftRequest なし）をスロット別に集約して1行で追加
+        reinf_slots: dict[int, dict[str, tuple]] = {}
         for (eid, d2, slot_v), asgn_val in assignments.items():
             if d2 != ds:
                 continue
             _, is_reinf, rs, re = asgn_val
             if not is_reinf or eid in added_ids:
                 continue
+            reinf_slots.setdefault(eid, {})[slot_v] = (rs, re)
+
+        for eid, slots in reinf_slots.items():
             emp = emp_map.get(eid)
             if not emp:
                 continue
-            is_b = slot_v == "breakfast"
-            start_h = cls._parse_hour(rs) if rs else (6.0 if is_b else 17.0)
-            end_h   = cls._parse_hour(re) if re else (11.0 if is_b else 23.0)
+            has_b = "breakfast" in slots
+            has_d = "dinner" in slots
+            if has_b and has_d:
+                rs, _  = slots["breakfast"]
+                _, re  = slots["dinner"]
+                start_h = cls._parse_hour(rs) if rs else 6.0
+                end_h   = cls._parse_hour(re) if re else 23.0
+            elif has_b:
+                rs, re = slots["breakfast"]
+                start_h = cls._parse_hour(rs) if rs else 6.0
+                end_h   = cls._parse_hour(re) if re else 11.0
+            else:
+                rs, re = slots["dinner"]
+                start_h = cls._parse_hour(rs) if rs else 17.0
+                end_h   = cls._parse_hour(re) if re else 23.0
             rows.append({
                 "emp": emp,
                 "start_h": start_h, "end_h": end_h,
-                "breakfast": is_b, "dinner": not is_b,
-                "force_both": False,
-                "assigned_b": is_b,
-                "assigned_d": not is_b,
+                "breakfast": has_b, "dinner": has_d,
+                "force_both": has_b and has_d,
+                "assigned_b": has_b,
+                "assigned_d": has_d,
                 "is_reinf": True,
             })
-            # added_ids には追加しない → 同一人物が朝食・ディナー両方に応援の場合も別行で表示
 
         return rows
 
