@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QDialog, QAbstractItemView, QTabWidget, QMessageBox,
-    QScrollBar, QFrame, QGroupBox
+    QScrollBar, QFrame, QGroupBox, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush, QPainter, QPen
@@ -42,6 +42,8 @@ class ScheduleView(QWidget):
         self._assignments: dict[tuple[int, str, str], AssignVal] = {}
         self._requests: dict[tuple[int, str], tuple[bool, bool]] = {}
         self._raw_requests: dict[tuple[int, str], ShiftRequest] = {}
+        self._notes: dict[str, str] = {}          # {date_str: note}
+        self._col_date_strs_b: list[str | None] = []  # 朝食タブの日付列リスト
         self._build_ui()
         self._load_periods()
 
@@ -105,9 +107,10 @@ class ScheduleView(QWidget):
         self.tab_widget = QTabWidget()
 
         (tab_b, self.emp_table_b, self.sum_table_b,
-         self._btn_other_b, self._warn_label_b) = self._make_tab_widget(TimeSlot.BREAKFAST)
+         self._btn_other_b, self._warn_label_b,
+         self._notes_table) = self._make_tab_widget(TimeSlot.BREAKFAST)
         (tab_d, self.emp_table_d, self.sum_table_d,
-         self._btn_other_d, self._warn_label_d) = self._make_tab_widget(TimeSlot.DINNER)
+         self._btn_other_d, self._warn_label_d, _) = self._make_tab_widget(TimeSlot.DINNER)
 
         self.tab_widget.addTab(tab_b, "🌅 朝食")
         self.tab_widget.addTab(tab_d, "🌆 ディナー")
@@ -133,7 +136,7 @@ class ScheduleView(QWidget):
         self._apply_styles()
 
     def _make_tab_widget(self, slot: TimeSlot):
-        """タブの中身を生成。(container, emp_table, sum_table, toggle_btn, warn_label) を返す"""
+        """タブの中身を生成。(container, emp_table, sum_table, toggle_btn, warn_label, notes_table|None) を返す"""
         container = QWidget()
         vbox = QVBoxLayout(container)
         vbox.setContentsMargins(0, 6, 0, 0)
@@ -156,6 +159,24 @@ class ScheduleView(QWidget):
         warn_label.setWordWrap(True)
         warn_label.setVisible(False)
         vbox.addWidget(warn_label)
+
+        # 備考テーブル（朝食タブのみ）
+        notes_table = None
+        if slot == TimeSlot.BREAKFAST:
+            notes_table = QTableWidget()
+            notes_table.setRowCount(1)
+            notes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            notes_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+            notes_table.verticalHeader().setVisible(False)
+            notes_table.horizontalHeader().setVisible(False)
+            notes_table.setShowGrid(True)
+            notes_table.setFixedHeight(26)
+            notes_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            notes_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            notes_table.setRowHeight(0, 22)
+            notes_table.setToolTip("クリックしてその日の備考を入力できます。PDF の備考欄に反映されます。")
+            notes_table.cellClicked.connect(lambda r, c: self._on_note_cell_clicked(c))
+            vbox.addWidget(notes_table)
 
         # 従業員テーブル（スクロール可）
         emp_table = QTableWidget()
@@ -188,22 +209,27 @@ class ScheduleView(QWidget):
         sum_table.setFixedHeight(60)  # 2行 × 28px + 余白
         vbox.addWidget(sum_table)
 
-        # 水平スクロール同期
+        # 水平スクロール同期（emp_table ↔ sum_table、朝食タブは notes_table も同期）
         emp_table.horizontalScrollBar().valueChanged.connect(
             sum_table.horizontalScrollBar().setValue)
+        if notes_table is not None:
+            emp_table.horizontalScrollBar().valueChanged.connect(
+                notes_table.horizontalScrollBar().setValue)
 
         # 区切り線（集計テーブル上部）
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         vbox.insertWidget(vbox.count() - 1, sep)  # sum_tableの直前に挿入
 
-        return container, emp_table, sum_table, btn, warn_label
+        return container, emp_table, sum_table, btn, warn_label, notes_table
 
     def _sync_col_width(self, col_idx: int, new_width: int, slot: TimeSlot):
-        """従業員テーブルの列幅変更を集計テーブルに反映"""
+        """従業員テーブルの列幅変更を集計・備考テーブルに反映"""
         sum_t = self.sum_table_b if slot == TimeSlot.BREAKFAST else self.sum_table_d
         if col_idx < sum_t.columnCount():
             sum_t.setColumnWidth(col_idx, new_width)
+        if slot == TimeSlot.BREAKFAST and self._notes_table and col_idx < self._notes_table.columnCount():
+            self._notes_table.setColumnWidth(col_idx, new_width)
 
     def _on_toggle_other(self, slot: TimeSlot, checked: bool):
         self._show_other[slot] = checked
@@ -317,6 +343,7 @@ class ScheduleView(QWidget):
             (r.employee_id, r.date): r
             for r in requests
         }
+        self._notes = repo.get_schedule_notes(self._period.id)
 
     # ── 描画 ──────────────────────────────────────────────────────────────
 
@@ -483,6 +510,11 @@ class ScheduleView(QWidget):
         # 警告更新
         self._update_constraint_warnings(warn_label, slot, dates, count_map, leader_map, shift_constraints)
 
+        # 備考テーブル（朝食タブのみ）
+        if slot == TimeSlot.BREAKFAST:
+            self._col_date_strs_b = col_date_strs
+            self._render_notes_row()
+
     def _fill_divider_row(self, table: QTableWidget, row: int, label: str, col_count: int):
         c = theme.c
         bg = QBrush(QColor(c["surface2"]))
@@ -622,6 +654,56 @@ class ScheduleView(QWidget):
             warn_label.setVisible(True)
         else:
             warn_label.setVisible(False)
+
+    # ── 備考テーブル ──────────────────────────────────────────────────────
+
+    def _render_notes_row(self):
+        if self._notes_table is None or not self._col_date_strs_b:
+            return
+        col_date_strs = self._col_date_strs_b
+        n_cols = len(col_date_strs)
+        self._notes_table.setColumnCount(n_cols)
+        for c_i in range(n_cols):
+            self._notes_table.setColumnWidth(c_i, self.emp_table_b.columnWidth(c_i))
+        c = theme.c
+        for col_idx, ds in enumerate(col_date_strs):
+            if col_idx == 0 or ds is None:
+                text = "備考" if col_idx == 0 else ""
+                item = QTableWidgetItem(text)
+                item.setBackground(QBrush(QColor(c["surface2"])))
+                item.setFont(QFont("", 8, QFont.Weight.Bold))
+                item.setForeground(QBrush(QColor(c["text3"])))
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            else:
+                note = self._notes.get(ds, "")
+                item = QTableWidgetItem(note)
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                item.setFont(QFont("", 8))
+                if note:
+                    item.setBackground(QBrush(QColor("#FFFDE7")))
+                    item.setForeground(QBrush(QColor(c["text"])))
+                else:
+                    item.setBackground(QBrush(QColor(c["bg"])))
+                    item.setForeground(QBrush(QColor(c["text3"])))
+            self._notes_table.setItem(0, col_idx, item)
+
+    def _on_note_cell_clicked(self, col: int):
+        if not self._period or not self._col_date_strs_b:
+            return
+        if col == 0 or col >= len(self._col_date_strs_b) - 1:
+            return
+        ds = self._col_date_strs_b[col]
+        if not ds:
+            return
+        dlg = NoteEditDialog(ds, self._notes.get(ds, ""), parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            note = dlg.note
+            repo.save_schedule_note(self._period.id, ds, note)
+            if note:
+                self._notes[ds] = note
+            else:
+                self._notes.pop(ds, None)
+            self._render_notes_row()
 
     # ── イベント ──────────────────────────────────────────────────────────
 
@@ -885,44 +967,29 @@ class _TimetableWidget(QWidget):
             })
             added_ids.add(emp.id)
 
-        # 応援要員（ShiftRequest なし）をスロット別に集約して追加
-        reinf_slots: dict[int, dict[str, tuple]] = {}
+        # 応援要員（ShiftRequest なし）をスロット別に個別行として追加
         for (eid, d2, slot_v), asgn_val in assignments.items():
             if d2 != ds:
                 continue
             _, is_reinf, rs, re = asgn_val
             if not is_reinf or eid in added_ids:
                 continue
-            reinf_slots.setdefault(eid, {})[slot_v] = (rs, re)
-
-        for eid, slots in reinf_slots.items():
             emp = emp_map.get(eid)
             if not emp:
                 continue
-            has_b = "breakfast" in slots
-            has_d = "dinner" in slots
-            if has_b and has_d:
-                rs, _  = slots["breakfast"]
-                _, re  = slots["dinner"]
-                start_h = cls._parse_hour(rs) if rs else 6.0
-                end_h   = cls._parse_hour(re) if re else 23.0
-            elif has_b:
-                rs, re = slots["breakfast"]
-                start_h = cls._parse_hour(rs) if rs else 6.0
-                end_h   = cls._parse_hour(re) if re else 11.0
-            else:
-                rs, re = slots["dinner"]
-                start_h = cls._parse_hour(rs) if rs else 17.0
-                end_h   = cls._parse_hour(re) if re else 23.0
+            is_b = slot_v == "breakfast"
+            start_h = cls._parse_hour(rs) if rs else (6.0 if is_b else 17.0)
+            end_h   = cls._parse_hour(re) if re else (11.0 if is_b else 23.0)
             rows.append({
                 "emp": emp,
                 "start_h": start_h, "end_h": end_h,
-                "breakfast": has_b, "dinner": has_d,
-                "force_both": has_b and has_d,
-                "assigned_b": has_b,
-                "assigned_d": has_d,
+                "breakfast": is_b, "dinner": not is_b,
+                "force_both": False,
+                "assigned_b": is_b,
+                "assigned_d": not is_b,
                 "is_reinf": True,
             })
+            # added_ids には追加しない → 同一人物が朝食・ディナー両方に応援の場合も別行で表示
 
         return rows
 
@@ -1013,6 +1080,46 @@ class _TimetableWidget(QWidget):
                 painter.drawText(x1 + 2, cov_y + bar_h + 18, str(count))
 
         painter.end()
+
+
+# ── 備考編集ダイアログ ────────────────────────────────────────────────────
+
+class NoteEditDialog(QDialog):
+    def __init__(self, date_str: str, current_note: str, parent=None):
+        super().__init__(parent)
+        d = date.fromisoformat(date_str)
+        dow = DAY_OF_WEEK_LABELS[d.weekday()]
+        self.setWindowTitle(f"{d.month}/{d.day}({dow}) 備考編集")
+        self.setFixedWidth(400)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.addWidget(QLabel(f"日付: {d.month}月{d.day}日 ({dow})"))
+
+        self._edit = QLineEdit(current_note)
+        self._edit.setPlaceholderText("例: 棚卸し / 検便提出期限 / ○○研修")
+        self._edit.setFixedHeight(32)
+        layout.addWidget(self._edit)
+
+        hint = QLabel("PDF 出力時のキッチン上段・備考欄に印字されます。空欄で保存すると削除されます。")
+        hint.setStyleSheet("font-size:11px; color:#6b7280;")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        btn_row = QHBoxLayout()
+        btn_cancel = QPushButton("キャンセル")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("保存")
+        btn_ok.setDefault(True)
+        btn_ok.clicked.connect(self.accept)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        layout.addLayout(btn_row)
+
+    @property
+    def note(self) -> str:
+        return self._edit.text().strip()
 
 
 # ── ポジション選択ダイアログ ──────────────────────────────────────────────

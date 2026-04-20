@@ -286,6 +286,37 @@ def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: Ti
     conn.close()
 
 
+# ── 備考 ────────────────────────────────────────────────────────────────
+
+def get_schedule_notes(period_id: int) -> dict[str, str]:
+    """期間の備考を {date_str: note} で返す"""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT date, note FROM schedule_notes WHERE period_id=? ORDER BY date",
+        (period_id,)
+    ).fetchall()
+    conn.close()
+    return {r["date"]: r["note"] for r in rows if r["note"]}
+
+
+def save_schedule_note(period_id: int, date_str: str, note: str):
+    """備考を保存。空文字の場合は削除"""
+    conn = get_connection()
+    if note.strip():
+        conn.execute(
+            """INSERT INTO schedule_notes (period_id, date, note) VALUES (?,?,?)
+               ON CONFLICT(period_id, date) DO UPDATE SET note=excluded.note""",
+            (period_id, date_str, note.strip())
+        )
+    else:
+        conn.execute(
+            "DELETE FROM schedule_notes WHERE period_id=? AND date=?",
+            (period_id, date_str)
+        )
+    conn.commit()
+    conn.close()
+
+
 # ── シフト制約 ──────────────────────────────────────────────────────────
 
 def get_shift_constraints() -> dict:

@@ -98,6 +98,14 @@ def initialize_db():
             min_leader  INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (slot, position)
         );
+
+        CREATE TABLE IF NOT EXISTS schedule_notes (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            period_id INTEGER NOT NULL REFERENCES schedule_periods(id) ON DELETE CASCADE,
+            date      TEXT NOT NULL,
+            note      TEXT NOT NULL DEFAULT '',
+            UNIQUE(period_id, date)
+        );
     """)
 
     # マイグレーション: 新カラムを既存テーブルへ追加

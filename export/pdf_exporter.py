@@ -165,7 +165,7 @@ COL_EVENT_BG = colors.HexColor("#FFFDE7")  # 行事行の背景（淡黄）
 def _build_block_table(
     block_emps, dates, assignments, req_map, col_widths,
     font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
-    events_h: int = 0,
+    events_h: int = 0, notes: dict | None = None,
 ):
     """
     従業員グループ1ブロック分のテーブルを生成する。
@@ -198,8 +198,9 @@ def _build_block_table(
         emp_rows.append(row)
 
     if has_events:
-        row_events = ["行事"] + [""] * n + [""]
-        table_data  = [row_dates, row_dows, row_events] + emp_rows
+        note_cells = [(notes or {}).get(d.isoformat(), "") for d in dates]
+        row_notes  = ["備考"] + note_cells + [""]
+        table_data  = [row_dates, row_dows, row_notes] + emp_rows
         row_heights = [hdr_h, dow_h, events_h] + [emp_h] * n_block
     else:
         table_data  = [row_dates, row_dows] + emp_rows
@@ -294,6 +295,7 @@ def export_pdf(
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
     req_map  = {(r.employee_id, r.date): r for r in requests}
+    notes    = repo.get_schedule_notes(period.id)
 
     font_name = _register_font()
 
@@ -369,13 +371,13 @@ def export_pdf(
 
     story = [Paragraph(title_text, title_style)]
 
-    # 上段: キッチン（行事メモ行あり）
+    # 上段: キッチン（備考行あり）
     if kitchen_emps:
         tbl = _build_block_table(
             kitchen_emps, dates, assignments, req_map,
             col_widths, font_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
-            events_h=EVENTS_H,
+            events_h=EVENTS_H, notes=notes,
         )
         story.append(tbl)
         if hall_emps:
