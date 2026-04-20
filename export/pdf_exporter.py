@@ -143,22 +143,29 @@ COL_EVENT_BG = colors.HexColor("#FFFDE7")  # 行事行の背景（淡黄）
 
 def _build_block_table(
     block_emps, dates, assignments, req_map, col_widths,
-    font_name, font_size, n, emp_h, hdr_h, dow_h, events_h, period_label,
+    font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
+    events_h: int = 0,
 ):
     """
     従業員グループ1ブロック分のテーブルを生成する。
 
-    行構成:
-      Row 0 : 日付番号（期間ラベル付き）
+    行構成（events_h > 0 のとき）:
+      Row 0 : 日付番号
       Row 1 : 曜日
-      Row 2 : 行事メモ欄（空欄・手書き記入用）
+      Row 2 : 行事メモ欄（空欄）
       Row 3+: 従業員シフト行
-    """
-    n_block = len(block_emps)
 
-    row_dates  = [period_label] + [str(d.day) for d in dates] + [period_label]
-    row_dows   = [""] + [DAY_JP[d.weekday()] for d in dates] + [""]
-    row_events = ["行事"] + [""] * n + [""]   # 行事メモ欄（空欄）
+    行構成（events_h == 0 のとき）:
+      Row 0 : 日付番号
+      Row 1 : 曜日
+      Row 2+: 従業員シフト行
+    """
+    n_block    = len(block_emps)
+    has_events = events_h > 0
+    EMP_START  = 3 if has_events else 2
+
+    row_dates = [period_label] + [str(d.day) for d in dates] + [period_label]
+    row_dows  = [""] + [DAY_JP[d.weekday()] for d in dates] + [""]
 
     emp_rows = []
     for emp in block_emps:
@@ -169,13 +176,16 @@ def _build_block_table(
         row.append(emp.name)
         emp_rows.append(row)
 
-    table_data  = [row_dates, row_dows, row_events] + emp_rows
-    row_heights = [hdr_h, dow_h, events_h] + [emp_h] * n_block
+    if has_events:
+        row_events = ["行事"] + [""] * n + [""]
+        table_data  = [row_dates, row_dows, row_events] + emp_rows
+        row_heights = [hdr_h, dow_h, events_h] + [emp_h] * n_block
+    else:
+        table_data  = [row_dates, row_dows] + emp_rows
+        row_heights = [hdr_h, dow_h] + [emp_h] * n_block
 
     tbl = Table(table_data, colWidths=col_widths,
                 rowHeights=row_heights, repeatRows=0)
-
-    EMP_START = 3  # 従業員行の開始行インデックス
 
     cmds = [
         ("FONTNAME",      (0, 0), (-1, -1), font_name),
@@ -200,13 +210,16 @@ def _build_block_table(
         ("BACKGROUND", (-1, 0), (-1, 0), COL_HDR_TITLE),
         ("TEXTCOLOR",  (0, 0),  (0, 0),  colors.white),
         ("TEXTCOLOR",  (-1, 0), (-1, 0), colors.white),
-        # 行事行
-        ("BACKGROUND", (0, 2),  (-1, 2), COL_EVENT_BG),
-        ("FONTSIZE",   (0, 2),  (0, 2),  max(5, font_size - 1)),
-        ("TEXTCOLOR",  (0, 2),  (0, 2),  COL_TXT_OFF),
-        ("ALIGN",      (0, 2),  (0, 2),  "LEFT"),
-        ("ALIGN",      (1, 2),  (-1, 2), "LEFT"),
     ]
+
+    if has_events:
+        cmds += [
+            ("BACKGROUND", (0, 2),  (-1, 2), COL_EVENT_BG),
+            ("FONTSIZE",   (0, 2),  (0, 2),  max(5, font_size - 1)),
+            ("TEXTCOLOR",  (0, 2),  (0, 2),  COL_TXT_OFF),
+            ("ALIGN",      (0, 2),  (0, 2),  "LEFT"),
+            ("ALIGN",      (1, 2),  (-1, 2), "LEFT"),
+        ]
 
     # 土日ヘッダー着色
     for i, d in enumerate(dates):
@@ -294,21 +307,30 @@ def export_pdf(
     period_label = f"{start_d.month}月"
 
     # ── レイアウト計算 ────────────────────────────────────────────────
-    TITLE_H  = 16   # タイトル段落高さ (pt)
+    HDR_H    = 11   # 日付番号行高さ (pt)
+    DOW_H    = 9    # 曜日行高さ (pt)
+    EVENTS_H = 13   # 行事メモ行高さ (pt, キッチンブロックのみ)
     GAP      = 4    # グループ間スペーサー (pt)
-    HDR_H    = 11   # 日付番号行高さ
-    DOW_H    = 9    # 曜日行高さ
-    EVENTS_H = 14   # 行事メモ行高さ
+    TITLE_H  = 18   # タイトル段落高さ余裕込み (pt)
 
-    BLOCK_HDR_H = HDR_H + DOW_H + EVENTS_H  # 1ブロックあたりのヘッダー合計
+    # フレーム高さ（reportlab が使える縦スペース）
+    frame_h = landscape(A4)[1] - 2 * MARGIN
 
-    page_h    = landscape(A4)[1] - 2 * MARGIN - TITLE_H
+    # 固定消費高さ: タイトル + 各ブロックのヘッダー行 + スペーサー
+    kit_hdr_h  = HDR_H + DOW_H + EVENTS_H   # キッチンブロックヘッダー
+    hall_hdr_h = HDR_H + DOW_H              # ホールブロックヘッダー（行事なし）
+
+    has_kitchen = bool(kitchen_emps)
+    has_hall    = bool(hall_emps)
+    gap_total   = GAP if (has_kitchen and has_hall) else 0
+    fixed_h     = (TITLE_H
+                   + (kit_hdr_h  if has_kitchen else 0)
+                   + (hall_hdr_h if has_hall    else 0)
+                   + gap_total)
+
     total_emp = len(kitchen_emps) + len(hall_emps)
-
     if total_emp > 0:
-        # 2ブロック（キッチン・ホール）のヘッダー高さとギャップを引いた残りを従業員行に充当
-        available = page_h - 2 * BLOCK_HDR_H - GAP
-        emp_h = max(9, min(20, int(available / total_emp)))
+        emp_h = max(9, min(20, int((frame_h - fixed_h) / total_emp)))
     else:
         emp_h = 14
 
@@ -317,7 +339,7 @@ def export_pdf(
         "Title",
         fontName=font_name, fontSize=11,
         alignment=TA_CENTER, textColor=COL_HDR_TITLE,
-        spaceAfter=3,
+        spaceAfter=4,
     )
     title_text = (
         f"{start_d.month}月 シフト表　"
@@ -326,22 +348,25 @@ def export_pdf(
 
     story = [Paragraph(title_text, title_style)]
 
-    # 上段: キッチン
+    # 上段: キッチン（行事メモ行あり）
     if kitchen_emps:
         tbl = _build_block_table(
             kitchen_emps, dates, assignments, req_map,
             col_widths, font_name, font_size, n,
-            emp_h, HDR_H, DOW_H, EVENTS_H, period_label,
+            emp_h, HDR_H, DOW_H, period_label,
+            events_h=EVENTS_H,
         )
         story.append(tbl)
-        story.append(Spacer(1, GAP))
+        if hall_emps:
+            story.append(Spacer(1, GAP))
 
-    # 下段: ホール
+    # 下段: ホール（行事メモ行なし）
     if hall_emps:
         tbl = _build_block_table(
             hall_emps, dates, assignments, req_map,
             col_widths, font_name, font_size, n,
-            emp_h, HDR_H, DOW_H, EVENTS_H, period_label,
+            emp_h, HDR_H, DOW_H, period_label,
+            events_h=0,
         )
         story.append(tbl)
 

@@ -92,10 +92,9 @@ class ScheduleView(QWidget):
             legend.addWidget(lbl)
         legend.addStretch()
         legend.addWidget(QLabel("習熟度: [L]リーダー [V]ベテラン　"))
-        reinf_lbl = QLabel("■ 応援要員（希望外追加）")
-        reinf_lbl.setToolTip("希望シフトを出していない従業員を手動で追加したアサインです")
-        reinf_lbl.setStyleSheet("background:#fed7aa; border-radius:3px; padding:2px 6px; font-size:11px;")
-        legend.addWidget(reinf_lbl)
+        self._reinf_lbl = QLabel("■ 応援要員（希望外追加）")
+        self._reinf_lbl.setToolTip("希望シフトを出していない従業員を手動で追加したアサインです")
+        legend.addWidget(self._reinf_lbl)
         layout.addLayout(legend)
 
         # タブ
@@ -152,14 +151,10 @@ class ScheduleView(QWidget):
         row_btn.addStretch()
         vbox.addLayout(row_btn)
 
-        # 制約違反警告ラベル
+        # 制約違反警告ラベル（スタイルは _apply_styles() で設定）
         warn_label = QLabel("")
         warn_label.setWordWrap(True)
         warn_label.setVisible(False)
-        warn_label.setStyleSheet(
-            "background:#fef2f2; border:1px solid #fca5a5; border-radius:4px; "
-            "padding:4px 8px; font-size:11px;"
-        )
         vbox.addWidget(warn_label)
 
         # 従業員テーブル（スクロール可）
@@ -224,15 +219,28 @@ class ScheduleView(QWidget):
             f" QPushButton:hover {{ background:{c['purple_hover']}; }}"
         )
         self.status_label.setStyleSheet(f"color:{c['text2']}; font-size:11px;")
+        # 凡例ラベル: テキスト色を明示してライト/ダーク両対応
         for lbl, color_key in self._status_legend_labels:
             lbl.setStyleSheet(
-                f"background:{c[color_key]}; border-radius:3px; padding:2px 8px; font-size:11px;"
+                f"background:{c[color_key]}; border-radius:3px; padding:2px 8px; "
+                f"font-size:11px; color:{c['text']};"
+            )
+        self._reinf_lbl.setStyleSheet(
+            f"background:{c['cell_reinforcement']}; border-radius:3px; "
+            f"padding:2px 6px; font-size:11px; color:{c['text']};"
+        )
+        # 警告ラベル: 両タブ
+        for warn in (self._warn_label_b, self._warn_label_d):
+            warn.setStyleSheet(
+                f"background:{c['status_err']}; border:1px solid {c['danger_border']}; "
+                f"border-radius:4px; padding:4px 8px; font-size:11px; color:{c['text']};"
             )
         for btn in (self._btn_other_b, self._btn_other_d):
             btn.setStyleSheet(
                 f"QPushButton {{ background:{c['cell_other_slot']}; border:1px solid {c['border2']}; "
                 f"border-radius:4px; font-size:11px; color:{c['text']}; }}"
-                f" QPushButton:checked {{ background:{c['status_warn']}; border-color:{c['border2']}; }}"
+                f" QPushButton:checked {{ background:{c['status_warn']}; border-color:{c['border2']}; "
+                f"color:{c['text']}; }}"
             )
 
     def apply_theme(self):
@@ -704,8 +712,8 @@ class ScheduleView(QWidget):
         else:
             self._btn_confirm.setText("✅ 確定する")
             self._btn_confirm.setStyleSheet(
-                f"QPushButton {{ background:#16a34a; color:white; border-radius:5px; padding:0 14px; }}"
-                f" QPushButton:hover {{ background:#15803d; }}"
+                f"QPushButton {{ background:{c['success']}; color:white; border-radius:5px; padding:0 14px; }}"
+                f" QPushButton:hover {{ background:{c['success_hover']}; }}"
             )
 
     def _on_toggle_confirm(self):
