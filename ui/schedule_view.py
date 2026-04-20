@@ -798,6 +798,7 @@ class DayTimetableDialog(QDialog):
             ("#3b82f6", "朝食アサイン"), ("#93c5fd", "朝食希望"),
             ("#ec4899", "ディナーアサイン"), ("#f9a8d4", "ディナー希望"),
             ("#22c55e", "ダブルアサイン"), ("#86efac", "ダブル希望"),
+            ("#f97316", "応援要員"),
         ]:
             dot = QLabel("●")
             dot.setStyleSheet(f"color:{color}; font-size:16px;")
@@ -845,7 +846,10 @@ class _TimetableWidget(QWidget):
     def _build_rows(cls, employees, assignments, raw_requests, ds):
         from utils.shift_patterns import PATTERN_MAP
         assigned_keys = {(eid, d2, s) for (eid, d2, s) in assignments if d2 == ds}
+        emp_map = {e.id: e for e in employees}
         rows = []
+        added_ids: set[int] = set()
+
         for emp in employees:
             req = raw_requests.get((emp.id, ds))
             if not req:
@@ -877,7 +881,49 @@ class _TimetableWidget(QWidget):
                 "force_both": force_both,
                 "assigned_b": (emp.id, ds, "breakfast") in assigned_keys,
                 "assigned_d": (emp.id, ds, "dinner")    in assigned_keys,
+                "is_reinf": False,
             })
+            added_ids.add(emp.id)
+
+        # 応援要員（ShiftRequest なし）をスロット別に集約して追加
+        reinf_slots: dict[int, dict[str, tuple]] = {}
+        for (eid, d2, slot_v), asgn_val in assignments.items():
+            if d2 != ds:
+                continue
+            _, is_reinf, rs, re = asgn_val
+            if not is_reinf or eid in added_ids:
+                continue
+            reinf_slots.setdefault(eid, {})[slot_v] = (rs, re)
+
+        for eid, slots in reinf_slots.items():
+            emp = emp_map.get(eid)
+            if not emp:
+                continue
+            has_b = "breakfast" in slots
+            has_d = "dinner" in slots
+            if has_b and has_d:
+                rs, _  = slots["breakfast"]
+                _, re  = slots["dinner"]
+                start_h = cls._parse_hour(rs) if rs else 6.0
+                end_h   = cls._parse_hour(re) if re else 23.0
+            elif has_b:
+                rs, re = slots["breakfast"]
+                start_h = cls._parse_hour(rs) if rs else 6.0
+                end_h   = cls._parse_hour(re) if re else 11.0
+            else:
+                rs, re = slots["dinner"]
+                start_h = cls._parse_hour(rs) if rs else 17.0
+                end_h   = cls._parse_hour(re) if re else 23.0
+            rows.append({
+                "emp": emp,
+                "start_h": start_h, "end_h": end_h,
+                "breakfast": has_b, "dinner": has_d,
+                "force_both": has_b and has_d,
+                "assigned_b": has_b,
+                "assigned_d": has_d,
+                "is_reinf": True,
+            })
+
         return rows
 
     def _x(self, hour: float, width: int) -> int:
@@ -915,7 +961,9 @@ class _TimetableWidget(QWidget):
 
             is_both = row["force_both"] or (row["breakfast"] and row["dinner"])
             assigned = row["assigned_b"] or row["assigned_d"]
-            if is_both:
+            if row.get("is_reinf"):
+                bar_color = QColor("#f97316")  # オレンジ（応援要員）
+            elif is_both:
                 bar_color = QColor("#22c55e") if assigned else QColor("#86efac")
             elif row["breakfast"]:
                 bar_color = QColor("#3b82f6") if row["assigned_b"] else QColor("#93c5fd")
