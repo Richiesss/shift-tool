@@ -109,6 +109,8 @@ def initialize_db():
         ("employees",        "primary_timeslot",        "TEXT DEFAULT NULL"),
         ("employees",        "can_work_both_positions", "INTEGER NOT NULL DEFAULT 0"),
         ("shift_assignments","is_reinforcement",   "INTEGER NOT NULL DEFAULT 0"),
+        ("shift_assignments","reinf_start",        "TEXT DEFAULT NULL"),
+        ("shift_assignments","reinf_end",          "TEXT DEFAULT NULL"),
     ]
     for table, col, definition in migrations:
         try:

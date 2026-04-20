@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QDialog, QAbstractItemView, QTabWidget, QMessageBox,
-    QScrollBar, QFrame
+    QScrollBar, QFrame, QGroupBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush, QPainter, QPen
@@ -26,8 +26,8 @@ SKILL_BADGE = {
     SkillLevel.BEGINNER: "",
 }
 
-# _assignments value: (position_str, is_reinforcement_bool)
-AssignVal = tuple[str, bool]
+# _assignments value: (position_str, is_reinforcement_bool, reinf_start_or_none, reinf_end_or_none)
+AssignVal = tuple[str, bool, str | None, str | None]
 
 
 class ScheduleView(QWidget):
@@ -304,7 +304,8 @@ class ScheduleView(QWidget):
         assignments = repo.get_assignments(self._period.id)
         requests = repo.get_shift_requests(self._period.id)
         self._assignments = {
-            (a.employee_id, a.date, a.time_slot.value): (a.position.value, a.is_reinforcement)
+            (a.employee_id, a.date, a.time_slot.value):
+                (a.position.value, a.is_reinforcement, a.reinf_start, a.reinf_end)
             for a in assignments
         }
         self._requests = {
@@ -519,8 +520,10 @@ class ScheduleView(QWidget):
             if ds is None:
                 continue
             result = self._assignments.get((emp.id, ds, slot_v))
-            pos_v = result[0] if result else None
-            is_reinf = result[1] if result else False
+            pos_v      = result[0] if result else None
+            is_reinf   = result[1] if result else False
+            reinf_start = result[2] if result else None
+            reinf_end   = result[3] if result else None
             req = self._requests.get((emp.id, ds))
             can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
 
@@ -533,7 +536,12 @@ class ScheduleView(QWidget):
                 bg_color = c["cell_reinforcement"] if is_reinf else c["cell_assigned"]
                 item.setBackground(QBrush(QColor(bg_color)))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                reinf_note = "（応援要員）" if is_reinf else ""
+                if is_reinf and reinf_start and reinf_end:
+                    reinf_note = f"（応援 {reinf_start}〜{reinf_end}）"
+                elif is_reinf:
+                    reinf_note = "（応援要員）"
+                else:
+                    reinf_note = ""
                 item.setToolTip(f"クリックで削除　{pos_label}={('ホール' if pos_v=='hall' else 'キッチン')}{reinf_note}")
                 item.setData(Qt.ItemDataRole.UserRole, ("assigned", emp.id, ds, slot_v))
                 total += 1
@@ -644,8 +652,14 @@ class ScheduleView(QWidget):
             emp = next((e for e in self._employees if e.id == emp_id), None)
             if not emp:
                 return
-            _, is_reinf = self._assignments.get((emp_id, ds, slot_v), ("", False))
-            reinf_note = "（応援要員）" if is_reinf else ""
+            asgn = self._assignments.get((emp_id, ds, slot_v), ("", False, None, None))
+            is_reinf, rs, re_ = asgn[1], asgn[2], asgn[3]
+            if is_reinf and rs and re_:
+                reinf_note = f"（応援 {rs}〜{re_}）"
+            elif is_reinf:
+                reinf_note = "（応援要員）"
+            else:
+                reinf_note = ""
             reply = QMessageBox.question(
                 self, "シフト削除",
                 f"{emp.name}さん{reinf_note} の {ds} {slot.short_label()} のアサインを削除しますか？",
@@ -668,21 +682,13 @@ class ScheduleView(QWidget):
                 assignment = ShiftAssignment(emp_id, ds, slot, dlg.selected_position,
                                              is_reinforcement=False)
                 repo.add_assignment(self._period.id, assignment)
-                self._assignments[(emp_id, ds, slot_v)] = (dlg.selected_position.value, False)
+                self._assignments[(emp_id, ds, slot_v)] = (dlg.selected_position.value, False, None, None)
                 self._render_table()
 
         elif state == "unavailable":
-            # 応援要員として追加
+            # 応援要員として追加（勤務時間・ポジション選択ダイアログ）
             emp = next((e for e in self._employees if e.id == emp_id), None)
             if not emp:
-                return
-            reply = QMessageBox.question(
-                self, "応援要員追加",
-                f"「{emp.name}さん」はこの時間帯の希望を出していませんが、\n"
-                f"応援要員として {ds} {slot.short_label()} に追加しますか？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
                 return
             dlg = PositionSelectDialog(
                 emp, ds, slot, self._employees, self._assignments,
@@ -690,9 +696,13 @@ class ScheduleView(QWidget):
             )
             if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected_position:
                 assignment = ShiftAssignment(emp_id, ds, slot, dlg.selected_position,
-                                             is_reinforcement=True)
+                                             is_reinforcement=True,
+                                             reinf_start=dlg.reinf_start,
+                                             reinf_end=dlg.reinf_end)
                 repo.add_assignment(self._period.id, assignment)
-                self._assignments[(emp_id, ds, slot_v)] = (dlg.selected_position.value, True)
+                self._assignments[(emp_id, ds, slot_v)] = (
+                    dlg.selected_position.value, True, dlg.reinf_start, dlg.reinf_end
+                )
                 self._render_table()
 
     def _update_confirm_button(self):
@@ -962,32 +972,67 @@ class PositionSelectDialog(QDialog):
                  is_reinforcement: bool = False, parent=None):
         super().__init__(parent)
         self.selected_position = None
+        self.reinf_start: str | None = None
+        self.reinf_end:   str | None = None
         suffix = "（応援要員）" if is_reinforcement else ""
         self.setWindowTitle(f"{emp.name}さんのポジション選択{suffix}")
-        self.setFixedWidth(340)
+        self.setFixedWidth(360)
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(10)
 
         d = date.fromisoformat(ds)
         dow = DAY_OF_WEEK_LABELS[d.weekday()]
         layout.addWidget(QLabel(f"日付: {d.month}/{d.day}({dow})  {slot.short_label()}"))
         layout.addWidget(QLabel(f"従業員: {emp.name}さん"))
+
         if is_reinforcement:
+            from PyQt6.QtWidgets import QTimeEdit
+            from PyQt6.QtCore import QTime
+            c = theme.c
             warn = QLabel("⚠️ この従業員は希望を出していません（応援要員として追加）")
-            warn.setStyleSheet("color:#b45309; font-size:11px;")
+            warn.setStyleSheet(f"color:{c['danger_text']}; font-size:11px;")
             layout.addWidget(warn)
-        layout.addWidget(QLabel(""))
+
+            # 勤務時間帯に応じたデフォルト時刻
+            if slot == TimeSlot.BREAKFAST:
+                default_start, default_end = QTime(6, 0), QTime(11, 0)
+            else:
+                default_start, default_end = QTime(17, 0), QTime(23, 0)
+
+            time_frame = QGroupBox("勤務時間")
+            time_layout = QHBoxLayout(time_frame)
+            time_layout.setSpacing(8)
+
+            self._start_edit = QTimeEdit(default_start)
+            self._start_edit.setDisplayFormat("HH:mm")
+            self._start_edit.setFixedWidth(80)
+            self._end_edit = QTimeEdit(default_end)
+            self._end_edit.setDisplayFormat("HH:mm")
+            self._end_edit.setFixedWidth(80)
+
+            time_layout.addWidget(QLabel("開始:"))
+            time_layout.addWidget(self._start_edit)
+            time_layout.addWidget(QLabel("終了:"))
+            time_layout.addWidget(self._end_edit)
+            time_layout.addStretch()
+            layout.addWidget(time_frame)
+        else:
+            self._start_edit = None
+            self._end_edit   = None
+
+        layout.addWidget(QLabel("ポジションを選択:"))
 
         _shift_constraints = repo.get_shift_constraints()
         for pos in Position:
             constraint = _shift_constraints.get((slot, pos), {})
             current = sum(
-                1 for (eid, d2, s2), (p, _) in assignments.items()
-                if d2 == ds and s2 == slot.value and p == pos.value
+                1 for (eid, d2, s2), val in assignments.items()
+                if d2 == ds and s2 == slot.value and val[0] == pos.value
             )
             leaders = sum(
-                1 for (eid, d2, s2), (p, _) in assignments.items()
-                if d2 == ds and s2 == slot.value and p == pos.value
+                1 for (eid, d2, s2), val in assignments.items()
+                if d2 == ds and s2 == slot.value and val[0] == pos.value
                 and any(x.id == eid and x.is_leader(pos.value) for x in all_employees)
             )
             emp_skill = emp.skill_for(pos.value)
@@ -1018,4 +1063,7 @@ class PositionSelectDialog(QDialog):
 
     def _select(self, pos: Position):
         self.selected_position = pos
+        if self._start_edit and self._end_edit:
+            self.reinf_start = self._start_edit.time().toString("HH:mm")
+            self.reinf_end   = self._end_edit.time().toString("HH:mm")
         self.accept()

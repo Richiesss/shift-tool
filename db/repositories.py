@@ -236,6 +236,8 @@ def get_assignments(period_id: int) -> list[ShiftAssignment]:
             employee_id=r["employee_id"], date=r["date"],
             time_slot=TimeSlot(r["time_slot"]), position=Position(r["position"]),
             is_reinforcement=is_r,
+            reinf_start=r["reinf_start"] if "reinf_start" in keys else None,
+            reinf_end=r["reinf_end"]   if "reinf_end"   in keys else None,
         ))
     return result
 
@@ -246,10 +248,10 @@ def save_assignments(period_id: int, assignments: list[ShiftAssignment]):
     for a in assignments:
         conn.execute(
             "INSERT INTO shift_assignments "
-            "(period_id, employee_id, date, time_slot, position, is_reinforcement) "
-            "VALUES (?,?,?,?,?,?)",
+            "(period_id, employee_id, date, time_slot, position, is_reinforcement, reinf_start, reinf_end) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (period_id, a.employee_id, a.date, a.time_slot.value,
-             a.position.value, int(a.is_reinforcement))
+             a.position.value, int(a.is_reinforcement), a.reinf_start, a.reinf_end)
         )
     conn.commit()
     conn.close()
@@ -259,14 +261,16 @@ def add_assignment(period_id: int, assignment: ShiftAssignment):
     conn = get_connection()
     conn.execute(
         """INSERT INTO shift_assignments
-               (period_id, employee_id, date, time_slot, position, is_reinforcement)
-           VALUES (?,?,?,?,?,?)
+               (period_id, employee_id, date, time_slot, position, is_reinforcement, reinf_start, reinf_end)
+           VALUES (?,?,?,?,?,?,?,?)
            ON CONFLICT(period_id, employee_id, date, time_slot) DO UPDATE SET
                position=excluded.position,
-               is_reinforcement=excluded.is_reinforcement""",
+               is_reinforcement=excluded.is_reinforcement,
+               reinf_start=excluded.reinf_start,
+               reinf_end=excluded.reinf_end""",
         (period_id, assignment.employee_id, assignment.date,
          assignment.time_slot.value, assignment.position.value,
-         int(assignment.is_reinforcement))
+         int(assignment.is_reinforcement), assignment.reinf_start, assignment.reinf_end)
     )
     conn.commit()
     conn.close()

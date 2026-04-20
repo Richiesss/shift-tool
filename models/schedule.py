@@ -59,6 +59,8 @@ class ShiftAssignment:
     time_slot: TimeSlot
     position: Position
     is_reinforcement: bool = False  # 応援要員として追加された場合 True
+    reinf_start: Optional[str] = None  # 応援要員の勤務開始時刻 "HH:MM"
+    reinf_end: Optional[str] = None    # 応援要員の勤務終了時刻 "HH:MM"
 
 
 @dataclass
