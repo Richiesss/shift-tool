@@ -288,6 +288,20 @@ def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: Ti
 
 # ── 備考 ────────────────────────────────────────────────────────────────
 
+def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int]]:
+    """従業員の過去の希望パターン頻度を [(pattern_id, count), ...] で返す（降順）"""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT pattern_id, COUNT(*) as cnt FROM shift_requests
+           WHERE employee_id=? AND pattern_id IS NOT NULL AND pattern_id != ''
+             AND pattern_id != 'custom'
+           GROUP BY pattern_id ORDER BY cnt DESC LIMIT 5""",
+        (emp_id,)
+    ).fetchall()
+    conn.close()
+    return [(r["pattern_id"], r["cnt"]) for r in rows]
+
+
 def get_schedule_notes(period_id: int) -> dict[str, str]:
     """期間の備考を {date_str: note} で返す"""
     conn = get_connection()

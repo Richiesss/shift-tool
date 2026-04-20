@@ -207,21 +207,19 @@ class ShiftInputView(QWidget):
         emp_nav.addWidget(self._btn_next)
         layout.addLayout(emp_nav)
 
-        # 前期間コピー行
-        copy_row = QHBoxLayout()
-        copy_lbl = QLabel("前期間から:")
-        copy_lbl.setStyleSheet("color:#6b7280; font-size:11px;")
-        self._prev_period_combo = QComboBox()
-        self._prev_period_combo.setMinimumWidth(200)
-        self._btn_copy = QPushButton("この従業員の希望をコピー")
-        self._btn_copy.setFixedHeight(28)
-        self._btn_copy.setEnabled(False)
-        self._btn_copy.setToolTip("選択した過去の期間から同じ従業員の希望シフトを現在の期間にコピーします")
-        self._btn_copy.clicked.connect(self._on_copy_from_prev)
-        copy_row.addWidget(copy_lbl)
-        copy_row.addWidget(self._prev_period_combo)
-        copy_row.addWidget(self._btn_copy)
-        copy_row.addStretch()
+        # 過去の希望パターン行
+        history_row = QHBoxLayout()
+        history_row.setSpacing(6)
+        hist_lbl = QLabel("よく使うパターン:")
+        hist_lbl.setStyleSheet("color:#6b7280; font-size:11px;")
+        history_row.addWidget(hist_lbl)
+        # パターンボタンを格納するコンテナ（_refresh_history で動的に更新）
+        self._history_container = QWidget()
+        self._history_inner = QHBoxLayout(self._history_container)
+        self._history_inner.setContentsMargins(0, 0, 0, 0)
+        self._history_inner.setSpacing(6)
+        history_row.addWidget(self._history_container)
+        history_row.addStretch()
 
         self._btn_forms_import = QPushButton("Google Forms CSV をインポート")
         self._btn_forms_import.setFixedHeight(28)
@@ -231,8 +229,8 @@ class ShiftInputView(QWidget):
             "「Google Forms 設定方法」タブでフォームのテンプレートを確認できます"
         )
         self._btn_forms_import.clicked.connect(self._on_forms_import)
-        copy_row.addWidget(self._btn_forms_import)
-        layout.addLayout(copy_row)
+        history_row.addWidget(self._btn_forms_import)
+        layout.addLayout(history_row)
 
         # パターン凡例
         legend = QHBoxLayout()
@@ -341,12 +339,6 @@ class ShiftInputView(QWidget):
             f"QPushButton {{ background:{c['success']}; color:white; border-radius:6px; padding:0 20px; font-weight:bold; }}"
             f" QPushButton:hover {{ background:{c['success_hover']}; }}"
         )
-        self._btn_copy.setStyleSheet(
-            f"QPushButton {{ border:1px solid {c['border2']}; border-radius:4px; "
-            f"padding:0 10px; color:{c['text']}; background:{c['surface']}; }}"
-            f" QPushButton:hover {{ background:{c['surface2']}; }}"
-            f" QPushButton:disabled {{ opacity:0.4; }}"
-        )
         self._btn_forms_import.setStyleSheet(
             f"QPushButton {{ border:1px solid {c['primary']}; border-radius:4px; "
             f"padding:0 10px; color:{c['primary']}; background:{c['surface']}; }}"
@@ -381,18 +373,6 @@ class ShiftInputView(QWidget):
             self.period_combo.addItem(_fmt(p.start_date, p.end_date), p)
         self.period_combo.blockSignals(False)
 
-        # コピー元コンボ: 現在の期間を除く
-        self._prev_period_combo.blockSignals(True)
-        self._prev_period_combo.clear()
-        self._prev_period_combo.addItem("（コピー元期間を選択）", None)
-        for p in periods:
-            if self._period and p.id == self._period.id:
-                continue
-            self._prev_period_combo.addItem(_fmt(p.start_date, p.end_date), p)
-        self._prev_period_combo.blockSignals(False)
-        self._btn_copy.setEnabled(
-            self._prev_period_combo.count() > 1 and bool(self._period)
-        )
 
     def set_period_by_id(self, period_id: int):
         """グローバル期間セレクターから呼ばれる同期メソッド（item 1）"""
@@ -415,48 +395,64 @@ class ShiftInputView(QWidget):
             self._load_employees()
             self.period_changed.emit(p.id)  # item 1
 
-    def _on_copy_from_prev(self):
-        src_period = self._prev_period_combo.currentData()
-        if not src_period or not self._period or not self._employees:
+    def _refresh_history(self):
+        """過去の希望パターン（頻出順）ボタンを更新する"""
+        layout = self._history_inner
+        # 既存ボタンをクリア
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not self._employees or not self._period:
             return
         emp = self._employees[self._current_idx]
-        src_requests = repo.get_shift_requests(src_period.id)
-        src_map = {r.date: r for r in src_requests if r.employee_id == emp.id}
-        if not src_map:
-            QMessageBox.information(
-                self, "コピー元なし",
-                f"期間「{src_period.start_date} 〜 {src_period.end_date}」に\n"
-                f"「{emp.name}さん」の希望データがありません。"
-            )
+        history = repo.get_employee_pattern_history(emp.id)
+
+        if not history:
+            lbl = QLabel("（過去のデータなし）")
+            lbl.setStyleSheet("color:#9ca3af; font-size:11px;")
+            layout.addWidget(lbl)
             return
-        # 日付のオフセットを計算して対応付け
-        from datetime import date as dt_date, timedelta
-        src_dates = src_period.date_range()
-        dst_dates = self._period.date_range()
-        # 曜日ベースでマッピング（同じ曜日オフセット順に対応）
-        for i, dst_d in enumerate(dst_dates):
-            if i < len(src_dates):
-                src_ds = src_dates[i].isoformat()
+
+        c = theme.c
+        for pid, cnt in history:
+            p = PATTERN_MAP.get(pid)
+            if not p:
+                continue
+            btn = QPushButton(f"{p.label}  ×{cnt}")
+            btn.setFixedHeight(26)
+            if p.covers_breakfast() and p.covers_dinner():
+                bg = c["cell_double"]
+            elif p.covers_breakfast():
+                bg = c["cell_breakfast"]
+            elif p.covers_dinner():
+                bg = c["cell_dinner"]
             else:
-                break
-            src_req = src_map.get(src_ds)
-            dst_ds = dst_d.isoformat()
-            cell = self._pattern_cells.get(dst_ds)
-            if cell and src_req and cell.combo.isEnabled():
-                cell.set_pattern(src_req.pattern_id, src_req.custom_start, src_req.custom_end)
-                row = next(
-                    (r for r in range(self.table.rowCount())
-                     if (self.table.item(r, 0) or type('', (), {'data': lambda *_: None})()).data(
-                         Qt.ItemDataRole.UserRole) == dst_ds),
-                    -1
-                )
-                if row >= 0:
-                    self._apply_row_color(row, dst_ds, False)
-        QMessageBox.information(
-            self, "コピー完了",
-            f"「{src_period.start_date} 〜 {src_period.end_date}」から\n"
-            f"「{emp.name}さん」の希望をコピーしました。\n保存ボタンで確定してください。"
-        )
+                bg = c["cell_none"]
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{bg}; border:1px solid {c['border2']}; "
+                f"border-radius:3px; padding:0 8px; font-size:11px; color:{c['text']}; }}"
+                f" QPushButton:hover {{ border-color:{c['primary']}; }}"
+            )
+            btn.setToolTip(f"すべての日程を「{p.label}」で埋めます（上書き）")
+            btn.clicked.connect(lambda checked=False, _pid=pid: self._apply_pattern_to_all(_pid))
+            layout.addWidget(btn)
+
+    def _apply_pattern_to_all(self, pattern_id: str):
+        """すべての有効な日程に指定パターンを適用する"""
+        if not self._period or not self._employees:
+            return
+        emp = self._employees[self._current_idx]
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if not item:
+                continue
+            ds = item.data(Qt.ItemDataRole.UserRole)
+            cell = self._pattern_cells.get(ds)
+            if cell and cell.combo.isEnabled():
+                cell.set_pattern(pattern_id)
+                self._apply_row_color(row, ds, False)
 
     def _on_delete_period(self):
         p = self.period_combo.currentData()
@@ -680,6 +676,7 @@ class ShiftInputView(QWidget):
 
         # テーブル描画後、現在の状態を「保存済み」スナップショットとして記録
         self._saved_snapshot = self._current_snapshot()
+        self._refresh_history()
 
     def _apply_row_color(self, row: int, date_str: str, is_unavail: bool):
         """選択パターンに応じて行背景を更新（変更時にも呼べるよう分離）"""

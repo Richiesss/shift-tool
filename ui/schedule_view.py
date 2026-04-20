@@ -941,6 +941,7 @@ class _TimetableWidget(QWidget):
         emp_map = {e.id: e for e in employees}
         rows = []
         added_ids: set[int] = set()
+        row_by_emp_id: dict[int, dict] = {}
 
         for emp in employees:
             req = raw_requests.get((emp.id, ds))
@@ -966,7 +967,7 @@ class _TimetableWidget(QWidget):
                 start_h = 6.0 if req.breakfast else 17.0
             if end_h is None:
                 end_h = 11.0 if not req.dinner else 23.0
-            rows.append({
+            row = {
                 "emp": emp,
                 "start_h": start_h, "end_h": end_h,
                 "breakfast": req.breakfast, "dinner": req.dinner,
@@ -974,16 +975,18 @@ class _TimetableWidget(QWidget):
                 "assigned_b": (emp.id, ds, "breakfast") in assigned_keys,
                 "assigned_d": (emp.id, ds, "dinner")    in assigned_keys,
                 "is_reinf": False,
-            })
+            }
+            rows.append(row)
             added_ids.add(emp.id)
+            row_by_emp_id[emp.id] = row
 
-        # 応援要員（ShiftRequest なし）をスロット別に集約して1行で追加
+        # 応援要員のスロット別情報を収集
         reinf_slots: dict[int, dict[str, tuple]] = {}
         for (eid, d2, slot_v), asgn_val in assignments.items():
             if d2 != ds:
                 continue
             _, is_reinf, rs, re = asgn_val
-            if not is_reinf or eid in added_ids:
+            if not is_reinf:
                 continue
             reinf_slots.setdefault(eid, {})[slot_v] = (rs, re)
 
@@ -993,6 +996,32 @@ class _TimetableWidget(QWidget):
                 continue
             has_b = "breakfast" in slots
             has_d = "dinner" in slots
+
+            if eid in added_ids:
+                # 通常リクエストのある従業員が別スロットに応援追加されている場合
+                # → 既存行の時間帯を拡張して合算1行にする
+                existing = row_by_emp_id[eid]
+                if has_b:
+                    rs, re = slots["breakfast"]
+                    sh = cls._parse_hour(rs) if rs else 6.0
+                    eh = cls._parse_hour(re) if re else 11.0
+                    existing["start_h"]   = min(existing["start_h"], sh)
+                    existing["end_h"]     = max(existing["end_h"],   eh)
+                    existing["breakfast"] = True
+                    existing["assigned_b"] = True
+                if has_d:
+                    rs, re = slots["dinner"]
+                    sh = cls._parse_hour(rs) if rs else 17.0
+                    eh = cls._parse_hour(re) if re else 23.0
+                    existing["start_h"]   = min(existing["start_h"], sh)
+                    existing["end_h"]     = max(existing["end_h"],   eh)
+                    existing["dinner"]    = True
+                    existing["assigned_d"] = True
+                if existing["breakfast"] and existing["dinner"]:
+                    existing["force_both"] = True
+                continue
+
+            # ShiftRequest のない純粋な応援要員 → 新規行追加
             if has_b and has_d:
                 rs, _  = slots["breakfast"]
                 _, re  = slots["dinner"]
