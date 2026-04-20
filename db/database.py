@@ -105,8 +105,9 @@ def initialize_db():
         ("shift_requests",   "pattern_id",        "TEXT"),
         ("shift_requests",   "custom_start",       "TEXT"),
         ("shift_requests",   "custom_end",         "TEXT"),
-        ("employees",        "primary_position",   "TEXT DEFAULT NULL"),
-        ("employees",        "primary_timeslot",   "TEXT DEFAULT NULL"),
+        ("employees",        "primary_position",        "TEXT DEFAULT NULL"),
+        ("employees",        "primary_timeslot",        "TEXT DEFAULT NULL"),
+        ("employees",        "can_work_both_positions", "INTEGER NOT NULL DEFAULT 0"),
         ("shift_assignments","is_reinforcement",   "INTEGER NOT NULL DEFAULT 0"),
     ]
     for table, col, definition in migrations:

@@ -96,9 +96,9 @@ def solve(
 
     # ── 絶対制約 ─────────────────────────────────────────────────────────
 
-    # 0. 所属ポジション制約: primary_position が設定されている場合は担当外のポジションに入れない
+    # 0. 所属ポジション制約: primary_position が設定されていて兼務不可の場合は担当外のポジションに入れない
     for emp in active_employees:
-        if emp.primary_position is None:
+        if emp.primary_position is None or emp.can_work_both_positions:
             continue
         restricted = [p for p in positions if p.value != emp.primary_position.value]
         for ds in date_strs:
@@ -348,7 +348,7 @@ def _solve_best_effort(
 
     # 絶対制約 0-3（ポジション・希望なし・1枠1ポジション・アルバイト1日制限）
     for emp in active_employees:
-        if emp.primary_position is not None:
+        if emp.primary_position is not None and not emp.can_work_both_positions:
             restricted = [p for p in positions if p.value != emp.primary_position.value]
             for ds in date_strs:
                 for slot in slots:
@@ -500,7 +500,7 @@ def _diagnose_infeasible(
                 available = [
                     e for e in employees
                     if req_map.get((e.id, ds, slot.value), False)
-                    and (e.primary_position is None or e.primary_position.value == pos.value)
+                    and (e.can_work_both_positions or e.primary_position is None or e.primary_position.value == pos.value)
                 ]
                 leaders = [e for e in available if e.is_leader(pos.value)]
                 min_req = constraint["min"]

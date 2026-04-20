@@ -17,7 +17,8 @@ class Employee:
     employment_type: EmploymentType
     hall_skill: SkillLevel = SkillLevel.BEGINNER
     kitchen_skill: SkillLevel = SkillLevel.BEGINNER
-    primary_position: Optional[PrimaryPosition] = None   # None = どちらでも可
+    primary_position: Optional[PrimaryPosition] = None   # None = 未設定（旧データ互換）
+    can_work_both_positions: bool = False                 # True = 兼務可（主所属外でも対応可）
     primary_timeslot: Optional[TimeSlot] = None          # None = どちらでも可
     fixed_patterns: list[FixedPattern] = field(default_factory=list)
     fixed_unavailable_dates: list[str] = field(default_factory=list)  # YYYY-MM-DD

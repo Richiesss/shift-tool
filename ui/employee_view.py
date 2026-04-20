@@ -61,7 +61,7 @@ class EmployeeView(QWidget):
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(["ID", "氏名", "所属ポジション", "勤務時間帯", "習熟度", "雇用形態", "操作"])
         # item 8: ツールチップ
-        self.table.horizontalHeaderItem(2).setToolTip("ホール専任 / キッチン専任 / どちらでも（制限なし）")
+        self.table.horizontalHeaderItem(2).setToolTip("ホール / キッチン / （兼務可）= 主所属外ポジションにも対応可")
         self.table.horizontalHeaderItem(3).setToolTip("朝食専任 / ディナー専任 / どちらでも")
         self.table.horizontalHeaderItem(4).setToolTip("H=ホール習熟度、K=キッチン習熟度\nL:リーダー / V:ベテラン / 一般 / 初心者")
         self.table.horizontalHeaderItem(5).setToolTip("正社員はシフト制約が異なります（希望入力不要）")
@@ -119,7 +119,8 @@ class EmployeeView(QWidget):
             self.employees = all_employees
         self.table.setRowCount(len(self.employees))
         for row, emp in enumerate(self.employees):
-            pp_text = emp.primary_position.label() if emp.primary_position else "どちらでも"
+            pp_label = emp.primary_position.label() if emp.primary_position else "未設定"
+            pp_text  = f"{pp_label}（兼務可）" if emp.can_work_both_positions else pp_label
             pt_text = emp.primary_timeslot.short_label() + "専任" if emp.primary_timeslot else "どちらでも"
             skill_text = f"H:{emp.hall_skill.label()} / K:{emp.kitchen_skill.label()}"
             name_text = emp.name if emp.is_active else f"{emp.name}（アーカイブ）"
@@ -243,10 +244,12 @@ class EmployeeDialog(QDialog):
         form.addRow("雇用形態 *", self.emp_type_combo)
 
         self.primary_pos_combo = QComboBox()
-        self.primary_pos_combo.addItem("どちらでも（制限なし）", None)
-        self.primary_pos_combo.addItem("ホール専任", PrimaryPosition.HALL)
-        self.primary_pos_combo.addItem("キッチン専任", PrimaryPosition.KITCHEN)
-        form.addRow("所属ポジション", self.primary_pos_combo)
+        self.primary_pos_combo.addItem("ホール", PrimaryPosition.HALL)
+        self.primary_pos_combo.addItem("キッチン", PrimaryPosition.KITCHEN)
+        form.addRow("所属ポジション *", self.primary_pos_combo)
+
+        self.can_both_check = QCheckBox("兼務可（主所属外のポジションにも入れる）")
+        form.addRow("", self.can_both_check)
 
         self.primary_ts_combo = QComboBox()
         self.primary_ts_combo.addItem("どちらでも", None)
@@ -372,6 +375,7 @@ class EmployeeDialog(QDialog):
         self.emp_type_combo.setCurrentIndex(idx)
         idx_pp = self.primary_pos_combo.findData(emp.primary_position)
         self.primary_pos_combo.setCurrentIndex(idx_pp if idx_pp >= 0 else 0)
+        self.can_both_check.setChecked(emp.can_work_both_positions)
         idx_pt = self.primary_ts_combo.findData(emp.primary_timeslot)
         self.primary_ts_combo.setCurrentIndex(idx_pt if idx_pt >= 0 else 0)
 
@@ -395,9 +399,10 @@ class EmployeeDialog(QDialog):
             QMessageBox.warning(self, "入力エラー", "氏名を入力してください")
             return
 
-        emp_type = self.emp_type_combo.currentData()
-        primary_position = self.primary_pos_combo.currentData()
-        primary_timeslot = self.primary_ts_combo.currentData()
+        emp_type             = self.emp_type_combo.currentData()
+        primary_position     = self.primary_pos_combo.currentData()
+        can_work_both        = self.can_both_check.isChecked()
+        primary_timeslot     = self.primary_ts_combo.currentData()
         hall_skill = self.hall_skill_combo.currentData()
         kitchen_skill = self.kitchen_skill_combo.currentData()
 
@@ -420,6 +425,7 @@ class EmployeeDialog(QDialog):
             hall_skill=hall_skill,
             kitchen_skill=kitchen_skill,
             primary_position=primary_position,
+            can_work_both_positions=can_work_both,
             primary_timeslot=primary_timeslot,
             fixed_patterns=patterns,
             fixed_unavailable_dates=unavail_dates,

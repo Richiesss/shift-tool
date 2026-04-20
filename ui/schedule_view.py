@@ -399,16 +399,19 @@ class ScheduleView(QWidget):
 
         # ポジション別グループ
         hall_emps = [e for e in display_emps
-                     if e.primary_position is not None and e.primary_position.value == "hall"]
-        any_emps  = [e for e in display_emps if e.primary_position is None]
+                     if e.primary_position is not None and e.primary_position.value == "hall"
+                     and not e.can_work_both_positions]
+        both_emps = [e for e in display_emps
+                     if e.can_work_both_positions or e.primary_position is None]
         kit_emps  = [e for e in display_emps
-                     if e.primary_position is not None and e.primary_position.value == "kitchen"]
+                     if e.primary_position is not None and e.primary_position.value == "kitchen"
+                     and not e.can_work_both_positions]
 
         emp_rows: list[tuple] = []
         for group_label, group_emps in [
-            ("ホール専任", hall_emps),
-            ("どちらでも", any_emps),
-            ("キッチン専任", kit_emps),
+            ("ホール", hall_emps),
+            ("兼務可", both_emps),
+            ("キッチン", kit_emps),
         ]:
             if not group_emps:
                 continue
@@ -489,7 +492,8 @@ class ScheduleView(QWidget):
                       slot: TimeSlot, col_date_strs: list, other_ids: set):
         skill_b = SKILL_BADGE.get(emp.hall_skill, "")
         skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
-        pp = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
+        pp_base = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
+        pp = f"{pp_base}[兼]" if emp.can_work_both_positions else pp_base
         is_other = emp.id in other_ids
         other_slot = TimeSlot.DINNER if slot == TimeSlot.BREAKFAST else TimeSlot.BREAKFAST
         suffix = f" ↔{other_slot.short_label()}" if is_other else ""
