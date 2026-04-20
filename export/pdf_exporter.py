@@ -92,6 +92,8 @@ def _get_shift_text(
     """
     (セルテキスト, スタイル種別) を返す。
     スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off'
+
+    assignments の値は (position_value, is_reinforcement, reinf_start, reinf_end) の4タプル。
     """
     from utils.shift_patterns import PATTERN_MAP
 
@@ -101,11 +103,30 @@ def _get_shift_text(
     if "有給" in note:
         return "有給", "leave"
 
-    b_pos = assignments.get((emp_id, date_str, TimeSlot.BREAKFAST.value))
-    d_pos = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
+    b_raw = assignments.get((emp_id, date_str, TimeSlot.BREAKFAST.value))
+    d_raw = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
 
-    if not b_pos and not d_pos:
+    if not b_raw and not d_raw:
         return "-", "off"
+
+    # 4タプルから位置情報を展開
+    b_pos,  b_is_reinf, b_rs, b_re = b_raw if b_raw else (None, False, None, None)
+    d_pos,  d_is_reinf, d_rs, d_re = d_raw if d_raw else (None, False, None, None)
+
+    # 応援要員は reinf_start/reinf_end を優先して使用
+    if b_is_reinf or d_is_reinf:
+        if b_raw and not d_raw and b_rs and b_re:
+            s, e = _to_decimal(b_rs), _to_decimal(b_re)
+        elif d_raw and not b_raw and d_rs and d_re:
+            s, e = _to_decimal(d_rs), _to_decimal(d_re)
+        elif b_raw and d_raw:
+            s = _to_decimal(b_rs) if b_rs else "6"
+            e = _to_decimal(d_re) if d_re else "23"
+        else:
+            s, e = _slot_default(b_pos, d_pos)
+        if note:
+            return f"{s} {note} {e}", "assigned_note"
+        return f"{s}-{e}", "assigned"
 
     if req and req.pattern_id == "double":
         s, e = "6", "23"

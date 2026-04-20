@@ -38,7 +38,7 @@ class ScheduleView(QWidget):
         super().__init__(parent)
         self._period = None
         self._employees: list[Employee] = []
-        # {(emp_id, date, slot_value): (position_value, is_reinforcement)}
+        # {(emp_id, date, slot_value): (position_value, is_reinforcement, reinf_start, reinf_end)}
         self._assignments: dict[tuple[int, str, str], AssignVal] = {}
         self._requests: dict[tuple[int, str], tuple[bool, bool]] = {}
         self._raw_requests: dict[tuple[int, str], ShiftRequest] = {}
@@ -268,6 +268,8 @@ class ScheduleView(QWidget):
                 if p and p.id == period_id:
                     self.period_combo.setCurrentIndex(i)
                     return
+        if self._period:
+            self._load_data()
         self._render_table()
 
     def set_period_by_id(self, period_id: int):
@@ -275,14 +277,13 @@ class ScheduleView(QWidget):
         for i in range(self.period_combo.count()):
             p = self.period_combo.itemData(i)
             if p and p.id == period_id:
-                if self.period_combo.currentIndex() != i:
-                    self.period_combo.blockSignals(True)
-                    self.period_combo.setCurrentIndex(i)
-                    self.period_combo.blockSignals(False)
-                    self._period = p
-                    self._load_data()
-                    self._render_table()
-                    self._update_confirm_button()
+                self.period_combo.blockSignals(True)
+                self.period_combo.setCurrentIndex(i)
+                self.period_combo.blockSignals(False)
+                self._period = p
+                self._load_data()
+                self._render_table()
+                self._update_confirm_button()
                 return
 
     def _on_period_changed(self, idx):
@@ -424,6 +425,7 @@ class ScheduleView(QWidget):
                 emp_rows.append(("employee", emp))
 
         # 集計
+        shift_constraints = repo.get_shift_constraints()
         count_map:  dict[tuple[str, str], int] = defaultdict(int)
         leader_map: dict[tuple[str, str], int] = defaultdict(int)
         for (emp_id, ds, slot_v), (pos_v, *_) in self._assignments.items():
@@ -475,11 +477,11 @@ class ScheduleView(QWidget):
         sum_table.setColumnWidth(n_cols - 1, 36)
 
         for pi, pos in enumerate(Position):
-            self._fill_summary_row(sum_table, pi, pos, slot, col_date_strs, count_map, leader_map)
+            self._fill_summary_row(sum_table, pi, pos, slot, col_date_strs, count_map, leader_map, shift_constraints)
             sum_table.setRowHeight(pi, 28)
 
         # 警告更新
-        self._update_constraint_warnings(warn_label, slot, dates, count_map, leader_map)
+        self._update_constraint_warnings(warn_label, slot, dates, count_map, leader_map, shift_constraints)
 
     def _fill_divider_row(self, table: QTableWidget, row: int, label: str, col_count: int):
         c = theme.c
@@ -567,14 +569,13 @@ class ScheduleView(QWidget):
 
     def _fill_summary_row(self, table: QTableWidget, row: int, pos: Position,
                           slot: TimeSlot, col_date_strs: list,
-                          count_map: dict, leader_map: dict):
+                          count_map: dict, leader_map: dict, shift_constraints: dict):
         label_item = QTableWidgetItem(pos.label())
         label_item.setFont(QFont("", 8, QFont.Weight.Bold))
         label_item.setBackground(QBrush(QColor(theme.c["surface2"])))
         label_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         table.setItem(row, 0, label_item)
 
-        shift_constraints = repo.get_shift_constraints()
         constraint = shift_constraints.get((slot, pos), {})
         min_req    = constraint.get("min", 0)
         min_leader = constraint.get("min_leader", 0)
@@ -600,8 +601,8 @@ class ScheduleView(QWidget):
         table.setItem(row, len(col_date_strs) - 1, QTableWidgetItem(""))
 
     def _update_constraint_warnings(self, warn_label: QLabel, slot: TimeSlot,
-                                    dates: list, count_map: dict, leader_map: dict):
-        shift_constraints = repo.get_shift_constraints()
+                                    dates: list, count_map: dict, leader_map: dict,
+                                    shift_constraints: dict):
         violations = []
         for d in dates:
             ds = d.isoformat()
@@ -626,6 +627,8 @@ class ScheduleView(QWidget):
 
     def _on_date_header_clicked(self, col: int, slot: TimeSlot, table: QTableWidget):
         if col == 0 or col >= table.columnCount() - 1:
+            return
+        if not self._period:
             return
         dates = self._period.date_range()
         date_idx = col - 1
