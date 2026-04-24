@@ -43,9 +43,7 @@ class ScheduleView(QWidget):
         self._requests: dict[tuple[int, str], tuple[bool, bool]] = {}
         self._raw_requests: dict[tuple[int, str], ShiftRequest] = {}
         self._notes: dict[str, str] = {}                     # {date_str: note}
-        self._reservations: dict[str, dict[str, int]] = {}  # {date_str: {"breakfast": int, "dinner": int}}
         self._col_date_strs_b: list[str | None] = []        # 朝食タブの日付列リスト
-        self._col_date_strs_d: list[str | None] = []        # ディナータブの日付列リスト
         self._build_ui()
         self._load_periods()
 
@@ -110,10 +108,9 @@ class ScheduleView(QWidget):
 
         (tab_b, self.emp_table_b, self.sum_table_b,
          self._btn_other_b, self._warn_label_b,
-         self._notes_table, self._reserv_table_b) = self._make_tab_widget(TimeSlot.BREAKFAST)
+         self._notes_table) = self._make_tab_widget(TimeSlot.BREAKFAST)
         (tab_d, self.emp_table_d, self.sum_table_d,
-         self._btn_other_d, self._warn_label_d,
-         _, self._reserv_table_d) = self._make_tab_widget(TimeSlot.DINNER)
+         self._btn_other_d, self._warn_label_d, _) = self._make_tab_widget(TimeSlot.DINNER)
 
         self.tab_widget.addTab(tab_b, "🌅 朝食")
         self.tab_widget.addTab(tab_d, "🌆 ディナー")
@@ -162,23 +159,6 @@ class ScheduleView(QWidget):
         warn_label.setWordWrap(True)
         warn_label.setVisible(False)
         vbox.addWidget(warn_label)
-
-        # 予約数テーブル（両タブ共通）
-        reserv_table = QTableWidget()
-        reserv_table.setRowCount(1)
-        reserv_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        reserv_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        reserv_table.verticalHeader().setVisible(False)
-        reserv_table.horizontalHeader().setVisible(False)
-        reserv_table.setShowGrid(True)
-        reserv_table.setFixedHeight(26)
-        reserv_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        reserv_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        reserv_table.setRowHeight(0, 22)
-        reserv_table.setToolTip("クリックしてその日の予約客数を入力できます。シフト生成時の増員判定に使用されます。")
-        reserv_table.cellClicked.connect(
-            lambda r, c, s=slot: self._on_reserv_cell_clicked(c, s))
-        vbox.addWidget(reserv_table)
 
         # 備考テーブル（朝食タブのみ）
         notes_table = None
@@ -232,8 +212,6 @@ class ScheduleView(QWidget):
         # 水平スクロール同期（emp_table ↔ sum_table、朝食タブは notes_table も同期）
         emp_table.horizontalScrollBar().valueChanged.connect(
             sum_table.horizontalScrollBar().setValue)
-        emp_table.horizontalScrollBar().valueChanged.connect(
-            reserv_table.horizontalScrollBar().setValue)
         if notes_table is not None:
             emp_table.horizontalScrollBar().valueChanged.connect(
                 notes_table.horizontalScrollBar().setValue)
@@ -243,7 +221,7 @@ class ScheduleView(QWidget):
         sep.setFrameShape(QFrame.Shape.HLine)
         vbox.insertWidget(vbox.count() - 1, sep)  # sum_tableの直前に挿入
 
-        return container, emp_table, sum_table, btn, warn_label, notes_table, reserv_table
+        return container, emp_table, sum_table, btn, warn_label, notes_table
 
     def _sync_col_width(self, col_idx: int, new_width: int, slot: TimeSlot):
         """従業員テーブルの列幅変更を集計・備考テーブルに反映"""
@@ -252,9 +230,6 @@ class ScheduleView(QWidget):
             sum_t.setColumnWidth(col_idx, new_width)
         if slot == TimeSlot.BREAKFAST and self._notes_table and col_idx < self._notes_table.columnCount():
             self._notes_table.setColumnWidth(col_idx, new_width)
-        reserv_t = self._reserv_table_b if slot == TimeSlot.BREAKFAST else self._reserv_table_d
-        if col_idx < reserv_t.columnCount():
-            reserv_t.setColumnWidth(col_idx, new_width)
 
     def _on_toggle_other(self, slot: TimeSlot, checked: bool):
         self._show_other[slot] = checked
@@ -368,8 +343,7 @@ class ScheduleView(QWidget):
             (r.employee_id, r.date): r
             for r in requests
         }
-        self._notes        = repo.get_schedule_notes(self._period.id)
-        self._reservations = repo.get_reservation_counts(self._period.id)
+        self._notes = repo.get_schedule_notes(self._period.id)
 
     # ── 描画 ──────────────────────────────────────────────────────────────
 
@@ -542,14 +516,10 @@ class ScheduleView(QWidget):
         # 警告更新
         self._update_constraint_warnings(warn_label, slot, dates, count_map, leader_map, shift_constraints)
 
-        # 備考・予約数テーブル更新
+        # 備考テーブル更新（朝食タブのみ）
         if slot == TimeSlot.BREAKFAST:
             self._col_date_strs_b = col_date_strs
             self._render_notes_row()
-            self._render_reserv_row(TimeSlot.BREAKFAST, col_date_strs, self._reserv_table_b)
-        else:
-            self._col_date_strs_d = col_date_strs
-            self._render_reserv_row(TimeSlot.DINNER, col_date_strs, self._reserv_table_d)
 
     def _fill_divider_row(self, table: QTableWidget, row: int, label: str, col_count: int):
         c = theme.c
@@ -710,73 +680,6 @@ class ScheduleView(QWidget):
             warn_label.setVisible(True)
         else:
             warn_label.setVisible(False)
-
-    # ── 予約数テーブル ────────────────────────────────────────────────────
-
-    def _render_reserv_row(self, slot: TimeSlot, col_date_strs: list, reserv_table: QTableWidget):
-        if not col_date_strs:
-            return
-        slot_key = "breakfast" if slot == TimeSlot.BREAKFAST else "dinner"
-        label    = "朝食予約" if slot == TimeSlot.BREAKFAST else "夜予約"
-        emp_table = self.emp_table_b if slot == TimeSlot.BREAKFAST else self.emp_table_d
-        n_cols = len(col_date_strs)
-        reserv_table.setColumnCount(n_cols)
-        for c_i in range(n_cols):
-            reserv_table.setColumnWidth(c_i, emp_table.columnWidth(c_i))
-
-        # 閾値を読んで超過日のハイライト判定
-        try:
-            thresh = int(repo.get_app_setting(
-                "reserv_threshold_breakfast" if slot == TimeSlot.BREAKFAST else "reserv_threshold_dinner",
-                "50" if slot == TimeSlot.BREAKFAST else "40"
-            ))
-        except Exception:
-            thresh = 999
-        c = theme.c
-        for col_idx, ds in enumerate(col_date_strs):
-            if col_idx == 0 or ds is None:
-                item = QTableWidgetItem(label if col_idx == 0 else "")
-                item.setBackground(QBrush(QColor(c["surface2"])))
-                item.setFont(QFont("", 8, QFont.Weight.Bold))
-                item.setForeground(QBrush(QColor(c["text3"])))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-            else:
-                count = self._reservations.get(ds, {}).get(slot_key, 0)
-                text  = str(count) if count > 0 else "-"
-                item  = QTableWidgetItem(text)
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                item.setFont(QFont("", 8))
-                if count > 0 and count >= thresh:
-                    item.setBackground(QBrush(QColor("#FEE2E2")))  # 赤系: 閾値超過
-                    item.setForeground(QBrush(QColor(c["text"])))
-                elif count > 0:
-                    item.setBackground(QBrush(QColor("#FEF3C7")))  # 黄系: 入力あり
-                    item.setForeground(QBrush(QColor(c["text"])))
-                else:
-                    item.setBackground(QBrush(QColor(c["bg"])))
-                    item.setForeground(QBrush(QColor(c["text3"])))
-            reserv_table.setItem(0, col_idx, item)
-
-    def _on_reserv_cell_clicked(self, col: int, slot: TimeSlot):
-        if not self._period:
-            return
-        col_date_strs = self._col_date_strs_b if slot == TimeSlot.BREAKFAST else self._col_date_strs_d
-        if not col_date_strs or col == 0 or col >= len(col_date_strs) - 1:
-            return
-        ds = col_date_strs[col]
-        if not ds:
-            return
-        slot_key = "breakfast" if slot == TimeSlot.BREAKFAST else "dinner"
-        current  = self._reservations.get(ds, {}).get(slot_key, 0)
-        dlg = ReservationEditDialog(ds, slot, current, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            count = dlg.count
-            rc = self._reservations.setdefault(ds, {"breakfast": 0, "dinner": 0}).copy()
-            rc[slot_key] = count
-            self._reservations[ds] = rc
-            repo.save_reservation_count(self._period.id, ds, rc["breakfast"], rc["dinner"])
-            reserv_table = self._reserv_table_b if slot == TimeSlot.BREAKFAST else self._reserv_table_d
-            self._render_reserv_row(slot, col_date_strs, reserv_table)
 
     # ── 備考テーブル ──────────────────────────────────────────────────────
 
@@ -1287,50 +1190,6 @@ class NoteEditDialog(QDialog):
     @property
     def note(self) -> str:
         return self._edit.text().strip()
-
-
-# ── 予約客数編集ダイアログ ────────────────────────────────────────────────
-
-class ReservationEditDialog(QDialog):
-    def __init__(self, date_str: str, slot: TimeSlot, current_count: int, parent=None):
-        super().__init__(parent)
-        d = date.fromisoformat(date_str)
-        dow = DAY_OF_WEEK_LABELS[d.weekday()]
-        slot_label = "朝食" if slot == TimeSlot.BREAKFAST else "ディナー"
-        self.setWindowTitle(f"{d.month}/{d.day}({dow}) {slot_label}予約客数")
-        self.setFixedWidth(320)
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.addWidget(QLabel(f"日付: {d.month}月{d.day}日 ({dow})  {slot_label}"))
-
-        from PyQt6.QtWidgets import QSpinBox
-        self._spin = QSpinBox()
-        self._spin.setRange(0, 999)
-        self._spin.setValue(current_count)
-        self._spin.setFixedHeight(36)
-        self._spin.setSuffix(" 名")
-        layout.addWidget(self._spin)
-
-        hint = QLabel("0 で入力するとデータを消去します。設定した閾値を超えると増員が発生します。")
-        hint.setStyleSheet("font-size:11px; color:#6b7280;")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-
-        btn_row = QHBoxLayout()
-        btn_cancel = QPushButton("キャンセル")
-        btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("保存")
-        btn_ok.setDefault(True)
-        btn_ok.clicked.connect(self.accept)
-        btn_row.addStretch()
-        btn_row.addWidget(btn_cancel)
-        btn_row.addWidget(btn_ok)
-        layout.addLayout(btn_row)
-
-    @property
-    def count(self) -> int:
-        return self._spin.value()
 
 
 # ── ポジション選択ダイアログ ──────────────────────────────────────────────

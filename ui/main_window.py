@@ -13,6 +13,7 @@ from ui.employee_view import EmployeeView
 from ui.shift_input_view import ShiftInputView
 from ui.generate_view import GenerateView
 from ui.schedule_view import ScheduleView
+from ui.customer_count_view import CustomerCountView
 from ui.settings_view import SettingsView
 from ui.help_view import HelpDialog
 from utils.theme import theme
@@ -24,7 +25,8 @@ NAV_ITEMS = [
     ("📝", "希望シフト入力", 1),
     ("⚡", "シフト自動生成", 2),
     ("📅", "シフト表示・編集", 3),
-    ("⚙️", "設定",          4),
+    ("🍽️", "客数管理",       4),
+    ("⚙️", "設定",           5),
 ]
 
 SIDEBAR_W = 160
@@ -410,17 +412,19 @@ class MainWindow(QMainWindow):
         # スタック
         self.stack = QStackedWidget()
 
-        self._employee_view    = EmployeeView()
-        self._shift_input_view = ShiftInputView()
-        self._generate_view    = GenerateView()
-        self._schedule_view    = ScheduleView()
-        self._settings_view    = SettingsView()
+        self._employee_view      = EmployeeView()
+        self._shift_input_view   = ShiftInputView()
+        self._generate_view      = GenerateView()
+        self._schedule_view      = ScheduleView()
+        self._customer_count_view = CustomerCountView()
+        self._settings_view      = SettingsView()
 
-        self.stack.addWidget(self._employee_view)
-        self.stack.addWidget(self._shift_input_view)
-        self.stack.addWidget(self._generate_view)
-        self.stack.addWidget(self._schedule_view)
-        self.stack.addWidget(self._settings_view)
+        self.stack.addWidget(self._employee_view)       # 0
+        self.stack.addWidget(self._shift_input_view)    # 1
+        self.stack.addWidget(self._generate_view)       # 2
+        self.stack.addWidget(self._schedule_view)       # 3
+        self.stack.addWidget(self._customer_count_view) # 4
+        self.stack.addWidget(self._settings_view)       # 5
 
         self._generate_view.schedule_generated.connect(self._on_schedule_generated)
         self._settings_view.db_imported.connect(self._on_db_imported)
@@ -429,6 +433,7 @@ class MainWindow(QMainWindow):
         self._shift_input_view.period_changed.connect(self._on_view_period_changed)
         self._generate_view.period_changed.connect(self._on_view_period_changed)
         self._schedule_view.period_changed.connect(self._on_view_period_changed)
+        self._customer_count_view.period_changed.connect(self._on_view_period_changed)
 
         # 空状態ナビシグナルを接続（item 4）
         self._shift_input_view.navigate_requested.connect(self._nav_to)
@@ -474,7 +479,8 @@ class MainWindow(QMainWindow):
         for btn in self._nav_buttons:
             btn.apply_theme()
         for view in (self._employee_view, self._shift_input_view,
-                     self._generate_view, self._schedule_view, self._settings_view):
+                     self._generate_view, self._schedule_view,
+                     self._customer_count_view, self._settings_view):
             if hasattr(view, "apply_theme"):
                 view.apply_theme()
         self._update_step_bar()
@@ -487,6 +493,8 @@ class MainWindow(QMainWindow):
             self._generate_view.refresh()
         elif idx == 3:
             self._schedule_view.refresh()
+        elif idx == 4:
+            self._customer_count_view.refresh()
         # 現在の期間を該当ビューに適用
         if self._current_period_id is not None:
             if idx == 1:
@@ -495,6 +503,8 @@ class MainWindow(QMainWindow):
                 self._generate_view.set_period_by_id(self._current_period_id)
             elif idx == 3:
                 self._schedule_view.set_period_by_id(self._current_period_id)
+            elif idx == 4:
+                self._customer_count_view.set_period_by_id(self._current_period_id)
         self._update_step_bar()
 
     def _on_schedule_generated(self, period_id: int):
@@ -512,7 +522,7 @@ class MainWindow(QMainWindow):
     def _update_step_bar(self):
         from db import repositories as repo
         nav_idx = self.stack.currentIndex()
-        step_idx = min(nav_idx, 3)  # 設定（4）はステップ外
+        step_idx = min(nav_idx, 3)  # 客数管理(4)・設定(5)はステップ外
 
         p = repo.get_period(self._current_period_id) if self._current_period_id else None
 
@@ -535,6 +545,7 @@ class MainWindow(QMainWindow):
         self._shift_input_view._load_periods()
         self._generate_view.refresh()
         self._schedule_view.refresh()
+        self._customer_count_view.refresh()
         self._current_period_id = None
         self._update_step_bar()
 
