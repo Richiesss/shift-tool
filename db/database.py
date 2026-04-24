@@ -106,6 +106,20 @@ def initialize_db():
             note      TEXT NOT NULL DEFAULT '',
             UNIQUE(period_id, date)
         );
+
+        CREATE TABLE IF NOT EXISTS reservation_counts (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            period_id INTEGER NOT NULL REFERENCES schedule_periods(id) ON DELETE CASCADE,
+            date      TEXT NOT NULL,
+            breakfast INTEGER NOT NULL DEFAULT 0,
+            dinner    INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(period_id, date)
+        );
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT ''
+        );
     """)
 
     # マイグレーション: 新カラムを既存テーブルへ追加
@@ -119,6 +133,7 @@ def initialize_db():
         ("shift_assignments","is_reinforcement",   "INTEGER NOT NULL DEFAULT 0"),
         ("shift_assignments","reinf_start",        "TEXT DEFAULT NULL"),
         ("shift_assignments","reinf_end",          "TEXT DEFAULT NULL"),
+        ("employees",        "can_open",            "INTEGER NOT NULL DEFAULT 0"),
     ]
     for table, col, definition in migrations:
         try:
@@ -137,6 +152,19 @@ def initialize_db():
         cur.execute(
             "INSERT OR IGNORE INTO shift_constraints (slot, position, min_staff, max_staff, min_leader) VALUES (?,?,?,?,?)",
             (slot, pos, mn, mx, ml)
+        )
+
+    # アプリ設定デフォルト値を投入（既に存在する場合は無視）
+    default_app_settings = [
+        ("reserv_threshold_breakfast", "50"),
+        ("reserv_extra_breakfast",     "1"),
+        ("reserv_threshold_dinner",    "40"),
+        ("reserv_extra_dinner",        "1"),
+        ("open_prep_required",         "2"),
+    ]
+    for key, val in default_app_settings:
+        cur.execute(
+            "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?,?)", (key, val)
         )
 
     conn.commit()

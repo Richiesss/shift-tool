@@ -251,6 +251,10 @@ class EmployeeDialog(QDialog):
         self.can_both_check = QCheckBox("兼務可（主所属外のポジションにも入れる）")
         form.addRow("", self.can_both_check)
 
+        self.can_open_check = QCheckBox("朝食開店準備対応可（5:45〜 入れる）")
+        self.can_open_check.setToolTip("チェックすると朝食の開店準備シフト（5:45〜）に対応可能として扱います")
+        form.addRow("", self.can_open_check)
+
         self.primary_ts_combo = QComboBox()
         self.primary_ts_combo.addItem("どちらでも", None)
         self.primary_ts_combo.addItem("朝食専任", TimeSlot.BREAKFAST)
@@ -376,6 +380,7 @@ class EmployeeDialog(QDialog):
         idx_pp = self.primary_pos_combo.findData(emp.primary_position)
         self.primary_pos_combo.setCurrentIndex(idx_pp if idx_pp >= 0 else 0)
         self.can_both_check.setChecked(emp.can_work_both_positions)
+        self.can_open_check.setChecked(emp.can_open)
         idx_pt = self.primary_ts_combo.findData(emp.primary_timeslot)
         self.primary_ts_combo.setCurrentIndex(idx_pt if idx_pt >= 0 else 0)
 
@@ -402,6 +407,7 @@ class EmployeeDialog(QDialog):
         emp_type             = self.emp_type_combo.currentData()
         primary_position     = self.primary_pos_combo.currentData()
         can_work_both        = self.can_both_check.isChecked()
+        can_open             = self.can_open_check.isChecked()
         primary_timeslot     = self.primary_ts_combo.currentData()
         hall_skill = self.hall_skill_combo.currentData()
         kitchen_skill = self.kitchen_skill_combo.currentData()
@@ -426,6 +432,7 @@ class EmployeeDialog(QDialog):
             kitchen_skill=kitchen_skill,
             primary_position=primary_position,
             can_work_both_positions=can_work_both,
+            can_open=can_open,
             primary_timeslot=primary_timeslot,
             fixed_patterns=patterns,
             fixed_unavailable_dates=unavail_dates,

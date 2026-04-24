@@ -35,16 +35,17 @@ def save_employee(emp: Employee) -> Employee:
     pp   = emp.primary_position.value if emp.primary_position else None
     pt   = emp.primary_timeslot.value if emp.primary_timeslot else None
     both = int(emp.can_work_both_positions)
+    opn  = int(emp.can_open)
     if emp.id is None:
         cur = conn.execute(
-            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, can_work_both_positions, is_active) VALUES (?,?,?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, 1)
+            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, can_work_both_positions, can_open, is_active) VALUES (?,?,?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, 1)
         )
         emp.id = cur.lastrowid
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, can_work_both_positions=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, int(emp.is_active), emp.id)
         )
     _save_fixed_patterns(conn, emp)
     _save_fixed_unavailable_dates(conn, emp)
@@ -80,6 +81,7 @@ def _row_to_employee(row, conn) -> Employee:
     pp_val   = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
     pt_val   = row["primary_timeslot"] if "primary_timeslot" in keys and row["primary_timeslot"] else None
     both_val = bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False
+    open_val = bool(row["can_open"]) if "can_open" in keys else False
     return Employee(
         id=row["id"],
         name=row["name"],
@@ -88,6 +90,7 @@ def _row_to_employee(row, conn) -> Employee:
         kitchen_skill=SkillLevel(row["kitchen_skill"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         can_work_both_positions=both_val,
+        can_open=open_val,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         is_active=bool(row["is_active"]),
         fixed_patterns=[
@@ -287,6 +290,69 @@ def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: Ti
 
 
 # ── 備考 ────────────────────────────────────────────────────────────────
+
+# ── 予約客数 ─────────────────────────────────────────────────────────────
+
+def get_reservation_counts(period_id: int) -> dict[str, dict[str, int]]:
+    """期間の予約客数を {date_str: {"breakfast": int, "dinner": int}} で返す"""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT date, breakfast, dinner FROM reservation_counts WHERE period_id=? ORDER BY date",
+        (period_id,)
+    ).fetchall()
+    conn.close()
+    return {r["date"]: {"breakfast": r["breakfast"], "dinner": r["dinner"]} for r in rows}
+
+
+def save_reservation_count(period_id: int, date_str: str, breakfast: int, dinner: int):
+    """予約客数を保存"""
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO reservation_counts (period_id, date, breakfast, dinner) VALUES (?,?,?,?)
+           ON CONFLICT(period_id, date) DO UPDATE SET
+               breakfast=excluded.breakfast, dinner=excluded.dinner""",
+        (period_id, date_str, breakfast, dinner)
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── アプリ設定 ────────────────────────────────────────────────────────────
+
+def get_app_setting(key: str, default: str = "") -> str:
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def save_app_setting(key: str, value: str):
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_app_settings() -> dict[str, str]:
+    conn = get_connection()
+    rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+    conn.close()
+    return {r["key"]: r["value"] for r in rows}
+
+
+def save_all_app_settings(settings: dict[str, str]):
+    conn = get_connection()
+    for key, value in settings.items():
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value)
+        )
+    conn.commit()
+    conn.close()
+
 
 def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int]]:
     """従業員の過去の希望パターン頻度を [(pattern_id, count), ...] で返す（降順）"""

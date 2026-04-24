@@ -76,9 +76,20 @@ def solve(
 
     active_employees = [e for e in employees if e.is_active]
 
-    # DB から制約を読み込む
+    # DB から制約・予約客数・アプリ設定を読み込む
     from db import repositories as repo
     shift_constraints = repo.get_shift_constraints()
+    reservation_counts = repo.get_reservation_counts(period.id)
+    try:
+        reserv_thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "50"))
+        reserv_extra_b  = int(repo.get_app_setting("reserv_extra_breakfast",     "1"))
+        reserv_thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "40"))
+        reserv_extra_d  = int(repo.get_app_setting("reserv_extra_dinner",        "1"))
+        open_prep_req   = int(repo.get_app_setting("open_prep_required",         "2"))
+    except Exception:
+        reserv_thresh_b = 50; reserv_extra_b = 1
+        reserv_thresh_d = 40; reserv_extra_d = 1
+        open_prep_req   = 2
 
     # ── 決定変数 ────────────────────────────────────────────────────────
     # assign[e_id][date_str][slot][pos] = BoolVar
@@ -134,21 +145,32 @@ def solve(
                 ]
                 model.add(sum(all_vars) <= 1)
 
-    # 4. 人員数制約（最低/最大）
+    # 4. 人員数制約（最低/最大）＋予約客数による増員
     for ds in date_strs:
-        d_obj = date.fromisoformat(ds)
+        rc = reservation_counts.get(ds, {})
+        b_count = rc.get("breakfast", 0)
+        d_count = rc.get("dinner",    0)
         for slot in slots:
             for pos in positions:
                 key = (slot, pos)
                 constraint = shift_constraints.get(key)
                 if not constraint:
                     continue
+                base_min = constraint["min"]
+                base_max = constraint["max"]
+                # 予約超過時の増員
+                if slot == TimeSlot.BREAKFAST and b_count >= reserv_thresh_b > 0:
+                    base_min += reserv_extra_b
+                    base_max  = max(base_max, base_min)
+                elif slot == TimeSlot.DINNER and d_count >= reserv_thresh_d > 0:
+                    base_min += reserv_extra_d
+                    base_max  = max(base_max, base_min)
                 staff_vars = [
                     assign[emp.id][ds][slot.value][pos.value]
                     for emp in active_employees
                 ]
-                model.add(sum(staff_vars) >= constraint["min"])
-                model.add(sum(staff_vars) <= constraint["max"])
+                model.add(sum(staff_vars) >= base_min)
+                model.add(sum(staff_vars) <= base_max)
 
     # 5. リーダー配置制約（絶対制約：リーダーの最低配置数）
     for ds in date_strs:
@@ -167,6 +189,24 @@ def solve(
                     if emp.is_leader(pos.value)
                 ]
                 model.add(sum(leader_vars) >= min_leader)
+
+    # 5b. 開店準備制約: 朝食に open_prep_req 人以上の can_open スタッフを配置
+    if open_prep_req > 0:
+        for ds in date_strs:
+            can_open_requested = [
+                emp for emp in active_employees
+                if emp.can_open and req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+            ]
+            if len(can_open_requested) >= open_prep_req:
+                open_vars = [
+                    assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                    for emp in can_open_requested for pos in positions
+                ]
+                model.add(sum(open_vars) >= open_prep_req)
+            elif can_open_requested:
+                warnings.append(
+                    f"{ds}: 開店準備対応可スタッフが {len(can_open_requested)} 名（必要 {open_prep_req} 名）"
+                )
 
     # 6. 正社員の両時間帯掛け持ちは最小化（ソフト制約で対応）
     # 両時間帯掛け持ち変数

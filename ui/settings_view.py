@@ -169,7 +169,77 @@ class SettingsView(QWidget):
         constraint_layout.addWidget(self._btn_save_constraints)
         layout.addWidget(constraint_group)
 
+        # ── 予約客数設定 ──────────────────────────────────────────────────
+        reserv_group = QGroupBox("予約客数による増員設定")
+        reserv_layout = QVBoxLayout(reserv_group)
+        reserv_layout.setSpacing(8)
+        note_r = QLabel(
+            "1日の予約客数が閾値を超えた場合、その時間帯の最低スタッフ数を増員します。\n"
+            "予約客数はシフト表確認・編集画面の各タブで日毎に入力できます。"
+        )
+        note_r.setWordWrap(True)
+        reserv_layout.addWidget(note_r)
+
+        reserv_grid = QWidget()
+        reserv_form = QFormLayout(reserv_grid)
+        reserv_form.setSpacing(6)
+
+        self._reserv_spins: dict[str, QSpinBox] = {}
+        for key, label, default in [
+            ("reserv_threshold_breakfast", "朝食: 予約が N 人以上で増員", 50),
+            ("reserv_extra_breakfast",     "　増員数（人）",               1),
+            ("reserv_threshold_dinner",    "ディナー: 予約が N 人以上で増員", 40),
+            ("reserv_extra_dinner",        "　増員数（人）",               1),
+        ]:
+            sp = QSpinBox()
+            sp.setRange(0, 999)
+            sp.setFixedWidth(80)
+            sp.setValue(default)
+            sp.setMinimumHeight(28)
+            self._reserv_spins[key] = sp
+            reserv_form.addRow(label, sp)
+
+        reserv_layout.addWidget(reserv_grid)
+
+        # ── 朝食タイムテーブル制約 ────────────────────────────────────────
+        timetable_sep = QFrame()
+        timetable_sep.setFrameShape(QFrame.Shape.HLine)
+        reserv_layout.addWidget(timetable_sep)
+
+        timetable_note = QLabel(
+            "【朝食タイムテーブル】\n"
+            "5:45〜6:30  開店準備（開店準備対応可スタッフ 必須人数）\n"
+            "6:30〜10:00 朝食営業（上記の人員設定どおり）\n"
+            "10:00〜11:30 片付け・レイアウト準備（リーダー必須、最高2名・最低1名）"
+        )
+        timetable_note.setWordWrap(True)
+        timetable_note.setStyleSheet("font-size:11px;")
+        reserv_layout.addWidget(timetable_note)
+
+        open_row = QWidget()
+        open_form = QFormLayout(open_row)
+        open_form.setSpacing(6)
+        self._open_prep_spin = QSpinBox()
+        self._open_prep_spin.setRange(0, 10)
+        self._open_prep_spin.setFixedWidth(80)
+        self._open_prep_spin.setValue(2)
+        self._open_prep_spin.setMinimumHeight(28)
+        self._open_prep_spin.setToolTip(
+            "朝食開店準備（5:45〜）に必要な「開店準備対応可」スタッフの最低人数。\n"
+            "従業員管理で「朝食開店準備対応可」をチェックした従業員が対象です。"
+        )
+        open_form.addRow("開店準備 必要人数（人）", self._open_prep_spin)
+        reserv_layout.addWidget(open_row)
+
+        btn_save_reserv = QPushButton("予約・タイムテーブル設定を保存")
+        btn_save_reserv.setFixedHeight(36)
+        btn_save_reserv.clicked.connect(self._on_save_reserv_settings)
+        reserv_layout.addWidget(btn_save_reserv)
+        self._btn_save_reserv = btn_save_reserv
+        layout.addWidget(reserv_group)
+
         self._load_constraints()
+        self._load_reserv_settings()
 
         self._apply_styles()
 
@@ -181,6 +251,27 @@ class SettingsView(QWidget):
             mn_spin.setValue(c["min"])
             mx_spin.setValue(c["max"])
             ldr_spin.setValue(c["min_leader"])
+
+    def _load_reserv_settings(self):
+        from db import repositories as repo
+        settings = repo.get_all_app_settings()
+        defaults = {
+            "reserv_threshold_breakfast": "50",
+            "reserv_extra_breakfast":     "1",
+            "reserv_threshold_dinner":    "40",
+            "reserv_extra_dinner":        "1",
+            "open_prep_required":         "2",
+        }
+        for key, sp in self._reserv_spins.items():
+            sp.setValue(int(settings.get(key, defaults.get(key, "0"))))
+        self._open_prep_spin.setValue(int(settings.get("open_prep_required", "2")))
+
+    def _on_save_reserv_settings(self):
+        from db import repositories as repo
+        settings = {key: str(sp.value()) for key, sp in self._reserv_spins.items()}
+        settings["open_prep_required"] = str(self._open_prep_spin.value())
+        repo.save_all_app_settings(settings)
+        QMessageBox.information(self, "保存完了", "予約・タイムテーブル設定を保存しました。")
 
     def _on_save_constraints(self):
         from db import repositories as repo
@@ -207,6 +298,11 @@ class SettingsView(QWidget):
 
     def _apply_styles(self):
         c = theme.c
+        self._btn_save_reserv.setStyleSheet(
+            f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
+            f"border-radius:6px; padding:0 16px; color:{c['text']}; }}"
+            f" QPushButton:hover {{ background:{c['surface2']}; }}"
+        )
         self._btn_save_constraints.setStyleSheet(
             f"QPushButton {{ background:{c['surface']}; border:1px solid {c['border2']}; "
             f"border-radius:6px; padding:0 16px; color:{c['text']}; }}"
