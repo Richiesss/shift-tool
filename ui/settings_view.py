@@ -110,61 +110,82 @@ class SettingsView(QWidget):
         import_layout.addWidget(self._btn_import)
         layout.addWidget(import_group)
 
-        # ── シフト人員制約 ────────────────────────────────────────────
-        constraint_group = QGroupBox("シフト人員設定")
+        # ── シフト人員制約（タイムバンド別） ──────────────────────────────
+        constraint_group = QGroupBox("シフト人員設定（タイムバンド別）")
         constraint_layout = QVBoxLayout(constraint_group)
-        constraint_layout.setSpacing(8)
+        constraint_layout.setSpacing(4)
 
-        note_c = QLabel("各時間帯・ポジションの最低/最大人数とリーダー最低人数を設定します。")
+        note_c = QLabel(
+            "各時間帯・ポジションの最低/最大人数とリーダー最低人数を設定します。\n"
+            "「開店準備対応可」スタッフは従業員管理で個別に設定してください。"
+        )
         note_c.setWordWrap(True)
         constraint_layout.addWidget(note_c)
 
-        grid_widget = QWidget()
-        grid_layout = QFormLayout(grid_widget)
-        grid_layout.setSpacing(6)
-
-        # (TimeSlot, Position) -> (min_spin, max_spin, leader_spin)
+        # (TimeSlot, Position) -> (min_spin, max_spin, leader_spin)  ← 既存 shift_constraints
         self._constraint_spins: dict[tuple, tuple] = {}
+        # (band, position) -> (min_spin, max_spin, leader_spin)      ← 朝食バンド
+        self._band_spins: dict[tuple[str, str], tuple] = {}
 
-        _LABELS = {
-            (TimeSlot.BREAKFAST, Position.HALL):    "朝食 ホール",
-            (TimeSlot.BREAKFAST, Position.KITCHEN): "朝食 キッチン",
-            (TimeSlot.DINNER,    Position.HALL):    "ディナー ホール",
-            (TimeSlot.DINNER,    Position.KITCHEN): "ディナー キッチン",
-        }
-        for key, label in _LABELS.items():
-            row_widget = QWidget()
-            row_layout = QHBoxLayout(row_widget)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(8)
+        def _make_spin_row(form: QFormLayout, row_label: str, key, store: dict, tip_suffix=""):
+            w = QWidget()
+            hl = QHBoxLayout(w)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(8)
+            mn = QSpinBox(); mx = QSpinBox(); ld = QSpinBox()
+            for sp in (mn, mx, ld):
+                sp.setRange(0, 20); sp.setFixedWidth(60); sp.setMinimumHeight(28)
+            mn.setToolTip(f"{row_label}: 最低必要人数{tip_suffix}")
+            mx.setToolTip(f"{row_label}: 最大配置人数")
+            ld.setToolTip(f"{row_label}: リーダー最低人数")
+            hl.addWidget(QLabel("最低:")); hl.addWidget(mn)
+            hl.addWidget(QLabel("最大:")); hl.addWidget(mx)
+            hl.addWidget(QLabel("リーダー最低:")); hl.addWidget(ld)
+            hl.addStretch()
+            form.addRow(row_label, w)
+            store[key] = (mn, mx, ld)
 
-            min_spin = QSpinBox()
-            max_spin = QSpinBox()
-            ldr_spin = QSpinBox()
-            for sp in (min_spin, max_spin, ldr_spin):
-                sp.setRange(0, 20)
-                sp.setFixedWidth(64)
-                sp.setMinimumHeight(28)   # 縦幅つぶれ防止
-            min_spin.setToolTip(f"{label}: 1日あたりの最低必要人数\nこの人数を下回るとシフト表で警告が表示されます")
-            max_spin.setToolTip(f"{label}: 1日あたりの最大配置人数\nこれを超えるとアサインできません")
-            ldr_spin.setToolTip(f"{label}: 1日あたりのリーダー最低必要人数\nリーダー不足もシフト表で警告されます")
+        # ── 5:45〜6:30 開店準備 ──
+        sep0 = QLabel("■ 5:45〜6:30  開店準備")
+        sep0.setStyleSheet("font-weight:bold; margin-top:6px;")
+        constraint_layout.addWidget(sep0)
+        open_tip = "\n※「開店準備対応可」スタッフのみカウントされます"
+        open_form_w = QWidget(); open_form = QFormLayout(open_form_w); open_form.setSpacing(4)
+        _make_spin_row(open_form, "　ホール",    ("open", "hall"),    self._band_spins, open_tip)
+        _make_spin_row(open_form, "　キッチン",  ("open", "kitchen"), self._band_spins, open_tip)
+        constraint_layout.addWidget(open_form_w)
 
-            row_layout.addWidget(QLabel("最低:"))
-            row_layout.addWidget(min_spin)
-            row_layout.addWidget(QLabel("最大:"))
-            row_layout.addWidget(max_spin)
-            row_layout.addWidget(QLabel("リーダー最低:"))
-            row_layout.addWidget(ldr_spin)
-            row_layout.addStretch()
+        # ── 6:30〜10:00 朝食営業 ──
+        sep1 = QLabel("■ 6:30〜10:00  朝食営業")
+        sep1.setStyleSheet("font-weight:bold; margin-top:6px;")
+        constraint_layout.addWidget(sep1)
+        svc_form_w = QWidget(); svc_form = QFormLayout(svc_form_w); svc_form.setSpacing(4)
+        _make_spin_row(svc_form, "　ホール",    (TimeSlot.BREAKFAST, Position.HALL),    self._constraint_spins)
+        _make_spin_row(svc_form, "　キッチン",  (TimeSlot.BREAKFAST, Position.KITCHEN), self._constraint_spins)
+        constraint_layout.addWidget(svc_form_w)
 
-            grid_layout.addRow(label, row_widget)
-            self._constraint_spins[key] = (min_spin, max_spin, ldr_spin)
+        # ── 10:00〜11:30 片付け ──
+        sep2 = QLabel("■ 10:00〜11:30  片付け・レイアウト準備")
+        sep2.setStyleSheet("font-weight:bold; margin-top:6px;")
+        constraint_layout.addWidget(sep2)
+        cln_tip = "\n※ 留まる人数の目安。リーダー最低はリーダー以上が対象です"
+        cln_form_w = QWidget(); cln_form = QFormLayout(cln_form_w); cln_form.setSpacing(4)
+        _make_spin_row(cln_form, "　ホール",    ("cleanup", "hall"),    self._band_spins, cln_tip)
+        _make_spin_row(cln_form, "　キッチン",  ("cleanup", "kitchen"), self._band_spins, cln_tip)
+        constraint_layout.addWidget(cln_form_w)
 
-        constraint_layout.addWidget(grid_widget)
+        # ── 17:00〜23:00 ディナー ──
+        sep3 = QLabel("■ 17:00〜23:00  ディナー営業")
+        sep3.setStyleSheet("font-weight:bold; margin-top:6px;")
+        constraint_layout.addWidget(sep3)
+        din_form_w = QWidget(); din_form = QFormLayout(din_form_w); din_form.setSpacing(4)
+        _make_spin_row(din_form, "　ホール",    (TimeSlot.DINNER, Position.HALL),    self._constraint_spins)
+        _make_spin_row(din_form, "　キッチン",  (TimeSlot.DINNER, Position.KITCHEN), self._constraint_spins)
+        constraint_layout.addWidget(din_form_w)
 
         self._btn_save_constraints = QPushButton("人員設定を保存")
         self._btn_save_constraints.setFixedHeight(36)
-        self._btn_save_constraints.setToolTip("シフト人員制約をDBに保存します。次回のシフト生成から反映されます。")
+        self._btn_save_constraints.setToolTip("すべての時間帯・ポジションの人員制約をDBに保存します。")
         self._btn_save_constraints.clicked.connect(self._on_save_constraints)
         constraint_layout.addWidget(self._btn_save_constraints)
         layout.addWidget(constraint_group)
@@ -174,7 +195,7 @@ class SettingsView(QWidget):
         reserv_layout = QVBoxLayout(reserv_group)
         reserv_layout.setSpacing(8)
         note_r = QLabel(
-            "1日の予約客数が閾値を超えた場合、その時間帯の最低スタッフ数を増員します。\n"
+            "1日の予約客数が閾値を超えた場合、朝食営業・ディナー営業の最低スタッフ数を増員します。\n"
             "予約客数はシフト表確認・編集画面の各タブで日毎に入力できます。"
         )
         note_r.setWordWrap(True)
@@ -186,10 +207,10 @@ class SettingsView(QWidget):
 
         self._reserv_spins: dict[str, QSpinBox] = {}
         for key, label, default in [
-            ("reserv_threshold_breakfast", "朝食: 予約が N 人以上で増員", 50),
-            ("reserv_extra_breakfast",     "　増員数（人）",               1),
-            ("reserv_threshold_dinner",    "ディナー: 予約が N 人以上で増員", 40),
-            ("reserv_extra_dinner",        "　増員数（人）",               1),
+            ("reserv_threshold_breakfast", "朝食: 予約が N 人以上で増員", 100),
+            ("reserv_extra_breakfast",     "　　　増員数（人）",           1),
+            ("reserv_threshold_dinner",    "ディナー: 予約が N 人以上で増員", 25),
+            ("reserv_extra_dinner",        "　　　増員数（人）",            1),
         ]:
             sp = QSpinBox()
             sp.setRange(0, 999)
@@ -201,37 +222,7 @@ class SettingsView(QWidget):
 
         reserv_layout.addWidget(reserv_grid)
 
-        # ── 朝食タイムテーブル制約 ────────────────────────────────────────
-        timetable_sep = QFrame()
-        timetable_sep.setFrameShape(QFrame.Shape.HLine)
-        reserv_layout.addWidget(timetable_sep)
-
-        timetable_note = QLabel(
-            "【朝食タイムテーブル】\n"
-            "5:45〜6:30  開店準備（開店準備対応可スタッフ 必須人数）\n"
-            "6:30〜10:00 朝食営業（上記の人員設定どおり）\n"
-            "10:00〜11:30 片付け・レイアウト準備（リーダー必須、最高2名・最低1名）"
-        )
-        timetable_note.setWordWrap(True)
-        timetable_note.setStyleSheet("font-size:11px;")
-        reserv_layout.addWidget(timetable_note)
-
-        open_row = QWidget()
-        open_form = QFormLayout(open_row)
-        open_form.setSpacing(6)
-        self._open_prep_spin = QSpinBox()
-        self._open_prep_spin.setRange(0, 10)
-        self._open_prep_spin.setFixedWidth(80)
-        self._open_prep_spin.setValue(2)
-        self._open_prep_spin.setMinimumHeight(28)
-        self._open_prep_spin.setToolTip(
-            "朝食開店準備（5:45〜）に必要な「開店準備対応可」スタッフの最低人数。\n"
-            "従業員管理で「朝食開店準備対応可」をチェックした従業員が対象です。"
-        )
-        open_form.addRow("開店準備 必要人数（人）", self._open_prep_spin)
-        reserv_layout.addWidget(open_row)
-
-        btn_save_reserv = QPushButton("予約・タイムテーブル設定を保存")
+        btn_save_reserv = QPushButton("予約設定を保存")
         btn_save_reserv.setFixedHeight(36)
         btn_save_reserv.clicked.connect(self._on_save_reserv_settings)
         reserv_layout.addWidget(btn_save_reserv)
@@ -251,38 +242,45 @@ class SettingsView(QWidget):
             mn_spin.setValue(c["min"])
             mx_spin.setValue(c["max"])
             ldr_spin.setValue(c["min_leader"])
+        band_constraints = repo.get_breakfast_band_constraints()
+        for (band, pos), (mn_spin, mx_spin, ldr_spin) in self._band_spins.items():
+            bc = band_constraints.get((band, pos), {"min": 0, "max": 10, "min_leader": 0})
+            mn_spin.setValue(bc["min"])
+            mx_spin.setValue(bc["max"])
+            ldr_spin.setValue(bc["min_leader"])
 
     def _load_reserv_settings(self):
         from db import repositories as repo
         settings = repo.get_all_app_settings()
         defaults = {
-            "reserv_threshold_breakfast": "50",
+            "reserv_threshold_breakfast": "100",
             "reserv_extra_breakfast":     "1",
-            "reserv_threshold_dinner":    "40",
+            "reserv_threshold_dinner":    "25",
             "reserv_extra_dinner":        "1",
-            "open_prep_required":         "2",
         }
         for key, sp in self._reserv_spins.items():
             sp.setValue(int(settings.get(key, defaults.get(key, "0"))))
-        self._open_prep_spin.setValue(int(settings.get("open_prep_required", "2")))
 
     def _on_save_reserv_settings(self):
         from db import repositories as repo
         settings = {key: str(sp.value()) for key, sp in self._reserv_spins.items()}
-        settings["open_prep_required"] = str(self._open_prep_spin.value())
         repo.save_all_app_settings(settings)
-        QMessageBox.information(self, "保存完了", "予約・タイムテーブル設定を保存しました。")
+        QMessageBox.information(self, "保存完了", "予約設定を保存しました。")
 
     def _on_save_constraints(self):
         from db import repositories as repo
         constraints = {}
         for key, (mn_spin, mx_spin, ldr_spin) in self._constraint_spins.items():
             constraints[key] = {
-                "min":        mn_spin.value(),
-                "max":        mx_spin.value(),
-                "min_leader": ldr_spin.value(),
+                "min": mn_spin.value(), "max": mx_spin.value(), "min_leader": ldr_spin.value(),
             }
         repo.save_shift_constraints(constraints)
+        band_constraints = {}
+        for (band, pos), (mn_spin, mx_spin, ldr_spin) in self._band_spins.items():
+            band_constraints[(band, pos)] = {
+                "min": mn_spin.value(), "max": mx_spin.value(), "min_leader": ldr_spin.value(),
+            }
+        repo.save_breakfast_band_constraints(band_constraints)
         QMessageBox.information(self, "保存完了", "シフト人員設定を保存しました。")
 
     def _on_theme_radio(self, checked: bool, mode: str):

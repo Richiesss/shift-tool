@@ -120,6 +120,15 @@ def initialize_db():
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL DEFAULT ''
         );
+
+        CREATE TABLE IF NOT EXISTS breakfast_band_constraints (
+            band       TEXT NOT NULL,
+            position   TEXT NOT NULL,
+            min_staff  INTEGER NOT NULL DEFAULT 0,
+            max_staff  INTEGER NOT NULL DEFAULT 10,
+            min_leader INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (band, position)
+        );
     """)
 
     # マイグレーション: 新カラムを既存テーブルへ追加
@@ -156,15 +165,27 @@ def initialize_db():
 
     # アプリ設定デフォルト値を投入（既に存在する場合は無視）
     default_app_settings = [
-        ("reserv_threshold_breakfast", "50"),
+        ("reserv_threshold_breakfast", "100"),
         ("reserv_extra_breakfast",     "1"),
-        ("reserv_threshold_dinner",    "40"),
+        ("reserv_threshold_dinner",    "25"),
         ("reserv_extra_dinner",        "1"),
-        ("open_prep_required",         "2"),
     ]
     for key, val in default_app_settings:
         cur.execute(
             "INSERT OR IGNORE INTO app_settings (key, value) VALUES (?,?)", (key, val)
+        )
+
+    # 朝食バンド制約のデフォルト値を投入（既に存在する場合は無視）
+    default_band_constraints = [
+        ("open",    "hall",    2, 4, 0),
+        ("open",    "kitchen", 0, 2, 0),
+        ("cleanup", "hall",    1, 2, 1),
+        ("cleanup", "kitchen", 0, 1, 0),
+    ]
+    for band, pos, mn, mx, ml in default_band_constraints:
+        cur.execute(
+            "INSERT OR IGNORE INTO breakfast_band_constraints (band, position, min_staff, max_staff, min_leader) VALUES (?,?,?,?,?)",
+            (band, pos, mn, mx, ml)
         )
 
     conn.commit()

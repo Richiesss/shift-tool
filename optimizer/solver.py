@@ -78,18 +78,17 @@ def solve(
 
     # DB から制約・予約客数・アプリ設定を読み込む
     from db import repositories as repo
-    shift_constraints = repo.get_shift_constraints()
-    reservation_counts = repo.get_reservation_counts(period.id)
+    shift_constraints      = repo.get_shift_constraints()
+    band_constraints       = repo.get_breakfast_band_constraints()
+    reservation_counts     = repo.get_reservation_counts(period.id)
     try:
-        reserv_thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "50"))
+        reserv_thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
         reserv_extra_b  = int(repo.get_app_setting("reserv_extra_breakfast",     "1"))
-        reserv_thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "40"))
+        reserv_thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
         reserv_extra_d  = int(repo.get_app_setting("reserv_extra_dinner",        "1"))
-        open_prep_req   = int(repo.get_app_setting("open_prep_required",         "2"))
     except Exception:
-        reserv_thresh_b = 50; reserv_extra_b = 1
-        reserv_thresh_d = 40; reserv_extra_d = 1
-        open_prep_req   = 2
+        reserv_thresh_b = 100; reserv_extra_b = 1
+        reserv_thresh_d = 25;  reserv_extra_d = 1
 
     # ── 決定変数 ────────────────────────────────────────────────────────
     # assign[e_id][date_str][slot][pos] = BoolVar
@@ -190,23 +189,52 @@ def solve(
                 ]
                 model.add(sum(leader_vars) >= min_leader)
 
-    # 5b. 開店準備制約: 朝食に open_prep_req 人以上の can_open スタッフを配置
-    if open_prep_req > 0:
+    # 5b. 開店準備制約（ポジション別）
+    for pos in positions:
+        bc_open = band_constraints.get(("open", pos.value), {})
+        min_open = bc_open.get("min", 0)
+        min_open_ldr = bc_open.get("min_leader", 0)
+        if min_open <= 0 and min_open_ldr <= 0:
+            continue
         for ds in date_strs:
-            can_open_requested = [
+            can_open_req = [
                 emp for emp in active_employees
                 if emp.can_open and req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
             ]
-            if len(can_open_requested) >= open_prep_req:
-                open_vars = [
+            open_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in can_open_req]
+            if min_open > 0:
+                if len(can_open_req) >= min_open:
+                    model.add(sum(open_vars) >= min_open)
+                else:
+                    warnings.append(
+                        f"{ds} 開店準備 {pos.label()}: 対応可 {len(can_open_req)} 名（必要 {min_open} 名）"
+                    )
+            if min_open_ldr > 0:
+                ldr_open_vars = [
                     assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                    for emp in can_open_requested for pos in positions
+                    for emp in can_open_req if emp.is_leader(pos.value)
                 ]
-                model.add(sum(open_vars) >= open_prep_req)
-            elif can_open_requested:
-                warnings.append(
-                    f"{ds}: 開店準備対応可スタッフが {len(can_open_requested)} 名（必要 {open_prep_req} 名）"
-                )
+                if ldr_open_vars:
+                    model.add(sum(ldr_open_vars) >= min(min_open_ldr, len(ldr_open_vars)))
+
+    # 5c. 片付け制約（ポジション別）: 朝食アサイン全体のうちリーダー数を確保
+    for pos in positions:
+        bc_cln = band_constraints.get(("cleanup", pos.value), {})
+        min_cln     = bc_cln.get("min", 0)
+        min_cln_ldr = bc_cln.get("min_leader", 0)
+        if min_cln <= 0 and min_cln_ldr <= 0:
+            continue
+        for ds in date_strs:
+            all_b_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in active_employees]
+            if min_cln > 0:
+                model.add(sum(all_b_vars) >= min_cln)
+            if min_cln_ldr > 0:
+                ldr_b_vars = [
+                    assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                    for emp in active_employees if emp.is_leader(pos.value)
+                ]
+                if ldr_b_vars:
+                    model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
 
     # 6. 正社員の両時間帯掛け持ちは最小化（ソフト制約で対応）
     # 両時間帯掛け持ち変数

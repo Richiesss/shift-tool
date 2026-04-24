@@ -354,6 +354,38 @@ def save_all_app_settings(settings: dict[str, str]):
     conn.close()
 
 
+def get_breakfast_band_constraints() -> dict[tuple[str, str], dict]:
+    """
+    朝食バンド制約を {(band, position): {"min": int, "max": int, "min_leader": int}} で返す。
+    band: 'open' | 'cleanup'
+    """
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM breakfast_band_constraints").fetchall()
+    conn.close()
+    return {
+        (r["band"], r["position"]): {
+            "min": r["min_staff"], "max": r["max_staff"], "min_leader": r["min_leader"]
+        }
+        for r in rows
+    }
+
+
+def save_breakfast_band_constraints(constraints: dict[tuple[str, str], dict]):
+    conn = get_connection()
+    for (band, pos), vals in constraints.items():
+        conn.execute(
+            """INSERT INTO breakfast_band_constraints (band, position, min_staff, max_staff, min_leader)
+               VALUES (?,?,?,?,?)
+               ON CONFLICT(band, position) DO UPDATE SET
+                   min_staff=excluded.min_staff,
+                   max_staff=excluded.max_staff,
+                   min_leader=excluded.min_leader""",
+            (band, pos, vals["min"], vals["max"], vals["min_leader"])
+        )
+    conn.commit()
+    conn.close()
+
+
 def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int]]:
     """従業員の過去の希望パターン頻度を [(pattern_id, count), ...] で返す（降順）"""
     conn = get_connection()
