@@ -142,7 +142,10 @@ def initialize_db():
         ("shift_assignments","is_reinforcement",   "INTEGER NOT NULL DEFAULT 0"),
         ("shift_assignments","reinf_start",        "TEXT DEFAULT NULL"),
         ("shift_assignments","reinf_end",          "TEXT DEFAULT NULL"),
-        ("employees",        "can_open",            "INTEGER NOT NULL DEFAULT 0"),
+        ("employees",        "can_open",                   "INTEGER NOT NULL DEFAULT 0"),
+        ("employees",        "can_cleanup",                "INTEGER NOT NULL DEFAULT 0"),
+        ("employees",        "always_available_breakfast", "INTEGER NOT NULL DEFAULT 0"),
+        ("employees",        "always_available_dinner",    "INTEGER NOT NULL DEFAULT 0"),
     ]
     for table, col, definition in migrations:
         try:

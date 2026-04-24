@@ -569,8 +569,11 @@ class ScheduleView(QWidget):
         skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
         pp_base = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
         pp = f"{pp_base}[兼]" if emp.can_work_both_positions else pp_base
-        if emp.can_open and slot == TimeSlot.BREAKFAST:
-            pp = pp + "[開]"
+        if slot == TimeSlot.BREAKFAST:
+            if emp.can_open:
+                pp = pp + "[開]"
+            if emp.can_cleanup:
+                pp = pp + "[片]"
         is_other = emp.id in other_ids
         is_reinf_emp = bool(reinf_emp_ids and emp.id in reinf_emp_ids)
         other_slot = TimeSlot.DINNER if slot == TimeSlot.BREAKFAST else TimeSlot.BREAKFAST
@@ -601,7 +604,13 @@ class ScheduleView(QWidget):
             reinf_start = result[2] if result else None
             reinf_end   = result[3] if result else None
             req = self._requests.get((emp.id, ds))
-            can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
+            # 常時出勤可スタッフ: 固定不可日以外は can_work=True
+            if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                can_work = ds not in emp.fixed_unavailable_dates
+            elif slot == TimeSlot.DINNER and emp.always_available_dinner:
+                can_work = ds not in emp.fixed_unavailable_dates
+            else:
+                can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
 
             if pos_v:
                 skill = emp.hall_skill if pos_v == "hall" else emp.kitchen_skill
@@ -622,11 +631,16 @@ class ScheduleView(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, ("assigned", emp.id, ds, slot_v))
                 total += 1
             elif can_work:
-                item = QTableWidgetItem("△")
+                always_avail = (
+                    (slot == TimeSlot.BREAKFAST and emp.always_available_breakfast) or
+                    (slot == TimeSlot.DINNER    and emp.always_available_dinner)
+                )
+                item = QTableWidgetItem("◎" if always_avail else "△")
                 item.setBackground(QBrush(QColor(c["cell_available"])))
                 item.setForeground(QBrush(QColor(c["cell_avail_text"])))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                item.setToolTip("クリックでアサイン（希望あり）")
+                tip = "クリックでアサイン（常時出勤可・希望提出不要）" if always_avail else "クリックでアサイン（希望あり）"
+                item.setToolTip(tip)
                 item.setData(Qt.ItemDataRole.UserRole, ("available", emp.id, ds, slot_v))
             else:
                 item = QTableWidgetItem("")

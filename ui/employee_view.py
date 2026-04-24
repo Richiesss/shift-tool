@@ -251,16 +251,42 @@ class EmployeeDialog(QDialog):
         self.can_both_check = QCheckBox("兼務可（主所属外のポジションにも入れる）")
         form.addRow("", self.can_both_check)
 
-        self.can_open_check = QCheckBox("朝食開店準備対応可（5:45〜 入れる）")
-        self.can_open_check.setToolTip("チェックすると朝食の開店準備シフト（5:45〜）に対応可能として扱います")
-        form.addRow("", self.can_open_check)
-
         self.primary_ts_combo = QComboBox()
         self.primary_ts_combo.addItem("どちらでも", None)
         self.primary_ts_combo.addItem("朝食専任", TimeSlot.BREAKFAST)
         self.primary_ts_combo.addItem("ディナー専任", TimeSlot.DINNER)
         form.addRow("勤務時間帯", self.primary_ts_combo)
         layout.addWidget(basic_group)
+
+        # 朝食タイムテーブル対応スキル
+        timetable_group = QGroupBox("朝食タイムテーブル対応")
+        tt_layout = QVBoxLayout(timetable_group)
+        tt_layout.setSpacing(6)
+        self.can_open_check = QCheckBox("開店準備対応可（5:45〜6:30）")
+        self.can_open_check.setToolTip("朝食の開店準備シフトに対応可能なスタッフ\nシフト生成時に開店準備バンドの人数制約対象となります")
+        self.can_cleanup_check = QCheckBox("朝食片付け対応可（10:00〜11:30）")
+        self.can_cleanup_check.setToolTip("朝食後の片付け・レイアウト準備に対応可能なスタッフ\nシフト生成時に片付けバンドの人数制約対象となります")
+        tt_layout.addWidget(self.can_open_check)
+        tt_layout.addWidget(self.can_cleanup_check)
+        layout.addWidget(timetable_group)
+
+        # シフト希望省略設定
+        avail_group = QGroupBox("シフト希望省略（常時出勤可）")
+        avail_layout = QVBoxLayout(avail_group)
+        avail_layout.setSpacing(6)
+        avail_note = QLabel(
+            "チェックしたスタッフは希望シフトの提出が不要です。\n"
+            "対象の時間帯であれば毎日シフトに入れることができます。\n"
+            "固定不可日のみ除外されます。"
+        )
+        avail_note.setWordWrap(True)
+        avail_note.setStyleSheet("font-size:11px; color:#6b7280;")
+        avail_layout.addWidget(avail_note)
+        self.always_avail_b_check = QCheckBox("朝食: 毎日出勤可（希望提出不要）")
+        self.always_avail_d_check = QCheckBox("ディナー: 毎日出勤可（希望提出不要）")
+        avail_layout.addWidget(self.always_avail_b_check)
+        avail_layout.addWidget(self.always_avail_d_check)
+        layout.addWidget(avail_group)
 
         # 習熟度
         skill_group = QGroupBox("習熟度（ポジション別）")
@@ -381,6 +407,9 @@ class EmployeeDialog(QDialog):
         self.primary_pos_combo.setCurrentIndex(idx_pp if idx_pp >= 0 else 0)
         self.can_both_check.setChecked(emp.can_work_both_positions)
         self.can_open_check.setChecked(emp.can_open)
+        self.can_cleanup_check.setChecked(emp.can_cleanup)
+        self.always_avail_b_check.setChecked(emp.always_available_breakfast)
+        self.always_avail_d_check.setChecked(emp.always_available_dinner)
         idx_pt = self.primary_ts_combo.findData(emp.primary_timeslot)
         self.primary_ts_combo.setCurrentIndex(idx_pt if idx_pt >= 0 else 0)
 
@@ -408,6 +437,9 @@ class EmployeeDialog(QDialog):
         primary_position     = self.primary_pos_combo.currentData()
         can_work_both        = self.can_both_check.isChecked()
         can_open             = self.can_open_check.isChecked()
+        can_cleanup          = self.can_cleanup_check.isChecked()
+        always_avail_b       = self.always_avail_b_check.isChecked()
+        always_avail_d       = self.always_avail_d_check.isChecked()
         primary_timeslot     = self.primary_ts_combo.currentData()
         hall_skill = self.hall_skill_combo.currentData()
         kitchen_skill = self.kitchen_skill_combo.currentData()
@@ -433,6 +465,9 @@ class EmployeeDialog(QDialog):
             primary_position=primary_position,
             can_work_both_positions=can_work_both,
             can_open=can_open,
+            can_cleanup=can_cleanup,
+            always_available_breakfast=always_avail_b,
+            always_available_dinner=always_avail_d,
             primary_timeslot=primary_timeslot,
             fixed_patterns=patterns,
             fixed_unavailable_dates=unavail_dates,

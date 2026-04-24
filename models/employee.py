@@ -19,7 +19,10 @@ class Employee:
     kitchen_skill: SkillLevel = SkillLevel.BEGINNER
     primary_position: Optional[PrimaryPosition] = None   # None = 未設定（旧データ互換）
     can_work_both_positions: bool = False                 # True = 兼務可（主所属外でも対応可）
-    can_open: bool = False                                # True = 朝食開店準備（5:45）対応可
+    can_open: bool = False                                # True = 朝食開店準備（5:45〜6:30）対応可
+    can_cleanup: bool = False                             # True = 朝食片付け（10:00〜11:30）対応可
+    always_available_breakfast: bool = False              # True = 朝食に希望提出不要・毎日出勤可
+    always_available_dinner: bool = False                 # True = ディナーに希望提出不要・毎日出勤可
     primary_timeslot: Optional[TimeSlot] = None          # None = どちらでも可
     fixed_patterns: list[FixedPattern] = field(default_factory=list)
     fixed_unavailable_dates: list[str] = field(default_factory=list)  # YYYY-MM-DD

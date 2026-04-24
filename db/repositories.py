@@ -35,17 +35,20 @@ def save_employee(emp: Employee) -> Employee:
     pp   = emp.primary_position.value if emp.primary_position else None
     pt   = emp.primary_timeslot.value if emp.primary_timeslot else None
     both = int(emp.can_work_both_positions)
-    opn  = int(emp.can_open)
+    opn     = int(emp.can_open)
+    cln     = int(emp.can_cleanup)
+    avail_b = int(emp.always_available_breakfast)
+    avail_d = int(emp.always_available_dinner)
     if emp.id is None:
         cur = conn.execute(
-            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, can_work_both_positions, can_open, is_active) VALUES (?,?,?,?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, 1)
+            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, cln, avail_b, avail_d, 1)
         )
         emp.id = cur.lastrowid
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, cln, avail_b, avail_d, int(emp.is_active), emp.id)
         )
     _save_fixed_patterns(conn, emp)
     _save_fixed_unavailable_dates(conn, emp)
@@ -81,7 +84,10 @@ def _row_to_employee(row, conn) -> Employee:
     pp_val   = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
     pt_val   = row["primary_timeslot"] if "primary_timeslot" in keys and row["primary_timeslot"] else None
     both_val = bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False
-    open_val = bool(row["can_open"]) if "can_open" in keys else False
+    open_val    = bool(row["can_open"])    if "can_open"    in keys else False
+    cleanup_val = bool(row["can_cleanup"]) if "can_cleanup" in keys else False
+    avail_b_val = bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False
+    avail_d_val = bool(row["always_available_dinner"])    if "always_available_dinner"    in keys else False
     return Employee(
         id=row["id"],
         name=row["name"],
@@ -91,6 +97,9 @@ def _row_to_employee(row, conn) -> Employee:
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         can_work_both_positions=both_val,
         can_open=open_val,
+        can_cleanup=cleanup_val,
+        always_available_breakfast=avail_b_val,
+        always_available_dinner=avail_d_val,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         is_active=bool(row["is_active"]),
         fixed_patterns=[

@@ -117,10 +117,16 @@ def solve(
                     model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
     # 1. 従業員は希望していない時間帯には入れない
+    # 常時出勤可スタッフは固定不可日以外すべて勤務可能とする
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                can_work = req_map.get((emp.id, ds, slot.value), False)
+                if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                    can_work = ds not in emp.fixed_unavailable_dates
+                elif slot == TimeSlot.DINNER and emp.always_available_dinner:
+                    can_work = ds not in emp.fixed_unavailable_dates
+                else:
+                    can_work = req_map.get((emp.id, ds, slot.value), False)
                 for pos in positions:
                     var = assign[emp.id][ds][slot.value][pos.value]
                     if not can_work:
@@ -217,24 +223,52 @@ def solve(
                 if ldr_open_vars:
                     model.add(sum(ldr_open_vars) >= min(min_open_ldr, len(ldr_open_vars)))
 
-    # 5c. 片付け制約（ポジション別）: 朝食アサイン全体のうちリーダー数を確保
+    # 5c. 片付け制約（ポジション別）
+    # can_cleanup スタッフが存在する場合はそのスタッフを対象にする。
+    # 存在しない場合はリーダー以上を対象にしてフォールバック。
+    cleanup_emps_by_pos = {
+        pos: [e for e in active_employees if e.can_cleanup]
+        for pos in positions
+    }
     for pos in positions:
         bc_cln = band_constraints.get(("cleanup", pos.value), {})
         min_cln     = bc_cln.get("min", 0)
         min_cln_ldr = bc_cln.get("min_leader", 0)
         if min_cln <= 0 and min_cln_ldr <= 0:
             continue
+        cleanup_pool = cleanup_emps_by_pos[pos]
         for ds in date_strs:
-            all_b_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in active_employees]
-            if min_cln > 0:
-                model.add(sum(all_b_vars) >= min_cln)
-            if min_cln_ldr > 0:
-                ldr_b_vars = [
+            if cleanup_pool:
+                # can_cleanup スタッフで制約
+                cln_vars = [
                     assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                    for emp in active_employees if emp.is_leader(pos.value)
+                    for emp in cleanup_pool
+                    if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                    or emp.always_available_breakfast
                 ]
-                if ldr_b_vars:
-                    model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
+                if min_cln > 0 and cln_vars:
+                    model.add(sum(cln_vars) >= min(min_cln, len(cln_vars)))
+                if min_cln_ldr > 0:
+                    ldr_cln_vars = [
+                        assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                        for emp in cleanup_pool if emp.is_leader(pos.value)
+                        if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                        or emp.always_available_breakfast
+                    ]
+                    if ldr_cln_vars:
+                        model.add(sum(ldr_cln_vars) >= min(min_cln_ldr, len(ldr_cln_vars)))
+            else:
+                # フォールバック: リーダー以上を対象
+                all_b_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in active_employees]
+                if min_cln > 0:
+                    model.add(sum(all_b_vars) >= min_cln)
+                if min_cln_ldr > 0:
+                    ldr_b_vars = [
+                        assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                        for emp in active_employees if emp.is_leader(pos.value)
+                    ]
+                    if ldr_b_vars:
+                        model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
 
     # 6. 正社員の両時間帯掛け持ちは最小化（ソフト制約で対応）
     # 両時間帯掛け持ち変数

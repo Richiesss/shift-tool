@@ -276,6 +276,12 @@ class ShiftInputView(QWidget):
         btn_row.addWidget(self.btn_save)
         layout.addLayout(btn_row)
 
+        # 常時出勤可スタッフ向けバナー（_render_table で表示/非表示を切替）
+        self._always_avail_banner = QLabel()
+        self._always_avail_banner.setWordWrap(True)
+        self._always_avail_banner.setVisible(False)
+        layout.addWidget(self._always_avail_banner)
+
         self._apply_styles()
         self._setup_shortcuts()
 
@@ -517,7 +523,13 @@ class ShiftInputView(QWidget):
         self.emp_combo.blockSignals(True)
         self.emp_combo.clear()
         for emp in self._employees:
-            self.emp_combo.addItem(emp.name, emp)
+            badges = []
+            if emp.always_available_breakfast:
+                badges.append("朝常時")
+            if emp.always_available_dinner:
+                badges.append("夜常時")
+            label = f"{emp.name}  ({'・'.join(badges)})" if badges else emp.name
+            self.emp_combo.addItem(label, emp)
         self.emp_combo.blockSignals(False)
         self._current_idx = 0
         self._update_progress()
@@ -530,6 +542,12 @@ class ShiftInputView(QWidget):
         filled_ids = set(
             r.employee_id for r in self._requests.values() if r.has_shift
         )
+        # 常時出勤可スタッフは希望提出不要 → 入力済み扱い
+        always_avail_ids = {
+            e.id for e in self._employees
+            if e.always_available_breakfast or e.always_available_dinner
+        }
+        filled_ids |= always_avail_ids
         total  = len(self._employees)
         filled = len(filled_ids)
         # item 3: 詳細サマリー
@@ -607,6 +625,27 @@ class ShiftInputView(QWidget):
             return
 
         emp = self._employees[self._current_idx]
+
+        # 常時出勤可バナー
+        slots_avail = []
+        if emp.always_available_breakfast:
+            slots_avail.append("朝食")
+        if emp.always_available_dinner:
+            slots_avail.append("ディナー")
+        if slots_avail:
+            c = theme.c
+            self._always_avail_banner.setText(
+                f"ℹ️  {emp.name}さんは【{'・'.join(slots_avail)}】が常時出勤可のため"
+                "希望提出は不要です。固定不可日を設定する場合のみ入力してください。"
+            )
+            self._always_avail_banner.setStyleSheet(
+                f"background:#EFF6FF; border:1px solid #BFDBFE; border-radius:4px; "
+                f"padding:6px 10px; font-size:11px; color:{c['text']};"
+            )
+            self._always_avail_banner.setVisible(True)
+        else:
+            self._always_avail_banner.setVisible(False)
+
         dates = self._period.date_range()
         self.table.setRowCount(len(dates))
         self._pattern_cells = {}
