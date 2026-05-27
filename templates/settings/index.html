@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}設定 - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-gear-fill me-2"></i>設定</h1>
+  <button form="settings-form" type="submit" class="btn btn-primary btn-sm ms-auto">
+    <i class="bi bi-floppy-fill"></i> 保存
+  </button>
+</div>
+<div class="content">
+<form id="settings-form" method="post" action="{{ url_for('settings.save') }}">
+
+  <!-- シフト人員制約 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">シフト人員制約</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered mb-0">
+          <thead class="table-light">
+            <tr><th>時間帯</th><th>ポジション</th><th>最少</th><th>最多</th><th>リーダー最少</th></tr>
+          </thead>
+          <tbody>
+            {% for (slot, pos), vals in constraints.items() %}
+            {% set prefix = slot.value + '_' + pos.value %}
+            <tr>
+              <td>{{ slot.short_label() }}</td>
+              <td>{{ pos.label() }}</td>
+              <td><input type="number" name="min_{{ prefix }}" value="{{ vals.min }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="max_{{ prefix }}" value="{{ vals.max }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="ml_{{ prefix }}"  value="{{ vals.min_leader }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 予約客数による増員設定 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">予約客数による増員設定</h6>
+      {% for key, label in [
+        ('reserv_threshold_breakfast', '朝食：閾値（人）'),
+        ('reserv_extra_breakfast',     '朝食：増員数（人）'),
+        ('reserv_threshold_dinner',    'ディナー：閾値（人）'),
+        ('reserv_extra_dinner',        'ディナー：増員数（人）'),
+      ] %}
+      <div class="mb-2 d-flex align-items-center gap-2">
+        <label class="form-label mb-0 small fw-semibold" style="min-width:180px">{{ label }}</label>
+        <input type="number" name="{{ key }}" value="{{ settings.get(key, '') }}"
+               class="form-control form-control-sm" style="max-width:100px" min="0">
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</form>
+</div>
+{% endblock %}

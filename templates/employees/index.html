@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}スタッフ管理 - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-people-fill me-2"></i>スタッフ管理</h1>
+  <a href="{{ url_for('employees.new') }}" class="btn btn-primary btn-sm ms-auto">
+    <i class="bi bi-plus-lg"></i> 新規登録
+  </a>
+</div>
+
+<div class="content">
+  <!-- 検索 / アーカイブ切替 -->
+  <form method="get" class="d-flex gap-2 mb-3">
+    <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="氏名で検索...">
+    {% if show_archive %}
+      <input type="hidden" name="archive" value="1">
+      <a href="{{ url_for('employees.index') }}" class="btn btn-outline-secondary btn-sm text-nowrap">現役のみ</a>
+    {% else %}
+      <a href="?archive=1" class="btn btn-outline-secondary btn-sm text-nowrap">アーカイブ</a>
+    {% endif %}
+  </form>
+
+  <!-- 従業員一覧 -->
+  {% for emp in employees %}
+  <div class="card mb-2 {% if not emp.is_active %}opacity-50{% endif %}">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex align-items-center gap-2">
+        <div class="flex-grow-1">
+          <div class="fw-semibold">{{ emp.name }}</div>
+          <div class="text-muted small">
+            {{ emp.employment_type.label() }} ·
+            {% if emp.primary_position %}{{ emp.primary_position.label() }}{% else %}どちらでも{% endif %} ·
+            H:{{ emp.hall_skill.label() }} / K:{{ emp.kitchen_skill.label() }}
+          </div>
+        </div>
+        <div class="d-flex gap-1">
+          <a href="{{ url_for('employees.edit', emp_id=emp.id) }}" class="btn btn-outline-primary btn-sm">編集</a>
+          {% if emp.is_active %}
+          <form method="post" action="{{ url_for('employees.archive', emp_id=emp.id) }}" onsubmit="return confirm('アーカイブしますか？')">
+            <button class="btn btn-outline-danger btn-sm">削除</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('employees.restore', emp_id=emp.id) }}">
+            <button class="btn btn-outline-success btn-sm">復元</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-people fs-1 d-block mb-2"></i>
+    従業員が登録されていません
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

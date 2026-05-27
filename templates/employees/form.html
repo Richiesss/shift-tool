@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ '従業員編集' if emp else '新規登録' }} - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('employees.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
+  <h1>{{ '従業員編集' if emp else '新規登録' }}</h1>
+</div>
+
+<div class="content">
+<form method="post">
+  <!-- 基本情報 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">基本情報</h6>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">氏名 <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="form-control" value="{{ emp.name if emp else '' }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">雇用形態</label>
+        <select name="employment_type" class="form-select">
+          {% for et in employment_types %}
+          <option value="{{ et.value }}" {{ 'selected' if emp and emp.employment_type == et else '' }}>
+            {{ et.label() }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-6">
+          <label class="form-label fw-semibold">ホール習熟度</label>
+          <select name="hall_skill" class="form-select">
+            {% for sl in skill_levels %}
+            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.hall_skill == sl else '' }}>
+              {{ sl.label() }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="form-label fw-semibold">キッチン習熟度</label>
+          <select name="kitchen_skill" class="form-select">
+            {% for sl in skill_levels %}
+            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.kitchen_skill == sl else '' }}>
+              {{ sl.label() }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 勤務設定 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">勤務設定</h6>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">所属ポジション</label>
+        <select name="primary_position" class="form-select">
+          <option value="">どちらでも</option>
+          {% for pp in primary_positions %}
+          <option value="{{ pp.value }}" {{ 'selected' if emp and emp.primary_position == pp else '' }}>
+            {{ pp.label() }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">勤務時間帯</label>
+        <select name="primary_timeslot" class="form-select">
+          <option value="">どちらでも</option>
+          {% for ts in time_slots %}
+          <option value="{{ ts.value }}" {{ 'selected' if emp and emp.primary_timeslot == ts else '' }}>
+            {{ ts.short_label() }}専任
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="d-flex flex-column gap-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="can_work_both_positions" id="cwbp"
+            {{ 'checked' if emp and emp.can_work_both_positions else '' }}>
+          <label class="form-check-label" for="cwbp">兼務可（主所属外ポジション対応可）</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="can_open" id="co"
+            {{ 'checked' if emp and emp.can_open else '' }}>
+          <label class="form-check-label" for="co">朝食開店準備対応可（5:45〜）</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="can_cleanup" id="cc"
+            {{ 'checked' if emp and emp.can_cleanup else '' }}>
+          <label class="form-check-label" for="cc">朝食片付け対応可（〜11:30）</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="always_available_breakfast" id="aab"
+            {{ 'checked' if emp and emp.always_available_breakfast else '' }}>
+          <label class="form-check-label" for="aab">朝食：希望提出不要（毎日出勤可）</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="always_available_dinner" id="aad"
+            {{ 'checked' if emp and emp.always_available_dinner else '' }}>
+          <label class="form-check-label" for="aad">ディナー：希望提出不要（毎日出勤可）</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 固定パターン（アルバイトのみ有意） -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">固定シフトパターン（アルバイト）</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered text-center mb-0">
+          <thead class="table-light">
+            <tr>
+              <th></th>
+              {% for d in dow_labels %}<th>{{ d }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="fw-semibold">朝食</td>
+              {% for i in range(7) %}
+              <td>
+                <input type="checkbox" name="fp_b_{{ i }}"
+                  {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).breakfast else '' }}>
+              </td>
+              {% endfor %}
+            </tr>
+            <tr>
+              <td class="fw-semibold">ディナー</td>
+              {% for i in range(7) %}
+              <td>
+                <input type="checkbox" name="fp_d_{{ i }}"
+                  {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).dinner else '' }}>
+              </td>
+              {% endfor %}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-grid gap-2">
+    <button type="submit" class="btn btn-primary btn-lg">
+      <i class="bi bi-check-lg me-1"></i>{{ '更新する' if emp else '登録する' }}
+    </button>
+    <a href="{{ url_for('employees.index') }}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+</div>
+{% endblock %}

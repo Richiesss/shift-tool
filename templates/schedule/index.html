@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}シフト表 - SDU-Shift{% endblock %}
+{% block head %}
+<style>
+  .sched-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sched-grid table { min-width: max-content; font-size: .82rem; }
+  .sched-grid th, .sched-grid td { white-space: nowrap; padding: .3rem .5rem; vertical-align: middle; }
+  .sched-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
+  .sched-grid thead th { background: #1e293b; color: white; }
+  .sched-grid thead th.emp-col { background: #0f172a; }
+  .sat td, .sat th { background: #eff6ff !important; }
+  .sun td, .sun th { background: #fff1f2 !important; }
+  .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
+  .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
+  .chip-empty   { color: #cbd5e1; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="fs-6"><i class="bi bi-calendar3 me-1"></i>シフト表</h1>
+  <div class="ms-auto d-flex gap-1">
+    {% if period %}
+    <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
+      <i class="bi bi-file-earmark-excel"></i>
+    </a>
+    <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
+      <i class="bi bi-file-earmark-pdf"></i>
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="content">
+  {% if not period %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>
+    シフト期間がありません
+  </div>
+  {% else %}
+
+  <!-- 期間セレクター -->
+  <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
+    <select class="form-select form-select-sm" style="max-width:220px"
+      onchange="location.href='/schedule/'+this.value">
+      {% for p in periods %}
+      <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
+        {{ p.start_date }} 〜 {{ p.end_date }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <!-- 朝食/ディナー タブ -->
+    <div class="btn-group btn-group-sm">
+      <a href="?slot=breakfast" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
+      <a href="?slot=dinner"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
+    </div>
+
+    {% if period.status == 'draft' %}
+    <form method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" class="ms-auto">
+      <button class="btn btn-success btn-sm">
+        <i class="bi bi-check-lg"></i> 確定
+      </button>
+    </form>
+    {% else %}
+    <span class="badge bg-success ms-auto">確定済</span>
+    {% endif %}
+  </div>
+
+  <!-- シフトグリッド -->
+  <div class="sched-grid">
+    <table class="table table-bordered table-sm mb-0">
+      <thead>
+        <tr>
+          <th class="emp-col">名前</th>
+          {% for d in dates %}
+          {% set dow = d.weekday() %}
+          <th class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
+            {{ d.strftime('%m/%d') }}<br>
+            <small>{{ ['月','火','水','木','金','土','日'][dow] }}</small>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        <tr>
+          <td class="emp-col">{{ emp.name }}</td>
+          {% for d in dates %}
+          {% set ds = d|string %}
+          {% set dow = d.weekday() %}
+          {% set day_assignments = asgn_map.get(ds, {}).get(slot, []) %}
+          {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | list | first %}
+          <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
+            {% if emp_asgn %}
+              <span class="{{ 'chip-hall' if emp_asgn.position.value == 'hall' else 'chip-kitchen' }}">
+                {{ 'H' if emp_asgn.position.value == 'hall' else 'K' }}
+              </span>
+            {% else %}
+              <span class="chip-empty">—</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 凡例 -->
+  <div class="d-flex gap-3 mt-2 small text-muted">
+    <span><span class="chip-hall">H</span> ホール</span>
+    <span><span class="chip-kitchen">K</span> キッチン</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

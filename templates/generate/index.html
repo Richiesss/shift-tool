@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}シフト自動生成 - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-lightning-fill me-2"></i>シフト自動生成</h1>
+</div>
+<div class="content">
+
+  {% if result and result.status not in ('optimal','feasible') %}
+  <div class="alert alert-danger">
+    <strong>生成失敗：{{ result.status }}</strong>
+    {% for e in result.errors %}<div class="small">{{ e }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('generate.run') }}">
+    <!-- 期間選択 -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6 class="card-title text-muted mb-3">対象期間</h6>
+        <select name="period_id" class="form-select" required>
+          <option value="">選択してください</option>
+          {% for p in periods %}
+          <option value="{{ p.id }}" {{ 'selected' if selected_period_id == p.id else '' }}>
+            {{ p.start_date }} 〜 {{ p.end_date }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- 優先度設定 -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h6 class="card-title text-muted mb-3">優先度設定</h6>
+        {% for key, label in [
+          ('cost_scale', '人件費最小化'),
+          ('pt_pref_scale', 'アルバイト希望充当'),
+          ('double_penalty_scale', '正社員両掛け持ち回避'),
+          ('balance_scale', '人員バランス均等化'),
+          ('late_night_scale', '深夜勤務分散'),
+        ] %}
+        <div class="mb-2">
+          <label class="form-label small fw-semibold mb-1">{{ label }}</label>
+          <select name="{{ key }}" class="form-select form-select-sm">
+            {% for v in priority_scale.keys() %}
+            <option value="{{ v }}" {{ 'selected' if v == '中' else '' }}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="d-grid">
+      <button type="submit" class="btn btn-primary btn-lg">
+        <i class="bi bi-lightning-fill me-1"></i>シフトを生成する
+      </button>
+    </div>
+    <div class="text-muted small text-center mt-2">※ 生成には数十秒かかる場合があります</div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,112 @@
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from db import repositories as repo
+from models.employee import Employee, FixedPattern
+from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot, DAY_OF_WEEK_LABELS
+
+bp = Blueprint("employees", __name__, url_prefix="/employees")
+
+
+@bp.get("/")
+def index():
+    show_archive = request.args.get("archive") == "1"
+    employees = repo.get_all_employees(active_only=not show_archive)
+    q = request.args.get("q", "").strip()
+    if q:
+        employees = [e for e in employees if q in e.name]
+    return render_template(
+        "employees/index.html",
+        employees=employees,
+        show_archive=show_archive,
+        q=q,
+    )
+
+
+@bp.get("/new")
+def new():
+    return render_template(
+        "employees/form.html",
+        emp=None,
+        employment_types=EmploymentType,
+        skill_levels=SkillLevel,
+        primary_positions=PrimaryPosition,
+        time_slots=TimeSlot,
+        dow_labels=DAY_OF_WEEK_LABELS,
+    )
+
+
+@bp.post("/new")
+def create():
+    emp = _form_to_employee(None)
+    repo.save_employee(emp)
+    flash(f"{emp.name} を登録しました", "success")
+    return redirect(url_for("employees.index"))
+
+
+@bp.get("/<int:emp_id>/edit")
+def edit(emp_id):
+    emp = repo.get_employee(emp_id)
+    if not emp:
+        flash("従業員が見つかりません", "error")
+        return redirect(url_for("employees.index"))
+    return render_template(
+        "employees/form.html",
+        emp=emp,
+        employment_types=EmploymentType,
+        skill_levels=SkillLevel,
+        primary_positions=PrimaryPosition,
+        time_slots=TimeSlot,
+        dow_labels=DAY_OF_WEEK_LABELS,
+    )
+
+
+@bp.post("/<int:emp_id>/edit")
+def update(emp_id):
+    emp = _form_to_employee(emp_id)
+    repo.save_employee(emp)
+    flash(f"{emp.name} を更新しました", "success")
+    return redirect(url_for("employees.index"))
+
+
+@bp.post("/<int:emp_id>/archive")
+def archive(emp_id):
+    repo.delete_employee(emp_id)
+    flash("アーカイブしました", "success")
+    return redirect(url_for("employees.index"))
+
+
+@bp.post("/<int:emp_id>/restore")
+def restore(emp_id):
+    repo.restore_employee(emp_id)
+    flash("復元しました", "success")
+    return redirect(url_for("employees.index") + "?archive=1")
+
+
+def _form_to_employee(emp_id):
+    f = request.form
+    patterns = []
+    for dow in range(7):
+        b = bool(f.get(f"fp_b_{dow}"))
+        d = bool(f.get(f"fp_d_{dow}"))
+        if b or d:
+            patterns.append(FixedPattern(dow, b, d))
+
+    pp_val = f.get("primary_position") or None
+    pt_val = f.get("primary_timeslot") or None
+
+    return Employee(
+        id=emp_id,
+        name=f["name"].strip(),
+        employment_type=EmploymentType(f["employment_type"]),
+        hall_skill=SkillLevel(f["hall_skill"]),
+        kitchen_skill=SkillLevel(f["kitchen_skill"]),
+        primary_position=PrimaryPosition(pp_val) if pp_val else None,
+        primary_timeslot=TimeSlot(pt_val) if pt_val else None,
+        can_work_both_positions=bool(f.get("can_work_both_positions")),
+        can_open=bool(f.get("can_open")),
+        can_cleanup=bool(f.get("can_cleanup")),
+        always_available_breakfast=bool(f.get("always_available_breakfast")),
+        always_available_dinner=bool(f.get("always_available_dinner")),
+        fixed_patterns=patterns,
+        fixed_unavailable_dates=[],
+        is_active=True,
+    )

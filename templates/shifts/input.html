@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}シフト入力 {{ period.start_date }} - SDU-Shift{% endblock %}
+{% block head %}
+<style>
+  .shift-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .shift-grid table { min-width: max-content; font-size: .82rem; }
+  .shift-grid th, .shift-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; }
+  .shift-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
+  .shift-grid thead th { background: #1e293b; color: white; }
+  .shift-grid thead th.emp-col { background: #0f172a; }
+  .shift-grid .sat { background: #eff6ff; }
+  .shift-grid .sun { background: #fff1f2; }
+  select.pattern-sel { font-size: .78rem; min-width: 140px; padding: 2px 4px; }
+  .custom-time { display: none; gap: 4px; margin-top: 3px; }
+  .custom-time input { width: 80px; font-size: .78rem; padding: 2px 4px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('shifts.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
+  <h1 class="fs-6">{{ period.start_date }} 〜 {{ period.end_date }}</h1>
+  <button form="shift-form" type="submit" class="btn btn-primary btn-sm ms-auto">
+    <i class="bi bi-floppy-fill"></i> 保存
+  </button>
+</div>
+
+<form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
+<div class="shift-grid p-2">
+  <table class="table table-bordered table-sm mb-0">
+    <thead>
+      <tr>
+        <th class="emp-col">名前</th>
+        {% for d in dates %}
+        {% set dow = d.weekday() %}
+        <th class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} text-center">
+          {{ d.strftime('%m/%d') }}<br>
+          <small>{{ ['月','火','水','木','金','土','日'][dow] }}</small>
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for emp in employees %}
+      <tr>
+        <td class="emp-col">{{ emp.name }}</td>
+        {% for d in dates %}
+        {% set req = req_map.get((emp.id, d|string)) %}
+        {% set dow = d.weekday() %}
+        <td class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
+          <select name="pattern_{{ emp.id }}_{{ d }}"
+                  class="form-select form-select-sm pattern-sel"
+                  onchange="toggleCustom(this, '{{ emp.id }}_{{ d }}')">
+            <option value="">（休み）</option>
+            {% for p in patterns %}
+            <option value="{{ p.id }}"
+              {{ 'selected' if req and req.pattern_id == p.id else '' }}>
+              {{ p.label }}
+            </option>
+            {% endfor %}
+          </select>
+          <div id="custom_{{ emp.id }}_{{ d }}" class="custom-time"
+               style="{{ 'display:flex' if req and req.pattern_id == 'custom' else '' }}">
+            <input type="time" name="custom_start_{{ emp.id }}_{{ d }}"
+                   value="{{ req.custom_start if req and req.custom_start else '' }}"
+                   class="form-control form-control-sm" placeholder="開始">
+            <span class="align-self-center">〜</span>
+            <input type="time" name="custom_end_{{ emp.id }}_{{ d }}"
+                   value="{{ req.custom_end if req and req.custom_end else '' }}"
+                   class="form-control form-control-sm" placeholder="終了">
+          </div>
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleCustom(sel, key) {
+  const div = document.getElementById('custom_' + key);
+  if (div) div.style.display = sel.value === 'custom' ? 'flex' : 'none';
+}
+</script>
+{% endblock %}

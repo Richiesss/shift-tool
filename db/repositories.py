@@ -1,7 +1,7 @@
 """DB操作の集約モジュール"""
 from __future__ import annotations
 from typing import Optional
-from db.database import get_connection
+from db.database import get_connection, Connection
 from models.employee import Employee, FixedPattern
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition
@@ -40,11 +40,10 @@ def save_employee(emp: Employee) -> Employee:
     avail_b = int(emp.always_available_breakfast)
     avail_d = int(emp.always_available_dinner)
     if emp.id is None:
-        cur = conn.execute(
+        emp.id = conn.execute_insert(
             "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, cln, avail_b, avail_d, 1)
         )
-        emp.id = cur.lastrowid
     else:
         conn.execute(
             "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, is_active=? WHERE id=?",
@@ -114,7 +113,7 @@ def _save_fixed_patterns(conn, emp: Employee):
     conn.execute("DELETE FROM fixed_patterns WHERE employee_id=?", (emp.id,))
     for p in emp.fixed_patterns:
         conn.execute(
-            "INSERT OR REPLACE INTO fixed_patterns (employee_id, day_of_week, breakfast, dinner) VALUES (?,?,?,?)",
+            "INSERT INTO fixed_patterns (employee_id, day_of_week, breakfast, dinner) VALUES (?,?,?,?)",
             (emp.id, p.day_of_week, int(p.breakfast), int(p.dinner))
         )
 
@@ -123,7 +122,7 @@ def _save_fixed_unavailable_dates(conn, emp: Employee):
     conn.execute("DELETE FROM fixed_unavailable_dates WHERE employee_id=?", (emp.id,))
     for d in emp.fixed_unavailable_dates:
         conn.execute(
-            "INSERT OR IGNORE INTO fixed_unavailable_dates (employee_id, date) VALUES (?,?)",
+            "INSERT INTO fixed_unavailable_dates (employee_id, date) VALUES (?,?)",
             (emp.id, d)
         )
 
@@ -149,11 +148,10 @@ def get_period(period_id: int) -> Optional[SchedulePeriod]:
 def save_period(period: SchedulePeriod) -> SchedulePeriod:
     conn = get_connection()
     if period.id is None:
-        cur = conn.execute(
+        period.id = conn.execute_insert(
             "INSERT INTO schedule_periods (start_date, end_date, status) VALUES (?,?,?)",
             (period.start_date, period.end_date, period.status)
         )
-        period.id = cur.lastrowid
     else:
         conn.execute(
             "UPDATE schedule_periods SET start_date=?, end_date=?, status=? WHERE id=?",
