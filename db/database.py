@@ -251,6 +251,15 @@ _MIGRATIONS = [
     ("employees",         "always_available_dinner",    "INTEGER NOT NULL DEFAULT 0"),
 ]
 
+_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_shift_assignments_period ON shift_assignments(period_id)",
+    "CREATE INDEX IF NOT EXISTS idx_shift_requests_period    ON shift_requests(period_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fixed_patterns_emp       ON fixed_patterns(employee_id)",
+    "CREATE INDEX IF NOT EXISTS idx_fixed_unavail_emp        ON fixed_unavailable_dates(employee_id)",
+    "CREATE INDEX IF NOT EXISTS idx_reservation_period       ON reservation_counts(period_id)",
+    "CREATE INDEX IF NOT EXISTS idx_schedule_notes_period    ON schedule_notes(period_id)",
+]
+
 
 def initialize_db():
     conn = get_connection()
@@ -261,6 +270,9 @@ def initialize_db():
 
     for ddl in _CREATE_TABLES:
         conn.execute(ddl)
+
+    for idx in _INDEXES:
+        conn.execute(idx)
 
     for table, col, definition in _MIGRATIONS:
         try:

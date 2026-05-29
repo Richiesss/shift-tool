@@ -5,10 +5,12 @@ from db.database import get_connection, Connection
 from models.employee import Employee, FixedPattern
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition
+from cache import cache
 
 
 # ── 従業員 ──────────────────────────────────────────────────────────────
 
+@cache.memoize(timeout=180)
 def get_all_employees(active_only: bool = True) -> list[Employee]:
     conn = get_connection()
     rows = conn.execute(
@@ -78,6 +80,7 @@ def save_employee(emp: Employee) -> Employee:
     _save_fixed_unavailable_dates(conn, emp)
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_all_employees)
     return emp
 
 
@@ -86,6 +89,7 @@ def delete_employee(employee_id: int):
     conn.execute("UPDATE employees SET is_active=0 WHERE id=?", (employee_id,))
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_all_employees)
 
 
 def restore_employee(employee_id: int):
@@ -93,6 +97,7 @@ def restore_employee(employee_id: int):
     conn.execute("UPDATE employees SET is_active=1 WHERE id=?", (employee_id,))
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_all_employees)
 
 
 def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employee:
@@ -180,6 +185,7 @@ def _save_fixed_unavailable_dates(conn, emp: Employee):
 
 # ── シフト期間 ──────────────────────────────────────────────────────────
 
+@cache.memoize(timeout=180)
 def get_all_periods() -> list[SchedulePeriod]:
     conn = get_connection()
     rows = conn.execute("SELECT * FROM schedule_periods ORDER BY start_date DESC").fetchall()
@@ -187,6 +193,7 @@ def get_all_periods() -> list[SchedulePeriod]:
     return [SchedulePeriod(id=r["id"], start_date=r["start_date"], end_date=r["end_date"], status=r["status"]) for r in rows]
 
 
+@cache.memoize(timeout=180)
 def get_period(period_id: int) -> Optional[SchedulePeriod]:
     conn = get_connection()
     row = conn.execute("SELECT * FROM schedule_periods WHERE id=?", (period_id,)).fetchone()
@@ -210,6 +217,8 @@ def save_period(period: SchedulePeriod) -> SchedulePeriod:
         )
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_all_periods)
+    cache.delete_memoized(get_period, period.id)
     return period
 
 
@@ -218,6 +227,8 @@ def delete_period(period_id: int):
     conn.execute("DELETE FROM schedule_periods WHERE id=?", (period_id,))
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_all_periods)
+    cache.delete_memoized(get_period, period_id)
 
 
 # ── 希望シフト ──────────────────────────────────────────────────────────
@@ -377,6 +388,7 @@ def save_reservation_count(period_id: int, date_str: str, breakfast: int, dinner
 
 # ── アプリ設定 ────────────────────────────────────────────────────────────
 
+@cache.memoize(timeout=300)
 def get_app_setting(key: str, default: str = "") -> str:
     conn = get_connection()
     row = conn.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
@@ -392,8 +404,10 @@ def save_app_setting(key: str, value: str):
     )
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_app_setting, key)
 
 
+@cache.memoize(timeout=300)
 def get_all_app_settings() -> dict[str, str]:
     conn = get_connection()
     rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
@@ -410,6 +424,9 @@ def save_all_app_settings(settings: dict[str, str]):
         )
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_all_app_settings)
+    for key in settings:
+        cache.delete_memoized(get_app_setting, key)
 
 
 def get_breakfast_band_constraints() -> dict[tuple[str, str], dict]:
@@ -489,6 +506,7 @@ def save_schedule_note(period_id: int, date_str: str, note: str):
 
 # ── シフト制約 ──────────────────────────────────────────────────────────
 
+@cache.memoize(timeout=300)
 def get_shift_constraints() -> dict:
     """
     DB から制約を読み込んで {(TimeSlot, Position): {"min": int, "max": int, "min_leader": int}} を返す。
@@ -529,3 +547,4 @@ def save_shift_constraints(constraints: dict):
         )
     conn.commit()
     conn.close()
+    cache.delete_memoized(get_shift_constraints)

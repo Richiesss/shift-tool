@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from flask import Flask, g
 from flask_compress import Compress
+from cache import cache
 from db.database import initialize_db
 
 
@@ -12,6 +13,7 @@ def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
     Compress(app)
+    cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
 
     initialize_db()
 
