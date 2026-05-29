@@ -34,11 +34,39 @@ class SolverConfig:
     late_night_scale: float = 1.0      # 深夜勤務分散
 
 
+class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
+    """解が見つかるたびに DB の gen_message を更新するコールバック"""
+
+    def __init__(self, period_id: int, max_time: float = 10.0):
+        super().__init__()
+        self._period_id = period_id
+        self._max_time = max_time
+        self._n = 0
+        self._last_update = 0.0
+
+    def on_solution_callback(self):
+        self._n += 1
+        elapsed = self.WallTime()
+        if elapsed - self._last_update < 1.5:
+            return
+        self._last_update = elapsed
+        pct = min(90, int(elapsed / self._max_time * 100))
+        try:
+            from db import repositories as repo
+            repo.update_period_gen_status(
+                self._period_id, "generating",
+                f"progress:{pct},solutions:{self._n},elapsed:{elapsed:.1f}"
+            )
+        except Exception:
+            pass
+
+
 def solve(
     period: SchedulePeriod,
     employees: list[Employee],
     requests: list[ShiftRequest],
     config: SolverConfig | None = None,
+    progress_callback: SolveProgressCallback | None = None,
 ) -> SolveResult:
     """
     シフトを最適化して SolveResult を返す。
@@ -387,7 +415,7 @@ def solve(
     solver.parameters.max_time_in_seconds = 10.0
     solver.parameters.num_search_workers = 1
     solver.parameters.log_search_progress = False
-    status = solver.solve(model)
+    status = solver.solve(model, progress_callback) if progress_callback else solver.solve(model)
 
     elapsed = time.time() - t0
     status_name = solver.status_name(status)

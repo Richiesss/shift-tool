@@ -1,7 +1,7 @@
 import threading
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from db import repositories as repo
-from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE
+from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE, SolveProgressCallback
 
 bp = Blueprint("generate", __name__, url_prefix="/generate")
 
@@ -52,7 +52,8 @@ def run():
         # app_context を最初から張る（cache.memoize など Flask 依存の処理を含むため）
         with app.app_context():
             try:
-                result = solve(period, employees, requests_list, config)
+                cb = SolveProgressCallback(period_id, max_time=10.0)
+                result = solve(period, employees, requests_list, config, progress_callback=cb)
                 if result.status in ("optimal", "feasible"):
                     repo.save_assignments(period_id, result.assignments)
                     msg = f"{result.status},{result.solve_time_sec:.1f}"
@@ -81,4 +82,13 @@ def wait(period_id):
 @bp.get("/status/<int:period_id>")
 def status(period_id):
     gen = repo.get_period_gen_status(period_id)
-    return jsonify(gen)
+    msg = gen.get("message", "")
+    progress = 0
+    solutions = 0
+    if gen["status"] == "generating" and msg.startswith("progress:"):
+        parts = dict(kv.split(":") for kv in msg.split(",") if ":" in kv)
+        progress = int(parts.get("progress", 0))
+        solutions = int(parts.get("solutions", 0))
+    elif gen["status"] == "done":
+        progress = 100
+    return jsonify({**gen, "progress": progress, "solutions": solutions})

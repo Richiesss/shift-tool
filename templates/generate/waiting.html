@@ -4,11 +4,25 @@
 <div class="page-header">
   <h1><i class="bi bi-hourglass-split me-2"></i>シフト生成中</h1>
 </div>
-<div class="content d-flex flex-column align-items-center justify-content-center" style="min-height:50vh">
-  <div class="text-center mb-4">
-    <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem" role="status"></div>
-    <h5 class="mb-1">{{ period.start_date }} 〜 {{ period.end_date }}</h5>
-    <p class="text-muted small" id="status-msg">最適なシフトを計算しています…</p>
+
+<div class="content">
+  <div class="card mx-auto" style="max-width:480px">
+    <div class="card-body py-4 text-center">
+      <div class="mb-3">
+        <i class="bi bi-cpu fs-1 text-primary"></i>
+      </div>
+      <h6 class="mb-1">{{ period.start_date }} 〜 {{ period.end_date }}</h6>
+      <p class="text-muted small mb-4" id="status-msg">最適なシフトを計算しています…</p>
+
+      <div class="progress mb-2" style="height:12px;border-radius:6px">
+        <div id="prog-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+             role="progressbar" style="width:0%;transition:width 0.6s ease"></div>
+      </div>
+      <div class="d-flex justify-content-between small text-muted">
+        <span id="pct-label">0%</span>
+        <span id="solution-label"></span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -16,25 +30,66 @@
 (function () {
   const periodId = {{ period.id }};
   const scheduleUrl = "{{ url_for('schedule.index', period_id=period.id) }}";
-  const generateUrl = "{{ url_for('generate.index') }}";
+  const bar = document.getElementById('prog-bar');
+  const pctLabel = document.getElementById('pct-label');
+  const solutionLabel = document.getElementById('solution-label');
+  const statusMsg = document.getElementById('status-msg');
+
+  // 時間ベースの滑らかなアニメーション（10秒で95%まで）
+  const MAX_TIME_MS = 10000;
+  const startTime = Date.now();
+  let animFrame;
+
+  function animateFill() {
+    const elapsed = Date.now() - startTime;
+    const timePct = Math.min(95, (elapsed / MAX_TIME_MS) * 95);
+    bar.style.width = timePct + '%';
+    pctLabel.textContent = Math.floor(timePct) + '%';
+    if (timePct < 95) animFrame = requestAnimationFrame(animateFill);
+  }
+  animFrame = requestAnimationFrame(animateFill);
 
   function poll() {
     fetch("{{ url_for('generate.status', period_id=period.id) }}")
       .then(r => r.json())
       .then(data => {
-        if (data.status === "done") {
-          window.location.href = scheduleUrl;
-        } else if (data.status === "failed") {
-          document.getElementById("status-msg").textContent = "エラー: " + (data.message || "生成失敗");
-          document.querySelector(".spinner-border").classList.add("d-none");
+        if (data.status === 'done') {
+          cancelAnimationFrame(animFrame);
+          bar.style.width = '100%';
+          bar.classList.remove('progress-bar-animated');
+          bar.classList.add('bg-success');
+          pctLabel.textContent = '100%';
+          statusMsg.textContent = '生成完了！シフト表に移動します…';
+          setTimeout(() => { window.location.href = scheduleUrl; }, 800);
+
+        } else if (data.status === 'failed') {
+          cancelAnimationFrame(animFrame);
+          bar.classList.remove('progress-bar-animated');
+          bar.classList.add('bg-danger');
+          statusMsg.textContent = 'エラー: ' + (data.message || '生成に失敗しました');
+          pctLabel.textContent = '失敗';
+
         } else {
+          // generating
+          if (data.solutions > 0) {
+            solutionLabel.textContent = `解 ${data.solutions} 個発見`;
+            statusMsg.textContent = 'より良いシフトを探索中…';
+          }
+          // DB から来た pct があれば反映
+          if (data.progress > 0) {
+            const dbPct = Math.min(95, data.progress);
+            if (dbPct > parseFloat(bar.style.width || 0)) {
+              bar.style.width = dbPct + '%';
+              pctLabel.textContent = dbPct + '%';
+            }
+          }
           setTimeout(poll, 2000);
         }
       })
       .catch(() => setTimeout(poll, 3000));
   }
 
-  setTimeout(poll, 1500);
+  setTimeout(poll, 2000);
 })();
 </script>
 {% endblock %}
