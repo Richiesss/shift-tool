@@ -14,7 +14,32 @@ def get_all_employees(active_only: bool = True) -> list[Employee]:
     rows = conn.execute(
         "SELECT * FROM employees" + (" WHERE is_active=1" if active_only else "") + " ORDER BY id"
     ).fetchall()
-    employees = [_row_to_employee(row, conn) for row in rows]
+    if not rows:
+        conn.close()
+        return []
+
+    emp_ids = [r["id"] for r in rows]
+    ph = ",".join(["?" ] * len(emp_ids))
+
+    # fixed_patterns を一括取得（N+1解消）
+    pat_rows = conn.execute(
+        f"SELECT * FROM fixed_patterns WHERE employee_id IN ({ph}) ORDER BY employee_id, day_of_week",
+        emp_ids
+    ).fetchall()
+    pat_map: dict[int, list] = {}
+    for p in pat_rows:
+        pat_map.setdefault(p["employee_id"], []).append(p)
+
+    # fixed_unavailable_dates を一括取得（N+1解消）
+    unavail_rows = conn.execute(
+        f"SELECT employee_id, date FROM fixed_unavailable_dates WHERE employee_id IN ({ph}) ORDER BY employee_id, date",
+        emp_ids
+    ).fetchall()
+    unavail_map: dict[int, list] = {}
+    for u in unavail_rows:
+        unavail_map.setdefault(u["employee_id"], []).append(u["date"])
+
+    employees = [_row_to_employee_preloaded(row, pat_map, unavail_map) for row in rows]
     conn.close()
     return employees
 
@@ -68,6 +93,32 @@ def restore_employee(employee_id: int):
     conn.execute("UPDATE employees SET is_active=1 WHERE id=?", (employee_id,))
     conn.commit()
     conn.close()
+
+
+def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employee:
+    eid = row["id"]
+    keys = row.keys()
+    pp_val   = row["primary_position"]   if "primary_position"   in keys and row["primary_position"] else None
+    pt_val   = row["primary_timeslot"]   if "primary_timeslot"   in keys and row["primary_timeslot"] else None
+    return Employee(
+        id=eid, name=row["name"],
+        employment_type=EmploymentType(row["employment_type"]),
+        hall_skill=SkillLevel(row["hall_skill"]),
+        kitchen_skill=SkillLevel(row["kitchen_skill"]),
+        primary_position=PrimaryPosition(pp_val) if pp_val else None,
+        primary_timeslot=TimeSlot(pt_val) if pt_val else None,
+        can_work_both_positions=bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False,
+        can_open=bool(row["can_open"]) if "can_open" in keys else False,
+        can_cleanup=bool(row["can_cleanup"]) if "can_cleanup" in keys else False,
+        always_available_breakfast=bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False,
+        always_available_dinner=bool(row["always_available_dinner"]) if "always_available_dinner" in keys else False,
+        is_active=bool(row["is_active"]),
+        fixed_patterns=[
+            FixedPattern(p["day_of_week"], bool(p["breakfast"]), bool(p["dinner"]))
+            for p in pat_map.get(eid, [])
+        ],
+        fixed_unavailable_dates=unavail_map.get(eid, []),
+    )
 
 
 def _row_to_employee(row, conn) -> Employee:

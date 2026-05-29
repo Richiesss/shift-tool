@@ -1,4 +1,5 @@
 flask>=3.0.0
+flask-compress>=1.14
 gunicorn>=21.0.0
 psycopg2-binary>=2.9.0
 ortools>=9.7.0

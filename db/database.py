@@ -120,13 +120,26 @@ class Connection:
     def commit(self): self._conn.commit()
 
     def close(self):
+        if getattr(self, "_flask_managed", False):
+            return  # Flask teardown が責任を持つ
         if self.backend == "postgres" and self._pool:
-            self._pool.putconn(self._conn)  # return to pool, not close
+            self._pool.putconn(self._conn)
         else:
             self._conn.close()
 
 
 def get_connection() -> Connection:
+    """Flask リクエスト中は接続を g で共有し、プール貸し借りを削減する"""
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            if not hasattr(g, "_db_conn"):
+                conn = Connection()
+                conn._flask_managed = True
+                g._db_conn = conn
+            return g._db_conn
+    except (ImportError, RuntimeError):
+        pass
     return Connection()
 
 
