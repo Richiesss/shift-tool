@@ -43,10 +43,10 @@ COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
 def _register_font() -> str:
     """日本語フォントを登録。利用不可の場合は Helvetica にフォールバック。"""
     import glob
-    _here = os.path.dirname(os.path.abspath(__file__))
     candidates = [
-        # バンドルフォント（最優先）
-        os.path.join(_here, "../static/fonts/NotoSansJP.ttf"),
+        # Linux: IPA Gothic (.ttf, ReportLab互換)
+        "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
+        "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
         # Windows
         "C:/Windows/Fonts/meiryo.ttc",
         "C:/Windows/Fonts/YuGothR.ttc",
@@ -54,14 +54,11 @@ def _register_font() -> str:
         # macOS
         "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
         "/Library/Fonts/Osaka.ttf",
-        # Linux
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     ]
-    candidates += sorted(glob.glob("/usr/share/fonts/**/*CJK*.ttc", recursive=True))
+    # glob fallback
+    candidates += sorted(glob.glob("/usr/share/fonts/**/*.ttf", recursive=True))
 
     for path in candidates:
-        path = os.path.normpath(path)
         if os.path.exists(path):
             try:
                 pdfmetrics.registerFont(TTFont("JpFont", path))
