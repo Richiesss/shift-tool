@@ -242,6 +242,10 @@ _MIGRATIONS = [
 def initialize_db():
     conn = get_connection()
 
+    # DDL は autocommit で実行（失敗した ALTER TABLE が後続を巻き込まないよう）
+    if conn.backend == "postgres":
+        conn._conn.autocommit = True
+
     for ddl in _CREATE_TABLES:
         conn.execute(ddl)
 
@@ -250,6 +254,9 @@ def initialize_db():
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
         except Exception:
             pass
+
+    if conn.backend == "postgres":
+        conn._conn.autocommit = False
 
     for slot, pos, mn, mx, ml in [
         ("breakfast", "hall",    3, 4, 1),
