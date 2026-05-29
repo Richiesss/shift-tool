@@ -42,6 +42,7 @@ COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
 
 def _register_font() -> str:
     """日本語フォントを登録。利用不可の場合は Helvetica にフォールバック。"""
+    import glob
     candidates = [
         # Windows
         "C:/Windows/Fonts/meiryo.ttc",
@@ -50,12 +51,16 @@ def _register_font() -> str:
         # macOS
         "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
         "/Library/Fonts/Osaka.ttf",
-        # Linux
+        # Linux (固定パス)
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
+    # Linux glob: fonts-noto-cjk でインストールされるあらゆるパスを検索
+    candidates += sorted(glob.glob("/usr/share/fonts/**/*CJK*.ttc", recursive=True))
+    candidates += sorted(glob.glob("/usr/share/fonts/**/*CJK*.otf", recursive=True))
+    candidates += sorted(glob.glob("/usr/share/fonts/**/*cjk*.ttc", recursive=True))
+
     for path in candidates:
         if os.path.exists(path):
             try:
