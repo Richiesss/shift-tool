@@ -7,6 +7,15 @@ from export.pdf_exporter import export_pdf
 bp = Blueprint("export", __name__, url_prefix="/export")
 
 
+def _assignments_dict(period_id: int) -> dict:
+    """list[ShiftAssignment] → exporterが期待するdict形式に変換"""
+    return {
+        (a.employee_id, a.date, a.time_slot.value):
+        (a.position.value, a.is_reinforcement, a.reinf_start, a.reinf_end)
+        for a in repo.get_assignments(period_id)
+    }
+
+
 @bp.get("/<int:period_id>/excel")
 def excel(period_id):
     period = repo.get_period(period_id)
@@ -14,9 +23,9 @@ def excel(period_id):
         flash("期間が見つかりません", "error")
         return redirect(url_for("schedule.index", period_id=period_id))
     employees = repo.get_all_employees(active_only=True)
-    assignments = repo.get_assignments(period_id)
+    assignments = _assignments_dict(period_id)
     buf = io.BytesIO()
-    export_excel(period, employees, assignments, buf)
+    export_excel(buf, period, employees, assignments)
     buf.seek(0)
     filename = f"shift_{period.start_date}_{period.end_date}.xlsx"
     return send_file(buf, as_attachment=True, download_name=filename,
@@ -30,9 +39,9 @@ def pdf(period_id):
         flash("期間が見つかりません", "error")
         return redirect(url_for("schedule.index", period_id=period_id))
     employees = repo.get_all_employees(active_only=True)
-    assignments = repo.get_assignments(period_id)
+    assignments = _assignments_dict(period_id)
     buf = io.BytesIO()
-    export_pdf(period, employees, assignments, buf)
+    export_pdf(buf, period, employees, assignments)
     buf.seek(0)
     filename = f"shift_{period.start_date}_{period.end_date}.pdf"
     return send_file(buf, as_attachment=True, download_name=filename,
