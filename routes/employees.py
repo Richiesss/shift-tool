@@ -107,6 +107,6 @@ def _form_to_employee(emp_id):
         always_available_breakfast=bool(f.get("always_available_breakfast")),
         always_available_dinner=bool(f.get("always_available_dinner")),
         fixed_patterns=patterns,
-        fixed_unavailable_dates=[],
+        fixed_unavailable_dates=request.form.getlist("unavail_dates"),
         is_active=True,
     )

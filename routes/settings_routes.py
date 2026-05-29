@@ -40,5 +40,16 @@ def save():
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     repo.save_all_app_settings(new_settings)
 
+    band_constraints = repo.get_breakfast_band_constraints()
+    new_band = {}
+    for (band, pos) in band_constraints:
+        prefix = f"{band}_{pos}"
+        new_band[(band, pos)] = {
+            "min":        int(request.form.get(f"band_min_{prefix}", 0)),
+            "max":        int(request.form.get(f"band_max_{prefix}", 0)),
+            "min_leader": int(request.form.get(f"band_ml_{prefix}", 0)),
+        }
+    repo.save_breakfast_band_constraints(new_band)
+
     flash("設定を保存しました", "success")
     return redirect(url_for("settings.index"))

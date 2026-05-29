@@ -34,6 +34,7 @@ def index(period_id):
         asgn_map.setdefault(a.date, {}).setdefault(a.time_slot.value, []).append(a)
 
     slot = request.args.get("slot", "breakfast")
+    notes = repo.get_schedule_notes(period_id)
 
     return render_template(
         "schedule/index.html",
@@ -44,6 +45,7 @@ def index(period_id):
         dates=dates,
         asgn_map=asgn_map,
         slot=slot,
+        notes=notes,
         TimeSlot=TimeSlot,
         Position=Position,
     )
@@ -69,6 +71,15 @@ def assign(period_id):
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.post("/<int:period_id>/note")
+def save_note(period_id):
+    data = request.get_json()
+    date_str = data.get("date", "")
+    note = data.get("note", "")
+    repo.save_schedule_note(period_id, date_str, note)
+    return jsonify({"ok": True})
 
 
 @bp.post("/<int:period_id>/confirm")

@@ -82,6 +82,19 @@
         </tr>
       </thead>
       <tbody>
+        <!-- メモ行 -->
+        <tr class="table-light">
+          <td class="emp-col small text-muted">メモ</td>
+          {% for d in dates %}
+          {% set ds = d|string %}
+          {% set dow = d.weekday() %}
+          <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}" style="min-width:70px">
+            <span class="note-cell d-block small text-muted" style="cursor:pointer;min-height:18px"
+              data-date="{{ ds }}" data-period="{{ period.id }}"
+              onclick="editNote(this)">{{ notes.get(ds, '') or '' }}</span>
+          </td>
+          {% endfor %}
+        </tr>
         {% for emp in employees %}
         <tr>
           <td class="emp-col">{{ emp.name }}</td>
@@ -113,4 +126,31 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+function editNote(el) {
+  const date = el.dataset.date;
+  const periodId = el.dataset.period;
+  const current = el.textContent.trim();
+  const input = document.createElement('input');
+  input.type = 'text'; input.value = current;
+  input.className = 'form-control form-control-sm'; input.style.minWidth = '80px';
+  el.replaceWith(input); input.focus();
+  function save() {
+    const note = input.value.trim();
+    fetch(`/schedule/${periodId}/note`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({date, note})
+    });
+    const span = document.createElement('span');
+    span.className = 'note-cell d-block small text-muted';
+    span.style.cssText = 'cursor:pointer;min-height:18px';
+    span.dataset.date = date; span.dataset.period = periodId;
+    span.onclick = function(){ editNote(this); };
+    span.textContent = note; input.replaceWith(span);
+  }
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+}
+</script>
 {% endblock %}

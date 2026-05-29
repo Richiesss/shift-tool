@@ -36,6 +36,32 @@
     </div>
   </div>
 
+  <!-- 朝食バンド制約 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">朝食バンド制約（開店準備 / 片付け）</h6>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered mb-0">
+          <thead class="table-light">
+            <tr><th>バンド</th><th>ポジション</th><th>最少</th><th>最多</th><th>リーダー最少</th></tr>
+          </thead>
+          <tbody>
+            {% for (band, pos), vals in band_constraints.items() %}
+            {% set prefix = band + '_' + pos %}
+            <tr>
+              <td>{{ '開店準備' if band == 'open' else '片付け' }}</td>
+              <td>{{ 'ホール' if pos == 'hall' else 'キッチン' }}</td>
+              <td><input type="number" name="band_min_{{ prefix }}" value="{{ vals.min }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="band_max_{{ prefix }}" value="{{ vals.max }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="band_ml_{{ prefix }}"  value="{{ vals.min_leader }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- 予約客数による増員設定 -->
   <div class="card mb-3">
     <div class="card-body">

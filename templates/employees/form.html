@@ -150,6 +150,29 @@
     </div>
   </div>
 
+  <!-- 固定不可日 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">固定不可日（毎年/毎月ではなく特定の日付）</h6>
+      <div id="unavail-list" class="d-flex flex-wrap gap-2 mb-2">
+        {% for d in (emp.fixed_unavailable_dates if emp else []) %}
+        <div class="badge bg-secondary d-flex align-items-center gap-1 unavail-badge" style="font-size:.85rem">
+          <input type="hidden" name="unavail_dates" value="{{ d }}">
+          {{ d }}
+          <button type="button" class="btn-close btn-close-white btn-sm" style="font-size:.6rem"
+            onclick="this.closest('.unavail-badge').remove()"></button>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="d-flex gap-2">
+        <input type="date" id="new-unavail-date" class="form-control form-control-sm" style="max-width:180px">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addUnavailDate()">
+          <i class="bi bi-plus"></i> 追加
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="d-grid gap-2">
     <button type="submit" class="btn btn-primary btn-lg">
       <i class="bi bi-check-lg me-1"></i>{{ '更新する' if emp else '登録する' }}
@@ -158,4 +181,22 @@
   </div>
 </form>
 </div>
+
+<script>
+function addUnavailDate() {
+  const input = document.getElementById('new-unavail-date');
+  const val = input.value;
+  if (!val) return;
+  const existing = [...document.querySelectorAll('input[name="unavail_dates"]')].map(e => e.value);
+  if (existing.includes(val)) { input.value = ''; return; }
+  const badge = document.createElement('div');
+  badge.className = 'badge bg-secondary d-flex align-items-center gap-1 unavail-badge';
+  badge.style.fontSize = '.85rem';
+  badge.innerHTML = `<input type="hidden" name="unavail_dates" value="${val}">${val}
+    <button type="button" class="btn-close btn-close-white btn-sm" style="font-size:.6rem"
+      onclick="this.closest('.unavail-badge').remove()"></button>`;
+  document.getElementById('unavail-list').appendChild(badge);
+  input.value = '';
+}
+</script>
 {% endblock %}
