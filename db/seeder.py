@@ -1,12 +1,10 @@
 """初期データ投入モジュール。DBが空のときのみ実行される。"""
 from __future__ import annotations
 import json
-import os
 from pathlib import Path
 
 _SEED_FILE = Path(__file__).parent / "seed_data.json"
 
-# 挿入順序（外部キー依存順）
 _TABLE_ORDER = [
     "employees",
     "fixed_patterns",
@@ -18,7 +16,6 @@ _TABLE_ORDER = [
 
 
 def seed_if_empty(conn) -> bool:
-    """employees テーブルが空のときだけシードデータを投入する。"""
     if not _SEED_FILE.exists():
         return False
 
@@ -33,41 +30,79 @@ def seed_if_empty(conn) -> bool:
         rows = data.get(table, [])
         if not rows:
             continue
-        cols = list(rows[0].keys())
-        # DBスキーマに存在するカラムだけ使う
-        cols = _filter_existing_cols(conn, table, cols)
-        placeholders = ", ".join(["?" if conn.backend == "sqlite" else "%s"] * len(cols))
+
+        schema = _get_schema(conn, table)  # {col: (not_null, default)}
+        cols = [c for c in rows[0].keys() if c in schema]
+
+        ph = "%s" if conn.backend == "postgres" else "?"
+        placeholders = ", ".join([ph] * len(cols))
         col_list = ", ".join(cols)
         sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"
+
         for row in rows:
-            values = [row.get(c) for c in cols]
+            values = []
+            for c in cols:
+                v = row.get(c)
+                if v is None:
+                    not_null, default = schema[c]
+                    if not_null:
+                        # NOT NULL カラムの null は DEFAULT 値で補完
+                        v = _parse_default(default)
+                values.append(v)
             try:
                 conn.execute(sql, values)
-            except Exception:
-                pass
+            except Exception as e:
+                # PostgreSQL: 1件失敗でトランザクションがアボートするため rollback
+                if conn.backend == "postgres":
+                    try:
+                        conn._conn.rollback()
+                    except Exception:
+                        pass
+                print(f"[seeder] skipped row in {table}: {e}")
 
     # PostgreSQL: SERIAL シーケンスを最大IDに合わせる
     if conn.backend == "postgres":
         for table in ["employees", "schedule_periods", "shift_requests", "shift_assignments"]:
-            conn.execute(
-                f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
-                f"COALESCE((SELECT MAX(id) FROM {table}), 1))"
-            )
+            try:
+                conn.execute(
+                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+                    f"COALESCE((SELECT MAX(id) FROM {table}), 1))"
+                )
+            except Exception:
+                if conn.backend == "postgres":
+                    conn._conn.rollback()
 
     conn.commit()
     return True
 
 
-def _filter_existing_cols(conn, table: str, cols: list[str]) -> list[str]:
-    """テーブルに実際に存在するカラムだけを返す。"""
+def _get_schema(conn, table: str) -> dict:
+    """カラム名 → (not_null: bool, default: str|None) のマップを返す"""
     if conn.backend == "postgres":
-        result = conn.execute(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name=%s",
+        rows = conn.execute(
+            "SELECT column_name, is_nullable, column_default "
+            "FROM information_schema.columns WHERE table_name=%s",
             (table,)
         ).fetchall()
-        existing = {r["column_name"] for r in result}
+        return {
+            r["column_name"]: (r["is_nullable"] == "NO", r["column_default"])
+            for r in rows
+        }
     else:
-        result = conn.execute(f"PRAGMA table_info({table})").fetchall()
-        existing = {r["name"] for r in result}
-    return [c for c in cols if c in existing]
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return {
+            r["name"]: (bool(r["notnull"]), r["dflt_value"])
+            for r in rows
+        }
+
+
+def _parse_default(default) -> object:
+    """DEFAULT 値文字列を Python 値に変換"""
+    if default is None:
+        return None
+    s = str(default).strip().strip("'\"")
+    if s.lstrip("-").isdigit():
+        return int(s)
+    if s.lower() in ("true", "false"):
+        return s.lower() == "true"
+    return s or None
