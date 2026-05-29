@@ -185,6 +185,32 @@ def _save_fixed_unavailable_dates(conn, emp: Employee):
 
 # ── シフト期間 ──────────────────────────────────────────────────────────
 
+def update_period_gen_status(period_id: int, status: str, message: str = ""):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE schedule_periods SET gen_status=?, gen_message=? WHERE id=?",
+        (status, message, period_id)
+    )
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_period, period_id)
+    cache.delete_memoized(get_all_periods)
+
+
+def get_period_gen_status(period_id: int) -> dict:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT gen_status, gen_message FROM schedule_periods WHERE id=?", (period_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return {"status": "unknown", "message": ""}
+    keys = row.keys()
+    return {
+        "status":  row["gen_status"]  if "gen_status"  in keys else "idle",
+        "message": row["gen_message"] if "gen_message" in keys else "",
+    }
+
 @cache.memoize(timeout=180)
 def get_all_periods() -> list[SchedulePeriod]:
     conn = get_connection()

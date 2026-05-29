@@ -249,6 +249,8 @@ _MIGRATIONS = [
     ("employees",         "can_cleanup",                "INTEGER NOT NULL DEFAULT 0"),
     ("employees",         "always_available_breakfast", "INTEGER NOT NULL DEFAULT 0"),
     ("employees",         "always_available_dinner",    "INTEGER NOT NULL DEFAULT 0"),
+    ("schedule_periods",  "gen_status",                 "TEXT NOT NULL DEFAULT 'idle'"),
+    ("schedule_periods",  "gen_message",                "TEXT NOT NULL DEFAULT ''"),
 ]
 
 _INDEXES = [

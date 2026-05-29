@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}シフト生成中 - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-hourglass-split me-2"></i>シフト生成中</h1>
+</div>
+<div class="content d-flex flex-column align-items-center justify-content-center" style="min-height:50vh">
+  <div class="text-center mb-4">
+    <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem" role="status"></div>
+    <h5 class="mb-1">{{ period.start_date }} 〜 {{ period.end_date }}</h5>
+    <p class="text-muted small" id="status-msg">最適なシフトを計算しています…</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  const periodId = {{ period.id }};
+  const scheduleUrl = "{{ url_for('schedule.index', period_id=period.id) }}";
+  const generateUrl = "{{ url_for('generate.index') }}";
+
+  function poll() {
+    fetch("{{ url_for('generate.status', period_id=period.id) }}")
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === "done") {
+          window.location.href = scheduleUrl;
+        } else if (data.status === "failed") {
+          document.getElementById("status-msg").textContent = "エラー: " + (data.message || "生成失敗");
+          document.querySelector(".spinner-border").classList.add("d-none");
+        } else {
+          setTimeout(poll, 2000);
+        }
+      })
+      .catch(() => setTimeout(poll, 3000));
+  }
+
+  setTimeout(poll, 1500);
+})();
+</script>
+{% endblock %}

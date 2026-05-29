@@ -371,8 +371,9 @@ def solve(
 
     # ── 求解 ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 30.0
-    solver.parameters.num_search_workers = 4
+    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.num_search_workers = 1
+    solver.parameters.log_search_progress = False
     status = solver.solve(model)
 
     elapsed = time.time() - t0
@@ -541,8 +542,9 @@ def _solve_best_effort(
     model.minimize(sum(penalty_terms))
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 30.0
-    solver.parameters.num_search_workers = 4
+    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.num_search_workers = 1
+    solver.parameters.log_search_progress = False
     status = solver.solve(model)
 
     warnings: list[str] = []

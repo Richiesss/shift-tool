@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+import threading
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from db import repositories as repo
 from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE
 
@@ -23,8 +24,13 @@ def run():
         flash("期間が見つかりません", "error")
         return redirect(url_for("generate.index"))
 
+    # すでに生成中なら待機ページへ
+    gen = repo.get_period_gen_status(period_id)
+    if gen["status"] == "generating":
+        return redirect(url_for("generate.wait", period_id=period_id))
+
     employees = repo.get_all_employees(active_only=True)
-    requests = repo.get_shift_requests(period_id)
+    requests_list = repo.get_shift_requests(period_id)
 
     def _scale(key):
         v = request.form.get(key, "中")
@@ -38,21 +44,41 @@ def run():
         late_night_scale=_scale("late_night_scale"),
     )
 
-    result = solve(period, employees, requests, config)
+    # 生成中ステータスに更新してバックグラウンドで実行
+    repo.update_period_gen_status(period_id, "generating", "")
+    app = current_app._get_current_object()
 
-    if result.status in ("optimal", "feasible"):
-        repo.save_assignments(period_id, result.assignments)
-        flash(f"シフトを生成しました（{result.status}、{result.solve_time_sec:.1f}秒）", "success")
-        if result.warnings:
-            for w in result.warnings:
-                flash(w, "warning")
-        return redirect(url_for("schedule.index", period_id=period_id))
-    else:
-        periods = repo.get_all_periods()
-        return render_template(
-            "generate/index.html",
-            periods=periods,
-            result=result,
-            priority_scale=PRIORITY_SCALE,
-            selected_period_id=period_id,
-        )
+    def _run_solver():
+        try:
+            result = solve(period, employees, requests_list, config)
+            with app.app_context():
+                if result.status in ("optimal", "feasible"):
+                    repo.save_assignments(period_id, result.assignments)
+                    msg = f"{result.status},{result.solve_time_sec:.1f}"
+                    if result.warnings:
+                        msg += "|" + "|".join(result.warnings)
+                    repo.update_period_gen_status(period_id, "done", msg)
+                else:
+                    errors = "; ".join(result.errors) if result.errors else "制約を満たすシフトが見つかりませんでした"
+                    repo.update_period_gen_status(period_id, "failed", errors)
+        except Exception as e:
+            try:
+                with app.app_context():
+                    repo.update_period_gen_status(period_id, "failed", str(e))
+            except Exception:
+                pass
+
+    threading.Thread(target=_run_solver, daemon=True).start()
+    return redirect(url_for("generate.wait", period_id=period_id))
+
+
+@bp.get("/wait/<int:period_id>")
+def wait(period_id):
+    period = repo.get_period(period_id)
+    return render_template("generate/waiting.html", period=period)
+
+
+@bp.get("/status/<int:period_id>")
+def status(period_id):
+    gen = repo.get_period_gen_status(period_id)
+    return jsonify(gen)
