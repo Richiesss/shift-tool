@@ -32,7 +32,7 @@
 
 <script>
 (function () {
-  const MAX_SEC = 10.0;
+  const MAX_SEC = 25.0;
   const periodId = {{ period.id }};
   const scheduleUrl = "{{ url_for('schedule.index', period_id=period.id) }}";
   const bar = document.getElementById('prog-bar');
@@ -70,7 +70,7 @@
           if (elapsed > 0) {
             const pct = Math.min(95, (elapsed / MAX_SEC) * 100);
             setBar(pct, true);
-            elapsedLabel.textContent = elapsed.toFixed(1) + '秒経過 / 最大' + MAX_SEC + '秒';
+            elapsedLabel.textContent = elapsed.toFixed(1) + '秒経過 / 最大約' + MAX_SEC + '秒';
           } else {
             // まだコールバック未着火＝可能解すら見つかっていない
             elapsedLabel.textContent = '解を探索中…';

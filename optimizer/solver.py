@@ -412,7 +412,7 @@ def solve(
 
     # ── 求解 ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.max_time_in_seconds = 25.0
     solver.parameters.num_search_workers = 1
     solver.parameters.log_search_progress = False
     status = solver.solve(model, progress_callback) if progress_callback else solver.solve(model)
@@ -583,7 +583,7 @@ def _solve_best_effort(
     model.minimize(sum(penalty_terms))
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.max_time_in_seconds = 15.0
     solver.parameters.num_search_workers = 1
     solver.parameters.log_search_progress = False
     status = solver.solve(model)

@@ -186,15 +186,21 @@ def _save_fixed_unavailable_dates(conn, emp: Employee):
 # ── シフト期間 ──────────────────────────────────────────────────────────
 
 def update_period_gen_status(period_id: int, status: str, message: str = ""):
-    conn = get_connection()
+    """app_context / キャッシュ不要な低レベル DB 更新（コールバックスレッドから安全に呼べる）"""
+    from db.database import Connection
+    conn = Connection()          # get_connection() を使わず直接生成（g / cache 不要）
     conn.execute(
         "UPDATE schedule_periods SET gen_status=?, gen_message=? WHERE id=?",
         (status, message, period_id)
     )
     conn.commit()
     conn.close()
-    cache.delete_memoized(get_period, period_id)
-    cache.delete_memoized(get_all_periods)
+    # キャッシュ無効化は app_context が確実にある場合のみ試みる
+    try:
+        cache.delete_memoized(get_period, period_id)
+        cache.delete_memoized(get_all_periods)
+    except Exception:
+        pass
 
 
 def get_period_gen_status(period_id: int) -> dict:

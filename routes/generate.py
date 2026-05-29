@@ -52,7 +52,7 @@ def run():
         # app_context を最初から張る（cache.memoize など Flask 依存の処理を含むため）
         with app.app_context():
             try:
-                cb = SolveProgressCallback(period_id, max_time=10.0)
+                cb = SolveProgressCallback(period_id, max_time=25.0)
                 result = solve(period, employees, requests_list, config, progress_callback=cb)
                 if result.status in ("optimal", "feasible"):
                     repo.save_assignments(period_id, result.assignments)
