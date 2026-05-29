@@ -356,19 +356,17 @@ def solve(
                     penalty_terms.append(penalty * not_worked)
 
     # P3b: primary_timeslot 専任制約（ソフト）
-    # 専任設定のある従業員が専任外の時間帯に入る場合にペナルティ
-    TIMESLOT_PENALTY = 5_000
+    # 専任設定のある従業員が専任外の時間帯に配置された場合に軽微なペナルティ
+    TIMESLOT_PENALTY = 80  # PT_NOT_WORKED_PENALTY より低く設定して他の制約を妨げない
     for emp in active_employees:
         if emp.primary_timeslot is None:
             continue
-        non_primary = [s for s in slots if s != emp.primary_timeslot]
-        for s in non_primary:
+        for s in slots:
+            if s == emp.primary_timeslot:
+                continue
             for ds in date_strs:
-                worked_off = sum(assign[emp.id][ds][s.value][pos.value] for pos in positions)
-                off_var = model.new_bool_var(f"off_ts_{emp.id}_{ds}_{s.value}")
-                model.add(worked_off == 0).only_enforce_if(off_var)
-                model.add(worked_off >= 1).only_enforce_if(off_var.negated())
-                penalty_terms.append(TIMESLOT_PENALTY * off_var.negated())
+                for pos in positions:
+                    penalty_terms.append(TIMESLOT_PENALTY * assign[emp.id][ds][s.value][pos.value])
 
     # P4: 人員バランス = ポジション毎の総シフト数の偏差を最小化
     # 各日の各（スロット×ポジション）の担当人数を均等にするため、

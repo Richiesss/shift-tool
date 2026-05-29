@@ -49,9 +49,10 @@ def run():
     app = current_app._get_current_object()
 
     def _run_solver():
-        try:
-            result = solve(period, employees, requests_list, config)
-            with app.app_context():
+        # app_context を最初から張る（cache.memoize など Flask 依存の処理を含むため）
+        with app.app_context():
+            try:
+                result = solve(period, employees, requests_list, config)
                 if result.status in ("optimal", "feasible"):
                     repo.save_assignments(period_id, result.assignments)
                     msg = f"{result.status},{result.solve_time_sec:.1f}"
@@ -61,12 +62,11 @@ def run():
                 else:
                     errors = "; ".join(result.errors) if result.errors else "制約を満たすシフトが見つかりませんでした"
                     repo.update_period_gen_status(period_id, "failed", errors)
-        except Exception as e:
-            try:
-                with app.app_context():
+            except Exception as e:
+                try:
                     repo.update_period_gen_status(period_id, "failed", str(e))
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
     threading.Thread(target=_run_solver, daemon=True).start()
     return redirect(url_for("generate.wait", period_id=period_id))
