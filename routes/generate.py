@@ -83,12 +83,10 @@ def wait(period_id):
 def status(period_id):
     gen = repo.get_period_gen_status(period_id)
     msg = gen.get("message", "")
-    progress = 0
+    elapsed = 0.0
     solutions = 0
     if gen["status"] == "generating" and msg.startswith("progress:"):
         parts = dict(kv.split(":") for kv in msg.split(",") if ":" in kv)
-        progress = int(parts.get("progress", 0))
+        elapsed = float(parts.get("elapsed", 0))
         solutions = int(parts.get("solutions", 0))
-    elif gen["status"] == "done":
-        progress = 100
-    return jsonify({**gen, "progress": progress, "solutions": solutions})
+    return jsonify({**gen, "elapsed": elapsed, "solutions": solutions})

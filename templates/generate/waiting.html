@@ -12,14 +12,18 @@
         <i class="bi bi-cpu fs-1 text-primary"></i>
       </div>
       <h6 class="mb-1">{{ period.start_date }} 〜 {{ period.end_date }}</h6>
-      <p class="text-muted small mb-4" id="status-msg">最適なシフトを計算しています…</p>
+      <p class="text-muted small mb-4" id="status-msg">解を探索しています…</p>
 
+      <!-- プログレスバー（実際の経過時間ベース） -->
       <div class="progress mb-2" style="height:12px;border-radius:6px">
-        <div id="prog-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-             role="progressbar" style="width:0%;transition:width 0.6s ease"></div>
+        <div id="prog-bar"
+             class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+             role="progressbar"
+             style="width:0%;transition:width 0.8s ease-out">
+        </div>
       </div>
       <div class="d-flex justify-content-between small text-muted">
-        <span id="pct-label">0%</span>
+        <span id="elapsed-label">待機中…</span>
         <span id="solution-label"></span>
       </div>
     </div>
@@ -28,68 +32,66 @@
 
 <script>
 (function () {
+  const MAX_SEC = 10.0;
   const periodId = {{ period.id }};
   const scheduleUrl = "{{ url_for('schedule.index', period_id=period.id) }}";
   const bar = document.getElementById('prog-bar');
-  const pctLabel = document.getElementById('pct-label');
+  const elapsedLabel = document.getElementById('elapsed-label');
   const solutionLabel = document.getElementById('solution-label');
   const statusMsg = document.getElementById('status-msg');
 
-  // 時間ベースの滑らかなアニメーション（10秒で95%まで）
-  const MAX_TIME_MS = 10000;
-  const startTime = Date.now();
-  let animFrame;
-
-  function animateFill() {
-    const elapsed = Date.now() - startTime;
-    const timePct = Math.min(95, (elapsed / MAX_TIME_MS) * 95);
-    bar.style.width = timePct + '%';
-    pctLabel.textContent = Math.floor(timePct) + '%';
-    if (timePct < 95) animFrame = requestAnimationFrame(animateFill);
+  function setBar(pct, animate) {
+    bar.style.transition = animate ? 'width 0.8s ease-out' : 'none';
+    bar.style.width = Math.min(100, pct) + '%';
   }
-  animFrame = requestAnimationFrame(animateFill);
 
   function poll() {
     fetch("{{ url_for('generate.status', period_id=period.id) }}")
       .then(r => r.json())
       .then(data => {
         if (data.status === 'done') {
-          cancelAnimationFrame(animFrame);
-          bar.style.width = '100%';
-          bar.classList.remove('progress-bar-animated');
+          setBar(100, true);
+          bar.classList.remove('progress-bar-animated', 'bg-primary');
           bar.classList.add('bg-success');
-          pctLabel.textContent = '100%';
+          elapsedLabel.textContent = '完了';
           statusMsg.textContent = '生成完了！シフト表に移動します…';
           setTimeout(() => { window.location.href = scheduleUrl; }, 800);
 
         } else if (data.status === 'failed') {
-          cancelAnimationFrame(animFrame);
-          bar.classList.remove('progress-bar-animated');
+          setBar(100, false);
+          bar.classList.remove('progress-bar-animated', 'bg-primary');
           bar.classList.add('bg-danger');
+          elapsedLabel.textContent = 'エラー';
           statusMsg.textContent = 'エラー: ' + (data.message || '生成に失敗しました');
-          pctLabel.textContent = '失敗';
 
         } else {
-          // generating
-          if (data.solutions > 0) {
-            solutionLabel.textContent = `解 ${data.solutions} 個発見`;
-            statusMsg.textContent = 'より良いシフトを探索中…';
+          // generating: elapsed はコールバックが初めて呼ばれてから届く
+          const elapsed = data.elapsed || 0;
+          if (elapsed > 0) {
+            const pct = Math.min(95, (elapsed / MAX_SEC) * 100);
+            setBar(pct, true);
+            elapsedLabel.textContent = elapsed.toFixed(1) + '秒経過 / 最大' + MAX_SEC + '秒';
+          } else {
+            // まだコールバック未着火＝可能解すら見つかっていない
+            elapsedLabel.textContent = '解を探索中…';
           }
-          // DB から来た pct があれば反映
-          if (data.progress > 0) {
-            const dbPct = Math.min(95, data.progress);
-            if (dbPct > parseFloat(bar.style.width || 0)) {
-              bar.style.width = dbPct + '%';
-              pctLabel.textContent = dbPct + '%';
+
+          if (data.solutions > 0) {
+            solutionLabel.textContent = '解 ' + data.solutions + ' 個発見';
+            if (data.solutions === 1) {
+              statusMsg.textContent = '初期解を発見。より良い解を探索中…';
+            } else {
+              statusMsg.textContent = '解を改善中…（' + data.solutions + ' 回更新）';
             }
           }
+
           setTimeout(poll, 2000);
         }
       })
       .catch(() => setTimeout(poll, 3000));
   }
 
-  setTimeout(poll, 2000);
+  setTimeout(poll, 1500);
 })();
 </script>
 {% endblock %}
