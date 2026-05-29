@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import threading
 from pathlib import Path
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -14,6 +15,24 @@ if getattr(sys, "frozen", False):
         _DB_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "SDU-Shift" / "shift_tool.db"
 else:
     _DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
+
+# PostgreSQL connection pool (reuse connections across requests)
+_pg_pool = None
+_pg_pool_lock = threading.Lock()
+
+
+def _get_pg_pool():
+    global _pg_pool
+    if _pg_pool is not None and not _pg_pool.closed:
+        return _pg_pool
+    with _pg_pool_lock:
+        if _pg_pool is None or _pg_pool.closed:
+            import psycopg2.pool
+            url = DATABASE_URL
+            if url.startswith("postgres://"):
+                url = "postgresql://" + url[len("postgres://"):]
+            _pg_pool = psycopg2.pool.ThreadedConnectionPool(1, 5, url)
+    return _pg_pool
 
 
 def _to_pg(sql: str) -> str:
@@ -45,12 +64,9 @@ class _PgCursor:
 class Connection:
     def __init__(self):
         if DATABASE_URL:
-            import psycopg2
             import psycopg2.extras
-            url = DATABASE_URL
-            if url.startswith("postgres://"):
-                url = "postgresql://" + url[len("postgres://"):]
-            self._conn = psycopg2.connect(url)
+            self._pool = _get_pg_pool()
+            self._conn = self._pool.getconn()
             self._factory = psycopg2.extras.RealDictCursor
             self.backend = "postgres"
         else:
@@ -59,13 +75,30 @@ class Connection:
             self._conn = sqlite3.connect(str(_DB_PATH))
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA foreign_keys = ON")
+            self._pool = None
             self.backend = "sqlite"
         self.lastrowid = None
 
+    def _pg_execute(self, sql: str, params):
+        import psycopg2
+        try:
+            cur = self._conn.cursor(cursor_factory=self._factory)
+            cur.execute(sql, params)
+            return cur
+        except psycopg2.OperationalError:
+            # stale connection — get a fresh one from pool
+            try:
+                self._pool.putconn(self._conn, close=True)
+            except Exception:
+                pass
+            self._conn = self._pool.getconn()
+            cur = self._conn.cursor(cursor_factory=self._factory)
+            cur.execute(sql, params)
+            return cur
+
     def execute(self, sql: str, params=()):
         if self.backend == "postgres":
-            cur = self._conn.cursor(cursor_factory=self._factory)
-            cur.execute(_to_pg(sql), list(params) if params else None)
+            cur = self._pg_execute(_to_pg(sql), list(params) if params else None)
             self.lastrowid = None
             return _PgCursor(cur)
         else:
@@ -77,8 +110,7 @@ class Connection:
         """INSERT して新規 id を返す（両 backend 対応）"""
         if self.backend == "postgres":
             adapted = _to_pg(sql).rstrip("; ") + " RETURNING id"
-            cur = self._conn.cursor(cursor_factory=self._factory)
-            cur.execute(adapted, list(params) if params else None)
+            cur = self._pg_execute(adapted, list(params) if params else None)
             row = cur.fetchone()
             return row["id"] if row else None
         else:
@@ -86,7 +118,12 @@ class Connection:
             return cur.lastrowid
 
     def commit(self): self._conn.commit()
-    def close(self): self._conn.close()
+
+    def close(self):
+        if self.backend == "postgres" and self._pool:
+            self._pool.putconn(self._conn)  # return to pool, not close
+        else:
+            self._conn.close()
 
 
 def get_connection() -> Connection:
