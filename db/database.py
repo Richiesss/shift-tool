@@ -294,4 +294,9 @@ def initialize_db():
         )
 
     conn.commit()
+
+    # DBが空なら初期データを投入
+    from db.seeder import seed_if_empty
+    seed_if_empty(conn)
+
     conn.close()
