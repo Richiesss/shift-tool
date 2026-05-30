@@ -2,12 +2,19 @@
 {% block title %}シフト入力 {{ period.start_date }} - SDU-Shift{% endblock %}
 {% block head %}
 <style>
-  .shift-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .shift-grid {
+    overflow: auto;
+    max-height: calc(100vh - 200px);
+    -webkit-overflow-scrolling: touch;
+  }
   .shift-grid table { min-width: max-content; font-size: .82rem; }
   .shift-grid th, .shift-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; }
+  /* 左固定（横スクロール） */
   .shift-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
-  .shift-grid thead th { background: #1e293b; color: white; }
-  .shift-grid thead th.emp-col { background: #0f172a; }
+  /* 上固定（縦スクロール） */
+  .shift-grid thead th { position: sticky; top: 0; z-index: 2; background: #1e293b; color: white; }
+  /* 左上セル：縦横両方固定 */
+  .shift-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .shift-grid .sat { background: #eff6ff; }
   .shift-grid .sun { background: #fff1f2; }
   select.pattern-sel { font-size: .78rem; min-width: 140px; padding: 2px 4px; }

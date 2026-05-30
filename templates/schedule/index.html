@@ -2,12 +2,19 @@
 {% block title %}シフト表 - SDU-Shift{% endblock %}
 {% block head %}
 <style>
-  .sched-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sched-grid {
+    overflow: auto;
+    max-height: calc(100vh - 200px);
+    -webkit-overflow-scrolling: touch;
+  }
   .sched-grid table { min-width: max-content; font-size: .82rem; }
   .sched-grid th, .sched-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; min-width: 62px; }
+  /* 左固定（横スクロール） */
   .sched-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
-  .sched-grid thead th { background: #1e293b; color: white; }
-  .sched-grid thead th.emp-col { background: #0f172a; }
+  /* 上固定（縦スクロール） */
+  .sched-grid thead th { position: sticky; top: 0; z-index: 2; background: #1e293b; color: white; }
+  /* 左上セル：縦横両方固定 */
+  .sched-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .sat td, .sat th { background: #eff6ff !important; }
   .sun td, .sun th { background: #fff1f2 !important; }
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
