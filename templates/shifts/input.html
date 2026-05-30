@@ -2,6 +2,7 @@
 {% block title %}シフト入力 {{ period.start_date }} - SDU-Shift{% endblock %}
 {% block head %}
 <style>
+  /* ── グリッドモード ─────────────────────────────── */
   .shift-grid {
     overflow: auto;
     max-height: calc(100vh - 200px);
@@ -9,17 +10,24 @@
   }
   .shift-grid table { min-width: max-content; font-size: .82rem; }
   .shift-grid th, .shift-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; }
-  /* 左固定（横スクロール） */
   .shift-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
-  /* 上固定（縦スクロール） */
   .shift-grid thead th { position: sticky; top: 0; z-index: 2; background: #1e293b; color: white; }
-  /* 左上セル：縦横両方固定 */
   .shift-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .shift-grid .sat { background: #eff6ff; }
   .shift-grid .sun { background: #fff1f2; }
-  /* 土日ヘッダーの文字色：薄背景に白はNG → 濃色に上書き */
   .shift-grid thead th.sat { color: #1e40af !important; }
   .shift-grid thead th.sun { color: #991b1b !important; }
+
+  /* ── 1人フォーカスモード ─────────────────────────── */
+  .focus-day-col { min-width: 155px; }
+  .focus-day-col.sat { background: #eff6ff; }
+  .focus-day-col.sun { background: #fff1f2; }
+  .focus-day-label { font-size: .78rem; font-weight: 600; }
+  .focus-day-label.sat { color: #1e40af; }
+  .focus-day-label.sun { color: #991b1b; }
+  .pattern-badge { font-size: .72rem; padding: 1px 6px; border-radius: 10px;
+                   background: #e2e8f0; color: #475569; white-space: nowrap; }
+
   select.pattern-sel { font-size: .78rem; min-width: 140px; padding: 2px 4px; }
   .custom-time { display: none; gap: 4px; margin-top: 3px; }
   .custom-time input { width: 80px; font-size: .78rem; padding: 2px 4px; }
@@ -29,9 +37,182 @@
 <div class="page-header">
   <a href="{{ url_for('shifts.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
   <h1 class="fs-6">{{ period.start_date }} 〜 {{ period.end_date }}</h1>
-  <button form="shift-form" type="submit" class="btn btn-primary btn-sm ms-auto">
-    <i class="bi bi-floppy-fill"></i> 保存
+  <div class="ms-auto d-flex gap-2">
+    {% if emp_idx is none %}
+    <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=0) }}"
+       class="btn btn-outline-light btn-sm">
+      <i class="bi bi-person-fill me-1"></i>1人ずつ
+    </a>
+    <button form="shift-form" type="submit" class="btn btn-primary btn-sm">
+      <i class="bi bi-floppy-fill"></i> 保存
+    </button>
+    {% else %}
+    <a href="{{ url_for('shifts.input', period_id=period.id) }}"
+       class="btn btn-outline-light btn-sm">
+      <i class="bi bi-table me-1"></i>全員表示
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if emp_idx is not none and current_emp %}
+{# ══════════════════════════════════════════════════
+   1人フォーカスモード
+══════════════════════════════════════════════════ #}
+
+{# 進捗バー #}
+<div class="px-3 pt-2">
+  <div class="d-flex justify-content-between small text-muted mb-1">
+    <span>入力済み <strong>{{ filled_count }}</strong> / {{ employees|length }} 人</span>
+    <span>{{ emp_idx + 1 }} / {{ employees|length }}</span>
+  </div>
+  <div class="progress mb-2" style="height:6px">
+    <div class="progress-bar bg-success"
+         style="width:{{ (filled_count / employees|length * 100)|int }}%"></div>
+  </div>
+</div>
+
+{# 従業員ナビゲーション #}
+<div class="d-flex align-items-center gap-2 px-3 pb-2">
+  {% if prev_idx is not none %}
+  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=prev_idx) }}"
+     class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
+  {% else %}
+  <button class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-chevron-left"></i></button>
+  {% endif %}
+
+  <div class="flex-grow-1 text-center">
+    <strong class="fs-5">{{ current_emp.name }}</strong>
+    <span class="ms-2 small text-muted">
+      {{ '正社員' if current_emp.employment_type.value == 'full_time' else 'アルバイト' }}
+      {% if current_emp.primary_position %}
+        · {{ 'ホール' if current_emp.primary_position.value == 'hall' else 'キッチン' }}専任
+      {% endif %}
+    </span>
+  </div>
+
+  {% if next_idx is not none %}
+  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=next_idx) }}"
+     class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
+  {% else %}
+  <button class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-chevron-right"></i></button>
+  {% endif %}
+</div>
+
+{# 固定パターン参照 #}
+{% set fp_days = current_emp.fixed_patterns %}
+{% if fp_days %}
+<div class="px-3 pb-2">
+  <div class="small text-muted mb-1"><i class="bi bi-pin-fill me-1"></i>固定パターン（参考）</div>
+  <div class="d-flex flex-wrap gap-1">
+    {% for fp in fp_days %}
+    <span class="pattern-badge">
+      {{ DAY_JP[fp.day_of_week] }}:
+      {% if fp.breakfast and fp.dinner %}両方{% elif fp.breakfast %}朝食{% elif fp.dinner %}ディナー{% endif %}
+    </span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# 一括入力 #}
+<div class="px-3 pb-2 d-flex gap-2 align-items-center">
+  <span class="small text-muted">一括：</span>
+  <select id="bulk-pattern" class="form-select form-select-sm" style="max-width:160px">
+    <option value="">（休み）</option>
+    {% for p in patterns %}
+    <option value="{{ p.id }}">{{ p.label }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="btn btn-outline-secondary btn-sm"
+          onclick="applyBulk('{{ current_emp.id }}')">
+    全日に適用
   </button>
+</div>
+
+{# 入力フォーム #}
+<form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
+  <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
+  {% if next_idx is not none %}
+  <input type="hidden" name="next_emp_idx" value="{{ next_idx }}">
+  {% endif %}
+
+  <div class="px-3">
+    <div class="shift-grid">
+      <table class="table table-bordered table-sm mb-0">
+        <thead>
+          <tr>
+            {% for d in dates %}
+            {% set dow = d.weekday() %}
+            <th class="focus-day-col {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} text-center">
+              <div class="focus-day-label {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
+                {{ d.strftime('%m/%d') }}（{{ DAY_JP[dow] }}）
+              </div>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {% for d in dates %}
+            {% set req = req_map.get((current_emp.id, d|string)) %}
+            {% set dow = d.weekday() %}
+            <td class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} focus-day-col">
+              <select name="pattern_{{ current_emp.id }}_{{ d }}"
+                      id="sel_{{ current_emp.id }}_{{ d }}"
+                      class="form-select form-select-sm pattern-sel w-100"
+                      onchange="toggleCustom(this, '{{ current_emp.id }}_{{ d }}')">
+                <option value="">（休み）</option>
+                {% for p in patterns %}
+                <option value="{{ p.id }}"
+                  {{ 'selected' if req and req.pattern_id == p.id else '' }}>
+                  {{ p.label }}
+                </option>
+                {% endfor %}
+              </select>
+              <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
+                   style="{{ 'display:flex' if req and req.pattern_id == 'custom' else '' }}">
+                <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
+                       value="{{ req.custom_start if req and req.custom_start else '' }}"
+                       class="form-control form-control-sm">
+                <span class="align-self-center small">〜</span>
+                <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
+                       value="{{ req.custom_end if req and req.custom_end else '' }}"
+                       class="form-control form-control-sm">
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="px-3 pt-3 pb-4 d-flex gap-2">
+    <button type="submit" class="btn btn-primary flex-grow-1">
+      <i class="bi bi-floppy-fill me-1"></i>保存
+      {% if next_idx is not none %}して次へ →{% endif %}
+    </button>
+    {% if next_idx is none %}
+    <a href="{{ url_for('shifts.input', period_id=period.id) }}"
+       class="btn btn-outline-success">
+      <i class="bi bi-check2-all me-1"></i>完了
+    </a>
+    {% endif %}
+  </div>
+</form>
+
+{% else %}
+{# ══════════════════════════════════════════════════
+   全員グリッドモード（従来）
+══════════════════════════════════════════════════ #}
+
+{# 進捗 #}
+<div class="px-3 pt-2 pb-1 d-flex justify-content-between small text-muted">
+  <span>入力済み <strong>{{ filled_count }}</strong> / {{ employees|length }} 人</span>
+  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=0) }}" class="text-primary">
+    1人ずつ入力 →
+  </a>
 </div>
 
 <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
@@ -44,7 +225,7 @@
         {% set dow = d.weekday() %}
         <th class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} text-center">
           {{ d.strftime('%m/%d') }}<br>
-          <small>{{ ['月','火','水','木','金','土','日'][dow] }}</small>
+          <small>{{ DAY_JP[dow] }}</small>
         </th>
         {% endfor %}
       </tr>
@@ -52,7 +233,10 @@
     <tbody>
       {% for emp in employees %}
       <tr>
-        <td class="emp-col">{{ emp.name }}</td>
+        <td class="emp-col">
+          {{ emp.name }}
+          {% if emp.id in filled_emp_ids %}<span class="text-success ms-1" style="font-size:.7rem">✓</span>{% endif %}
+        </td>
         {% for d in dates %}
         {% set req = req_map.get((emp.id, d|string)) %}
         {% set dow = d.weekday() %}
@@ -86,12 +270,22 @@
   </table>
 </div>
 </form>
+{% endif %}
 {% endblock %}
+
 {% block scripts %}
 <script>
 function toggleCustom(sel, key) {
   const div = document.getElementById('custom_' + key);
   if (div) div.style.display = sel.value === 'custom' ? 'flex' : 'none';
+}
+
+function applyBulk(empId) {
+  const pattern = document.getElementById('bulk-pattern').value;
+  document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
+    sel.value = pattern;
+    toggleCustom(sel, sel.name.replace(`pattern_${empId}_`, empId + '_'));
+  });
 }
 </script>
 {% endblock %}
