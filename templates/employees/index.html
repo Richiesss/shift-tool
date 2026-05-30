@@ -20,11 +20,25 @@
     {% endif %}
   </form>
 
+  {% if not show_archive and not q %}
+  <p class="text-muted small mb-2">
+    <i class="bi bi-grip-vertical me-1"></i>左端のハンドルをドラッグして並び替えできます
+  </p>
+  {% endif %}
+
   <!-- 従業員一覧 -->
+  <div id="emp-list">
   {% for emp in employees %}
-  <div class="card mb-2 {% if not emp.is_active %}opacity-50{% endif %}">
+  <div class="card mb-2 {% if not emp.is_active %}opacity-50{% endif %}"
+       data-id="{{ emp.id }}">
     <div class="card-body py-2 px-3">
       <div class="d-flex align-items-center gap-2">
+        <!-- ドラッグハンドル（検索中・アーカイブ中は非表示） -->
+        {% if not show_archive and not q %}
+        <span class="drag-handle text-muted" style="cursor:grab;font-size:1.2rem;padding:4px 2px">
+          <i class="bi bi-grip-vertical"></i>
+        </span>
+        {% endif %}
         <div class="flex-grow-1">
           <div class="fw-semibold">{{ emp.name }}</div>
           <div class="text-muted small">
@@ -57,5 +71,45 @@
     従業員が登録されていません
   </div>
   {% endfor %}
+  </div>
+
+  <!-- 保存中インジケーター -->
+  <div id="order-saving" class="text-center small text-muted mt-2" style="display:none">
+    <span class="spinner-border spinner-border-sm me-1"></span>並び順を保存中…
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if not show_archive and not q %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+const saveIndicator = document.getElementById('order-saving');
+let saveTimer = null;
+
+Sortable.create(document.getElementById('emp-list'), {
+  handle: '.drag-handle',
+  animation: 150,
+  ghostClass: 'opacity-50',
+  onEnd() {
+    // デバウンス：連続操作後に1回だけ保存
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveOrder, 500);
+  }
+});
+
+function saveOrder() {
+  const ids = [...document.querySelectorAll('#emp-list [data-id]')]
+    .map(el => parseInt(el.dataset.id));
+  saveIndicator.style.display = 'block';
+  fetch('{{ url_for("employees.reorder") }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(ids)
+  }).finally(() => {
+    saveIndicator.style.display = 'none';
+  });
+}
+</script>
+{% endif %}
 {% endblock %}

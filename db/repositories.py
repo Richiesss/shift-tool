@@ -14,7 +14,7 @@ from cache import cache
 def get_all_employees(active_only: bool = True) -> list[Employee]:
     conn = get_connection()
     rows = conn.execute(
-        "SELECT * FROM employees" + (" WHERE is_active=1" if active_only else "") + " ORDER BY id"
+        "SELECT * FROM employees" + (" WHERE is_active=1" if active_only else "") + " ORDER BY display_order, id"
     ).fetchall()
     if not rows:
         conn.close()
@@ -95,6 +95,16 @@ def delete_employee(employee_id: int):
 def restore_employee(employee_id: int):
     conn = get_connection()
     conn.execute("UPDATE employees SET is_active=1 WHERE id=?", (employee_id,))
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_all_employees)
+
+
+def reorder_employees(ordered_ids: list[int]):
+    """ドラッグ&ドロップ後の並び順を保存する"""
+    conn = get_connection()
+    for i, emp_id in enumerate(ordered_ids):
+        conn.execute("UPDATE employees SET display_order=? WHERE id=?", (i, emp_id))
     conn.commit()
     conn.close()
     cache.delete_memoized(get_all_employees)

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
 from models.employee import Employee, FixedPattern
 from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot, DAY_OF_WEEK_LABELS
@@ -65,6 +65,15 @@ def update(emp_id):
     repo.save_employee(emp)
     flash(f"{emp.name} を更新しました", "success")
     return redirect(url_for("employees.index"))
+
+
+@bp.post("/reorder")
+def reorder():
+    ids = request.get_json()
+    if not isinstance(ids, list):
+        return jsonify({"ok": False, "error": "invalid"}), 400
+    repo.reorder_employees([int(i) for i in ids])
+    return jsonify({"ok": True})
 
 
 @bp.post("/<int:emp_id>/archive")
