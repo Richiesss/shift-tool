@@ -3,6 +3,28 @@ from db import repositories as repo
 from models.schedule import ShiftAssignment
 from utils.constants import TimeSlot, Position
 
+
+def _build_time_map(requests) -> dict:
+    """(employee_id, date, slot_value) → 時間文字列 のマップを生成"""
+    from utils.shift_patterns import PATTERN_MAP
+    time_map = {}
+    for r in requests:
+        # パターンから時間を決定
+        if r.pattern_id == "custom" and r.custom_start and r.custom_end:
+            t = f"{r.custom_start}〜{r.custom_end}"
+        elif r.pattern_id == "double":
+            t = "6:00〜23:00"
+        elif r.pattern_id:
+            p = PATTERN_MAP.get(r.pattern_id)
+            t = f"{p.start}〜{p.end}" if (p and p.start and p.end) else ""
+        else:
+            t = ""
+        if r.breakfast:
+            time_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = t
+        if r.dinner:
+            time_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = t
+    return time_map
+
 bp = Blueprint("schedule", __name__, url_prefix="/schedule")
 
 
@@ -35,6 +57,8 @@ def index(period_id):
 
     slot = request.args.get("slot", "breakfast")
     notes = repo.get_schedule_notes(period_id)
+    shift_requests = repo.get_shift_requests(period_id)
+    time_map = _build_time_map(shift_requests)
 
     return render_template(
         "schedule/index.html",
@@ -46,6 +70,7 @@ def index(period_id):
         asgn_map=asgn_map,
         slot=slot,
         notes=notes,
+        time_map=time_map,
         TimeSlot=TimeSlot,
         Position=Position,
     )

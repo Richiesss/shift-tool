@@ -4,7 +4,7 @@
 <style>
   .sched-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .sched-grid table { min-width: max-content; font-size: .82rem; }
-  .sched-grid th, .sched-grid td { white-space: nowrap; padding: .3rem .5rem; vertical-align: middle; }
+  .sched-grid th, .sched-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; min-width: 62px; }
   .sched-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
   .sched-grid thead th { background: #1e293b; color: white; }
   .sched-grid thead th.emp-col { background: #0f172a; }
@@ -105,9 +105,17 @@
           {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | list | first %}
           <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
             {% if emp_asgn %}
-              <span class="{{ 'chip-hall' if emp_asgn.position.value == 'hall' else 'chip-kitchen' }}">
-                {{ 'H' if emp_asgn.position.value == 'hall' else 'K' }}
-              </span>
+              {% set pos_label = 'H' if emp_asgn.position.value == 'hall' else 'K' %}
+              {% set chip_cls = 'chip-hall' if emp_asgn.position.value == 'hall' else 'chip-kitchen' %}
+              {% if emp_asgn.is_reinforcement and emp_asgn.reinf_start and emp_asgn.reinf_end %}
+                {% set t = emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end %}
+              {% else %}
+                {% set t = time_map.get((emp_asgn.employee_id, ds, slot), '') %}
+              {% endif %}
+              <span class="{{ chip_cls }}">{{ pos_label }}</span>
+              {% if t %}
+              <div style="font-size:.65rem;color:#475569;line-height:1.2;margin-top:1px">{{ t }}</div>
+              {% endif %}
             {% else %}
               <span class="chip-empty">—</span>
             {% endif %}
