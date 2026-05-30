@@ -38,8 +38,13 @@ def input(period_id):
     req_map = {(r.employee_id, r.date): r for r in requests_list}
     dates = period.date_range()
 
-    # 1人フォーカスモード
-    emp_idx = request.args.get("emp_idx", type=int, default=None)
+    # 1人フォーカスモードをデフォルト（grid=1 で全員表示）
+    show_grid = request.args.get("grid", type=int, default=0)
+    if show_grid:
+        emp_idx = None
+    else:
+        emp_idx = request.args.get("emp_idx", type=int, default=0)
+
     current_emp = None
     prev_idx = next_idx = None
     if emp_idx is not None and 0 <= emp_idx < len(employees):

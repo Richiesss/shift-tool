@@ -39,7 +39,7 @@
   <h1 class="fs-6">{{ period.start_date }} 〜 {{ period.end_date }}</h1>
   <div class="ms-auto d-flex gap-2">
     {% if emp_idx is none %}
-    <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=0) }}"
+    <a href="{{ url_for('shifts.input', period_id=period.id) }}"
        class="btn btn-outline-light btn-sm">
       <i class="bi bi-person-fill me-1"></i>1人ずつ
     </a>
@@ -47,7 +47,7 @@
       <i class="bi bi-floppy-fill"></i> 保存
     </button>
     {% else %}
-    <a href="{{ url_for('shifts.input', period_id=period.id) }}"
+    <a href="{{ url_for('shifts.input', period_id=period.id, grid=1) }}"
        class="btn btn-outline-light btn-sm">
       <i class="bi bi-table me-1"></i>全員表示
     </a>
@@ -137,55 +137,54 @@
   <input type="hidden" name="next_emp_idx" value="{{ next_idx }}">
   {% endif %}
 
+  {# 日付を行に縦並び #}
   <div class="px-3">
-    <div class="shift-grid">
-      <table class="table table-bordered table-sm mb-0">
-        <thead>
-          <tr>
-            {% for d in dates %}
-            {% set dow = d.weekday() %}
-            <th class="focus-day-col {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} text-center">
-              <div class="focus-day-label {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
-                {{ d.strftime('%m/%d') }}（{{ DAY_JP[dow] }}）
-              </div>
-            </th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {% for d in dates %}
-            {% set req = req_map.get((current_emp.id, d|string)) %}
-            {% set dow = d.weekday() %}
-            <td class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} focus-day-col">
-              <select name="pattern_{{ current_emp.id }}_{{ d }}"
-                      id="sel_{{ current_emp.id }}_{{ d }}"
-                      class="form-select form-select-sm pattern-sel w-100"
-                      onchange="toggleCustom(this, '{{ current_emp.id }}_{{ d }}')">
-                <option value="">（休み）</option>
-                {% for p in patterns %}
-                <option value="{{ p.id }}"
-                  {{ 'selected' if req and req.pattern_id == p.id else '' }}>
-                  {{ p.label }}
-                </option>
-                {% endfor %}
-              </select>
-              <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
-                   style="{{ 'display:flex' if req and req.pattern_id == 'custom' else '' }}">
-                <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
-                       value="{{ req.custom_start if req and req.custom_start else '' }}"
-                       class="form-control form-control-sm">
-                <span class="align-self-center small">〜</span>
-                <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
-                       value="{{ req.custom_end if req and req.custom_end else '' }}"
-                       class="form-control form-control-sm">
-              </div>
-            </td>
-            {% endfor %}
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <table class="table table-sm table-bordered mb-0">
+      <tbody>
+        {% for d in dates %}
+        {% set req = req_map.get((current_emp.id, d|string)) %}
+        {% set dow = d.weekday() %}
+        {% set day_cls = 'sat' if dow == 5 else 'sun' if dow == 6 else '' %}
+        <tr class="{{ day_cls }}">
+          {# 日付ラベル #}
+          <th class="align-middle text-center {{ day_cls }}"
+              style="width:80px;white-space:nowrap">
+            <div class="focus-day-label {{ day_cls }}">
+              {{ d.strftime('%m/%d') }}
+            </div>
+            <div class="focus-day-label {{ day_cls }}" style="font-size:.72rem">
+              （{{ DAY_JP[dow] }}）
+            </div>
+          </th>
+          {# パターン選択 #}
+          <td class="{{ day_cls }}">
+            <select name="pattern_{{ current_emp.id }}_{{ d }}"
+                    id="sel_{{ current_emp.id }}_{{ d }}"
+                    class="form-select form-select-sm pattern-sel w-100"
+                    onchange="toggleCustom(this, '{{ current_emp.id }}_{{ d }}')">
+              <option value="">（休み）</option>
+              {% for p in patterns %}
+              <option value="{{ p.id }}"
+                {{ 'selected' if req and req.pattern_id == p.id else '' }}>
+                {{ p.label }}
+              </option>
+              {% endfor %}
+            </select>
+            <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
+                 style="{{ 'display:flex' if req and req.pattern_id == 'custom' else '' }}">
+              <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
+                     value="{{ req.custom_start if req and req.custom_start else '' }}"
+                     class="form-control form-control-sm">
+              <span class="align-self-center small px-1">〜</span>
+              <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
+                     value="{{ req.custom_end if req and req.custom_end else '' }}"
+                     class="form-control form-control-sm">
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
   <div class="px-3 pt-3 pb-4 d-flex gap-2">
@@ -210,7 +209,7 @@
 {# 進捗 #}
 <div class="px-3 pt-2 pb-1 d-flex justify-content-between small text-muted">
   <span>入力済み <strong>{{ filled_count }}</strong> / {{ employees|length }} 人</span>
-  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=0) }}" class="text-primary">
+  <a href="{{ url_for('shifts.input', period_id=period.id) }}" class="text-primary">
     1人ずつ入力 →
   </a>
 </div>
