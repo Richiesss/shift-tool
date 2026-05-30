@@ -56,6 +56,7 @@ def index(period_id):
         asgn_map.setdefault(a.date, {}).setdefault(a.time_slot.value, []).append(a)
 
     slot = request.args.get("slot", "breakfast")
+    pos  = request.args.get("pos",  "hall")
     notes = repo.get_schedule_notes(period_id)
     shift_requests = repo.get_shift_requests(period_id)
     time_map = _build_time_map(shift_requests)
@@ -69,6 +70,7 @@ def index(period_id):
         dates=dates,
         asgn_map=asgn_map,
         slot=slot,
+        pos=pos,
         notes=notes,
         time_map=time_map,
         TimeSlot=TimeSlot,

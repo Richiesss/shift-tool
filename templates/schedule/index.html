@@ -51,8 +51,18 @@
 
     <!-- 朝食/ディナー タブ -->
     <div class="btn-group btn-group-sm">
-      <a href="?slot=breakfast" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
-      <a href="?slot=dinner"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
+      <a href="?slot=breakfast&pos={{ pos }}" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
+      <a href="?slot=dinner&pos={{ pos }}"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
+    </div>
+
+    <!-- ホール/キッチン タブ -->
+    <div class="btn-group btn-group-sm">
+      <a href="?slot={{ slot }}&pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
+        <i class="bi bi-people me-1"></i>ホール
+      </a>
+      <a href="?slot={{ slot }}&pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
+        <i class="bi bi-fire me-1"></i>キッチン
+      </a>
     </div>
 
     {% if period.status == 'draft' %}
@@ -102,11 +112,11 @@
           {% set ds = d|string %}
           {% set dow = d.weekday() %}
           {% set day_assignments = asgn_map.get(ds, {}).get(slot, []) %}
-          {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | list | first %}
+          {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
           <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
             {% if emp_asgn %}
-              {% set pos_label = 'H' if emp_asgn.position.value == 'hall' else 'K' %}
-              {% set chip_cls = 'chip-hall' if emp_asgn.position.value == 'hall' else 'chip-kitchen' %}
+              {% set pos_label = 'H' if pos == 'hall' else 'K' %}
+              {% set chip_cls = 'chip-hall' if pos == 'hall' else 'chip-kitchen' %}
               {% if emp_asgn.is_reinforcement and emp_asgn.reinf_start and emp_asgn.reinf_end %}
                 {% set t = emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end %}
               {% else %}
@@ -128,9 +138,11 @@
   </div>
 
   <!-- 凡例 -->
-  <div class="d-flex gap-3 mt-2 small text-muted">
-    <span><span class="chip-hall">H</span> ホール</span>
-    <span><span class="chip-kitchen">K</span> キッチン</span>
+  <div class="d-flex gap-3 mt-2 small text-muted flex-wrap">
+    <span><span class="chip-hall">H</span> ホール出勤</span>
+    <span><span class="chip-kitchen">K</span> キッチン出勤</span>
+    <span class="text-secondary">— 該当なし</span>
+    <span class="ms-auto">表示中：{{ '朝食' if slot == 'breakfast' else 'ディナー' }} / {{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
   </div>
   {% endif %}
 </div>
