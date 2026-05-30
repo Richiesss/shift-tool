@@ -9,6 +9,7 @@ from utils.constants import (
     TimeSlot, Position, SkillLevel, EmploymentType, PrimaryPosition,
     LATE_NIGHT_START
 )
+from utils.solver_logger import logger
 
 
 @dataclass
@@ -109,6 +110,23 @@ def solve(
 
     active_employees = [e for e in employees if e.is_active]
 
+    # ── ログ: 入力サマリー ────────────────────────────────────────────────
+    logger.info("=" * 60)
+    logger.info(f"[SOLVE START] period_id={period.id}  {period.start_date} 〜 {period.end_date}")
+    logger.info(f"  日数={len(date_strs)}  有効従業員={len(active_employees)}  希望レコード={len(requests)}")
+    logger.info(f"  config: cost={config.cost_scale} pt_pref={config.pt_pref_scale} "
+                f"double={config.double_penalty_scale} balance={config.balance_scale} "
+                f"late_night={config.late_night_scale}")
+    ft_count = sum(1 for e in active_employees if e.employment_type == EmploymentType.FULL_TIME)
+    pt_count = len(active_employees) - ft_count
+    always_b = sum(1 for e in active_employees if e.always_available_breakfast)
+    always_d = sum(1 for e in active_employees if e.always_available_dinner)
+    logger.info(f"  正社員={ft_count}  アルバイト={pt_count}  "
+                f"常時出勤可(朝)={always_b}  常時出勤可(夜)={always_d}")
+    req_counts = {"breakfast": sum(1 for k in req_map if k[2] == TimeSlot.BREAKFAST.value),
+                  "dinner":    sum(1 for k in req_map if k[2] == TimeSlot.DINNER.value)}
+    logger.info(f"  req_map: 朝食希望={req_counts['breakfast']}件  ディナー希望={req_counts['dinner']}件")
+
     # DB から制約・予約客数・アプリ設定を読み込む
     from db import repositories as repo
     shift_constraints      = repo.get_shift_constraints()
@@ -122,6 +140,54 @@ def solve(
     except Exception:
         reserv_thresh_b = 100; reserv_extra_b = 1
         reserv_thresh_d = 25;  reserv_extra_d = 1
+
+    # ── ログ: 制約設定 & 充足前チェック ──────────────────────────────────
+    logger.info("  [制約設定]")
+    for (slot, pos), c in sorted(shift_constraints.items(), key=lambda x: (x[0][0].value, x[0][1].value)):
+        logger.info(f"    {slot.value}/{pos.value}: min={c['min']} max={c['max']} min_leader={c.get('min_leader',0)}")
+    for (band, pos), c in sorted(band_constraints.items()):
+        if c.get("min", 0) > 0 or c.get("min_leader", 0) > 0:
+            logger.info(f"    band {band}/{pos}: min={c.get('min',0)} min_leader={c.get('min_leader',0)}")
+    logger.info("  [充足前チェック] (各日×スロット×ポジションの利用可能人数 vs 必要最低数)")
+    shortage_days: list[str] = []
+    for ds in date_strs:
+        rc = reservation_counts.get(ds, {})
+        for slot in slots:
+            for pos in positions:
+                c = shift_constraints.get((slot, pos))
+                if not c:
+                    continue
+                base_min = c["min"]
+                if slot == TimeSlot.BREAKFAST and rc.get("breakfast", 0) >= reserv_thresh_b > 0:
+                    base_min += reserv_extra_b
+                elif slot == TimeSlot.DINNER and rc.get("dinner", 0) >= reserv_thresh_d > 0:
+                    base_min += reserv_extra_d
+                avail = []
+                for e in active_employees:
+                    if slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
+                        ok = ds not in e.fixed_unavailable_dates
+                    elif slot == TimeSlot.DINNER and e.always_available_dinner:
+                        ok = ds not in e.fixed_unavailable_dates
+                    else:
+                        ok = req_map.get((e.id, ds, slot.value), False)
+                    if not ok:
+                        continue
+                    if e.primary_position is not None and not e.can_work_both_positions:
+                        if e.primary_position.value != pos.value:
+                            continue
+                    avail.append(e)
+                leaders = [e for e in avail if e.is_leader(pos.value)]
+                min_ldr = c.get("min_leader", 0)
+                ok_staff  = len(avail) >= base_min
+                ok_leader = len(leaders) >= min_ldr
+                if not ok_staff or not ok_leader:
+                    msg = (f"    NG  {ds} {slot.value}/{pos.value}: "
+                           f"利用可={len(avail)}(必要{base_min})  "
+                           f"リーダー={len(leaders)}(必要{min_ldr})")
+                    logger.warning(msg)
+                    shortage_days.append(msg)
+    if not shortage_days:
+        logger.info("    → 全日程で最低人数を満たせる見込み")
 
     # ── 決定変数 ────────────────────────────────────────────────────────
     # assign[e_id][date_str][slot][pos] = BoolVar
@@ -420,14 +486,30 @@ def solve(
     solver.parameters.max_time_in_seconds = 25.0
     solver.parameters.num_search_workers = 2
     solver.parameters.log_search_progress = False
+    logger.info(f"  [CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s "
+                f"workers={solver.parameters.num_search_workers}")
     status = solver.solve(model, progress_callback) if progress_callback else solver.solve(model)
 
     elapsed = time.time() - t0
     status_name = solver.status_name(status)
 
+    logger.info(f"  [CP-SAT 求解完了] status={status_name}  wall={elapsed:.2f}s  "
+                f"branches={solver.num_branches()}  conflicts={solver.num_conflicts()}")
+
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        try:
+            obj_val = int(solver.objective_value)
+            logger.info(f"  objective={obj_val}")
+        except Exception:
+            pass
         result_assignments = _extract_assignments(solver, assign, active_employees, date_strs, slots, positions)
+        _log_assignment_summary(result_assignments, date_strs)
         _check_warnings(result_assignments, date_strs, warnings)
+        if warnings:
+            for w in warnings:
+                logger.warning(f"  [警告] {w}")
+        logger.info(f"[SOLVE END] status='{status_name}'  assignments={len(result_assignments)}  "
+                    f"warnings={len(warnings)}  time={elapsed:.2f}s")
         return SolveResult(
             status="optimal" if status == cp_model.OPTIMAL else "feasible",
             assignments=result_assignments,
@@ -436,18 +518,28 @@ def solve(
             solve_time_sec=elapsed,
         )
     else:
+        logger.error(f"  [INFEASIBLE/UNKNOWN] status={status_name} → フェーズ2へ移行")
         # 実行不可能 → 制約違反の診断メッセージを収集
         errs = _diagnose_infeasible(active_employees, date_strs, req_map)
+        for e in errs:
+            logger.error(f"  [診断] {e}")
 
         # フェーズ2開始を通知
         _notify_phase2(period_id or (progress_callback._period_id if progress_callback else None))
 
         # ベストエフォート生成: 人数・リーダー制約をソフト化して再実行
+        logger.info("  [フェーズ2] ベストエフォート求解開始")
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
             req_map, req_hours, config, shift_constraints
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
+        _log_assignment_summary(best_assignments, date_strs)
+        if best_warnings:
+            for w in best_warnings:
+                logger.warning(f"  [警告] {w}")
+        logger.info(f"[SOLVE END] status='best_effort'  assignments={len(best_assignments)}  "
+                    f"warnings={len(best_warnings)}  errors={len(errs)}  time={time.time()-t0:.2f}s")
 
         return SolveResult(
             status="feasible",   # ベストエフォートなので feasible 扱い
@@ -456,6 +548,22 @@ def solve(
             errors=errs,         # どこが不足しているかを表示
             solve_time_sec=time.time() - t0,
         )
+
+
+def _log_assignment_summary(assignments, date_strs):
+    """日×スロット×ポジションごとの配置人数をログ出力"""
+    from collections import defaultdict
+    count = defaultdict(int)
+    for a in assignments:
+        count[(a.date, a.time_slot.value, a.position.value)] += 1
+    logger.info("  [配置サマリー]")
+    for ds in date_strs:
+        parts = []
+        for slot in TimeSlot:
+            for pos in Position:
+                n = count[(ds, slot.value, pos.value)]
+                parts.append(f"{slot.value[0].upper()}/{pos.value[0].upper()}={n}")
+        logger.info(f"    {ds}: {' '.join(parts)}")
 
 
 def _notify_phase2(period_id):
@@ -612,12 +720,17 @@ def _solve_best_effort(
     solver.parameters.max_time_in_seconds = 15.0
     solver.parameters.num_search_workers = 2
     solver.parameters.log_search_progress = False
+    logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s")
     status = solver.solve(model)
+    status_name = solver.status_name(status)
+    logger.info(f"  [フェーズ2 CP-SAT 求解完了] status={status_name}  "
+                f"branches={solver.num_branches()}  conflicts={solver.num_conflicts()}")
 
     warnings: list[str] = []
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return _extract_assignments(solver, assign, active_employees, date_strs, slots, positions), warnings
     # フォールバック: 全員不在
+    logger.error("  [フェーズ2 FAILED] ベストエフォート生成にも失敗")
     return [], ["⚠️ ベストエフォート生成にも失敗しました。希望シフトの入力状況を確認してください。"]
 
 
