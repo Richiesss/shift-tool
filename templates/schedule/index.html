@@ -17,6 +17,14 @@
   .sched-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .sat td, .sat th { background: #eff6ff !important; }
   .sun td, .sun th { background: #fff1f2 !important; }
+  /* 人員不足の日付ヘッダー */
+  .sched-grid thead th.short-staff  { background: #991b1b !important; color: #fef2f2 !important; }
+  .sched-grid thead th.short-leader { background: #92400e !important; color: #fffbeb !important; }
+  .count-badge { font-size: .65rem; font-weight: 700; border-radius: 3px;
+                 padding: 0 3px; display: inline-block; margin-top: 2px; }
+  .count-ok     { background: #bbf7d0; color: #166534; }
+  .count-short  { background: #fecaca; color: #991b1b; }
+  .count-leader { background: #fde68a; color: #92400e; }
   /* 土日ヘッダーの文字色：薄背景に白はNG → 濃色に上書き */
   .sched-grid thead th.sat { color: #1e40af !important; }
   .sched-grid thead th.sun { color: #991b1b !important; }
@@ -94,6 +102,43 @@
   </div>
   {% endif %}
 
+  {# ── 人員不足サマリーバナー ── #}
+  {% set shortage_items = [] %}
+  {% for d in dates %}
+    {% set ds = d.isoformat() %}
+    {% set dow_lbl = ['月','火','水','木','金','土','日'][d.weekday()] %}
+    {% set dlabel = d.strftime('%m/%d') + '(' + dow_lbl + ')' %}
+    {% for sv, sl_name in [('breakfast','朝食'), ('dinner','ディナー')] %}
+      {% for pv, pos_name in [('hall','ホール'), ('kitchen','キッチン')] %}
+        {% set st = staffing.get((ds, sv, pv), {}) %}
+        {% if st.short_staff %}
+          {% set _ = shortage_items.append(dlabel ~ ' ' ~ sl_name ~ ' ' ~ pos_name ~ '：' ~ st.count ~ '名（最低' ~ st.min ~ '名必要）') %}
+        {% elif st.short_leader %}
+          {% set _ = shortage_items.append(dlabel ~ ' ' ~ sl_name ~ ' ' ~ pos_name ~ '：リーダー' ~ st.leaders ~ '名（最低' ~ st.min_leader ~ '名必要）') %}
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  {% endfor %}
+  {% if shortage_items %}
+  <div class="alert alert-warning alert-dismissible fade show mb-3 p-2" role="alert">
+    <div class="d-flex align-items-center gap-2 mb-1" data-bs-toggle="collapse"
+         data-bs-target="#shortage-list" style="cursor:pointer">
+      <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+      <strong>{{ shortage_items|length }} 件の人員不足があります</strong>
+      <i class="bi bi-chevron-down ms-auto small"></i>
+    </div>
+    <div class="collapse" id="shortage-list">
+      <ul class="mb-0 ps-3 small mt-1">
+        {% for item in shortage_items %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <button type="button" class="btn-close btn-sm position-absolute top-0 end-0 m-2"
+            data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
   <!-- シフトグリッド -->
   <div class="sched-grid">
     <table class="table table-bordered table-sm mb-0">
@@ -102,9 +147,15 @@
           <th class="emp-col">名前</th>
           {% for d in dates %}
           {% set dow = d.weekday() %}
-          <th class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
+          {% set st = staffing.get((d.isoformat(), slot, pos), {}) %}
+          {% set hdr_cls = 'short-staff' if st.get('short_staff') else 'short-leader' if st.get('short_leader') else '' %}
+          <th class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} {{ hdr_cls }}">
             {{ d.strftime('%m/%d') }}<br>
             <small>{{ ['月','火','水','木','金','土','日'][dow] }}</small>
+            {% if st %}
+            {% set badge_cls = 'count-short' if st.short_staff else 'count-leader' if st.short_leader else 'count-ok' %}
+            <span class="count-badge {{ badge_cls }}">{{ st.count }}/{{ st.min }}</span>
+            {% endif %}
           </th>
           {% endfor %}
         </tr>

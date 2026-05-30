@@ -1,7 +1,47 @@
+from collections import defaultdict
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
 from models.schedule import ShiftAssignment
 from utils.constants import TimeSlot, Position
+
+
+def _compute_staffing(assignments, employees, dates, constraints) -> dict:
+    """
+    各日×スロット×ポジションの人員充足状況を計算して返す。
+
+    返り値: {(date_str, slot_val, pos_val): {
+        count, min, leaders, min_leader, short_staff, short_leader
+    }}
+    """
+    emp_map = {e.id: e for e in employees}
+    count_map  = defaultdict(int)
+    leader_map = defaultdict(int)
+    for a in assignments:
+        key = (a.date, a.time_slot.value, a.position.value)
+        count_map[key] += 1
+        e = emp_map.get(a.employee_id)
+        if e and e.is_leader(a.position.value):
+            leader_map[key] += 1
+
+    result = {}
+    for d in dates:
+        ds = d.isoformat()
+        for slot in TimeSlot:
+            for pos in Position:
+                c = constraints.get((slot, pos), {})
+                min_s = c.get("min", 0)
+                min_l = c.get("min_leader", 0)
+                cnt   = count_map[(ds, slot.value, pos.value)]
+                ldrs  = leader_map[(ds, slot.value, pos.value)]
+                result[(ds, slot.value, pos.value)] = {
+                    "count":        cnt,
+                    "min":          min_s,
+                    "leaders":      ldrs,
+                    "min_leader":   min_l,
+                    "short_staff":  cnt < min_s,
+                    "short_leader": min_l > 0 and ldrs < min_l,
+                }
+    return result
 
 
 def _build_time_map(requests) -> dict:
@@ -61,6 +101,11 @@ def index(period_id):
     shift_requests = repo.get_shift_requests(period_id)
     time_map = _build_time_map(shift_requests)
 
+    # 人員充足チェック
+    all_employees = repo.get_all_employees(active_only=True)
+    constraints   = repo.get_shift_constraints()
+    staffing      = _compute_staffing(assignments, all_employees, dates, constraints)
+
     # ポジションタブでメンバーを絞り込む
     # 兼任（primary_position=None or can_work_both_positions=True）は両タブに表示
     filtered_employees = [
@@ -82,6 +127,7 @@ def index(period_id):
         pos=pos,
         notes=notes,
         time_map=time_map,
+        staffing=staffing,
         TimeSlot=TimeSlot,
         Position=Position,
     )
