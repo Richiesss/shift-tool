@@ -1,3 +1,4 @@
+import calendar
 from datetime import date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from db import repositories as repo
@@ -15,13 +16,22 @@ def index():
 
 @bp.post("/period/new")
 def new_period():
-    start_str = request.form.get("start_date", "")
-    try:
-        start = date.fromisoformat(start_str)
-    except ValueError:
-        flash("日付が不正です", "error")
+    year  = request.form.get("year",  type=int)
+    month = request.form.get("month", type=int)
+    half  = request.form.get("half", "first")  # "first" or "second"
+
+    if not year or not month or month < 1 or month > 12:
+        flash("年月が不正です", "error")
         return redirect(url_for("shifts.index"))
-    end = start + timedelta(days=13)
+
+    last_day = calendar.monthrange(year, month)[1]
+    if half == "first":
+        start = date(year, month, 1)
+        end   = date(year, month, 15)
+    else:
+        start = date(year, month, 16)
+        end   = date(year, month, last_day)
+
     period = SchedulePeriod(id=None, start_date=str(start), end_date=str(end))
     period = repo.save_period(period)
     return redirect(url_for("shifts.input", period_id=period.id))

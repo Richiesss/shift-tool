@@ -9,11 +9,30 @@
   <div class="card mb-3">
     <div class="card-body">
       <h6 class="card-title text-muted mb-3">新しい期間を作成</h6>
-      <form method="post" action="{{ url_for('shifts.new_period') }}" class="d-flex gap-2">
-        <input type="date" name="start_date" class="form-control" required>
-        <button class="btn btn-primary text-nowrap">作成</button>
+      <form method="post" action="{{ url_for('shifts.new_period') }}" id="new-period-form">
+        <!-- 年月セレクター -->
+        <div class="d-flex gap-2 mb-3">
+          <select name="year" id="sel-year" class="form-select" onchange="updatePreview()"></select>
+          <select name="month" id="sel-month" class="form-select" onchange="updatePreview()">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}">{{ m }}月</option>
+            {% endfor %}
+          </select>
+        </div>
+        <!-- 前半・後半 -->
+        <div class="d-grid gap-2">
+          <button type="submit" name="half" value="first"
+                  class="btn btn-outline-primary d-flex align-items-center justify-content-between px-3">
+            <span><i class="bi bi-calendar-week me-2"></i>前半</span>
+            <span id="preview-first" class="text-muted small"></span>
+          </button>
+          <button type="submit" name="half" value="second"
+                  class="btn btn-outline-primary d-flex align-items-center justify-content-between px-3">
+            <span><i class="bi bi-calendar-week me-2"></i>後半</span>
+            <span id="preview-second" class="text-muted small"></span>
+          </button>
+        </div>
       </form>
-      <div class="text-muted small mt-1">開始日から 14 日間の期間が作成されます</div>
     </div>
   </div>
 
@@ -37,4 +56,39 @@
   <div class="text-center text-muted py-4">期間がありません</div>
   {% endfor %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const today = new Date();
+  const yearSel  = document.getElementById('sel-year');
+  const monthSel = document.getElementById('sel-month');
+
+  // 年セレクター：今年 ±1 年
+  for (let y = today.getFullYear() - 1; y <= today.getFullYear() + 1; y++) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '年';
+    if (y === today.getFullYear()) opt.selected = true;
+    yearSel.appendChild(opt);
+  }
+  monthSel.value = today.getMonth() + 1;
+
+  function lastDay(y, m) { return new Date(y, m, 0).getDate(); }
+  function fmt(y, m, d) {
+    return `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}`;
+  }
+
+  window.updatePreview = function () {
+    const y = parseInt(yearSel.value);
+    const m = parseInt(monthSel.value);
+    document.getElementById('preview-first').textContent
+      = fmt(y, m, 1) + ' 〜 ' + fmt(y, m, 15);
+    document.getElementById('preview-second').textContent
+      = fmt(y, m, 16) + ' 〜 ' + fmt(y, m, lastDay(y, m));
+  };
+
+  updatePreview();
+})();
+</script>
 {% endblock %}
