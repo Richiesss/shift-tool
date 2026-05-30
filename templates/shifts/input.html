@@ -17,6 +17,9 @@
   .shift-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .shift-grid .sat { background: #eff6ff; }
   .shift-grid .sun { background: #fff1f2; }
+  /* 土日ヘッダーの文字色：薄背景に白はNG → 濃色に上書き */
+  .shift-grid thead th.sat { color: #1e40af !important; }
+  .shift-grid thead th.sun { color: #991b1b !important; }
   select.pattern-sel { font-size: .78rem; min-width: 140px; padding: 2px 4px; }
   .custom-time { display: none; gap: 4px; margin-top: 3px; }
   .custom-time input { width: 80px; font-size: .78rem; padding: 2px 4px; }

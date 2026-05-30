@@ -17,6 +17,9 @@
   .sched-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .sat td, .sat th { background: #eff6ff !important; }
   .sun td, .sun th { background: #fff1f2 !important; }
+  /* 土日ヘッダーの文字色：薄背景に白はNG → 濃色に上書き */
+  .sched-grid thead th.sat { color: #1e40af !important; }
+  .sched-grid thead th.sun { color: #991b1b !important; }
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: #cbd5e1; }
