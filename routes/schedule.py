@@ -61,11 +61,20 @@ def index(period_id):
     shift_requests = repo.get_shift_requests(period_id)
     time_map = _build_time_map(shift_requests)
 
+    # ポジションタブでメンバーを絞り込む
+    # 兼任（primary_position=None or can_work_both_positions=True）は両タブに表示
+    filtered_employees = [
+        e for e in employees
+        if e.primary_position is None
+        or e.can_work_both_positions
+        or e.primary_position.value == pos
+    ]
+
     return render_template(
         "schedule/index.html",
         period=period,
         periods=periods,
-        employees=employees,
+        employees=filtered_employees,
         emp_map=emp_map,
         dates=dates,
         asgn_map=asgn_map,
