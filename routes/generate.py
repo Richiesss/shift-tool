@@ -53,7 +53,7 @@ def run():
         with app.app_context():
             try:
                 cb = SolveProgressCallback(period_id, max_time=25.0)
-                result = solve(period, employees, requests_list, config, progress_callback=cb)
+                result = solve(period, employees, requests_list, config, progress_callback=cb, period_id=period_id)
                 if result.status in ("optimal", "feasible"):
                     repo.save_assignments(period_id, result.assignments)
                     msg = f"{result.status},{result.solve_time_sec:.1f}"
@@ -85,8 +85,12 @@ def status(period_id):
     msg = gen.get("message", "")
     elapsed = 0.0
     solutions = 0
-    if gen["status"] == "generating" and msg.startswith("progress:"):
+    phase = 1
+    obj = -1
+    if gen["status"] == "generating" and ("progress:" in msg or "phase:" in msg):
         parts = dict(kv.split(":") for kv in msg.split(",") if ":" in kv)
         elapsed = float(parts.get("elapsed", 0))
         solutions = int(parts.get("solutions", 0))
-    return jsonify({**gen, "elapsed": elapsed, "solutions": solutions})
+        phase = int(parts.get("phase", 1))
+        obj = int(parts.get("obj", -1))
+    return jsonify({**gen, "elapsed": elapsed, "solutions": solutions, "phase": phase, "obj": obj})

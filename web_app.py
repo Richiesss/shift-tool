@@ -17,6 +17,18 @@ def create_app():
 
     initialize_db()
 
+    # クラッシュ/リロード後に "generating" のままスタックした状態をリセット
+    try:
+        from db.database import Connection as _Conn
+        _c = _Conn()
+        _c.execute(
+            "UPDATE schedule_periods SET gen_status='idle', gen_message='' WHERE gen_status='generating'"
+        )
+        _c.commit()
+        _c.close()
+    except Exception:
+        pass
+
     from routes.employees import bp as emp_bp
     from routes.shifts import bp as shifts_bp
     from routes.generate import bp as gen_bp

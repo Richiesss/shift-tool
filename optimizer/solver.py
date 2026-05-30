@@ -52,10 +52,14 @@ class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
         self._last_update = elapsed
         pct = min(90, int(elapsed / self._max_time * 100))
         try:
+            obj = int(self.ObjectiveValue())
+        except Exception:
+            obj = -1
+        try:
             from db import repositories as repo
             repo.update_period_gen_status(
                 self._period_id, "generating",
-                f"progress:{pct},solutions:{self._n},elapsed:{elapsed:.1f}"
+                f"phase:1,progress:{pct},solutions:{self._n},elapsed:{elapsed:.1f},obj:{obj}"
             )
         except Exception:
             pass
@@ -67,6 +71,7 @@ def solve(
     requests: list[ShiftRequest],
     config: SolverConfig | None = None,
     progress_callback: SolveProgressCallback | None = None,
+    period_id: int | None = None,
 ) -> SolveResult:
     """
     シフトを最適化して SolveResult を返す。
@@ -434,6 +439,9 @@ def solve(
         # 実行不可能 → 制約違反の診断メッセージを収集
         errs = _diagnose_infeasible(active_employees, date_strs, req_map)
 
+        # フェーズ2開始を通知
+        _notify_phase2(period_id or (progress_callback._period_id if progress_callback else None))
+
         # ベストエフォート生成: 人数・リーダー制約をソフト化して再実行
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
@@ -448,6 +456,19 @@ def solve(
             errors=errs,         # どこが不足しているかを表示
             solve_time_sec=time.time() - t0,
         )
+
+
+def _notify_phase2(period_id):
+    if period_id is None:
+        return
+    try:
+        from db import repositories as repo
+        repo.update_period_gen_status(
+            period_id, "generating",
+            "phase:2,progress:0,solutions:0,elapsed:0,obj:-1"
+        )
+    except Exception:
+        pass
 
 
 def _extract_assignments(solver, assign, active_employees, date_strs, slots, positions) -> list[ShiftAssignment]:
@@ -502,7 +523,12 @@ def _solve_best_effort(
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                can_work = req_map.get((emp.id, ds, slot.value), False)
+                if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                    can_work = ds not in emp.fixed_unavailable_dates
+                elif slot == TimeSlot.DINNER and emp.always_available_dinner:
+                    can_work = ds not in emp.fixed_unavailable_dates
+                else:
+                    can_work = req_map.get((emp.id, ds, slot.value), False)
                 for pos in positions:
                     if not can_work:
                         model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
@@ -631,7 +657,7 @@ def _diagnose_infeasible(
 
     for ds in date_strs:
         d = date.fromisoformat(ds)
-        dow_labels = ["月", "火", "水", "木", "金", "日", "日"]
+        dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
         label = f"{d.month}/{d.day}({dow_labels[d.weekday()]})"
 
         for slot in TimeSlot:

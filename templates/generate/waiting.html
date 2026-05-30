@@ -6,25 +6,44 @@
 </div>
 
 <div class="content">
-  <div class="card mx-auto" style="max-width:480px">
+  <div class="card mx-auto" style="max-width:520px">
     <div class="card-body py-4 text-center">
       <div class="mb-3">
-        <i class="bi bi-cpu fs-1 text-primary"></i>
+        <i class="bi bi-cpu fs-1 text-primary" id="status-icon"></i>
       </div>
       <h6 class="mb-1">{{ period.start_date }} 〜 {{ period.end_date }}</h6>
-      <p class="text-muted small mb-4" id="status-msg">解を探索しています…</p>
+      <p class="mb-3" id="status-msg" style="min-height:1.4em">
+        <span class="text-muted small">モデルを構築しています…</span>
+      </p>
 
-      <!-- プログレスバー（実際の経過時間ベース） -->
-      <div class="progress mb-2" style="height:12px;border-radius:6px">
+      <!-- フェーズ表示 -->
+      <div class="d-flex justify-content-between align-items-center small mb-1">
+        <span id="phase-label" class="fw-semibold text-primary">
+          <i class="bi bi-search me-1"></i>ステップ 1/2: 最適解を探索中
+        </span>
+        <span id="pct-label" class="text-muted">0%</span>
+      </div>
+
+      <!-- プログレスバー -->
+      <div class="progress mb-2" style="height:14px;border-radius:7px">
         <div id="prog-bar"
              class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
              role="progressbar"
-             style="width:0%;transition:width 0.8s ease-out">
+             style="width:0%">
         </div>
       </div>
-      <div class="d-flex justify-content-between small text-muted">
+
+      <!-- 経過時間 & 発見数 -->
+      <div class="d-flex justify-content-between small text-muted mb-2">
         <span id="elapsed-label">待機中…</span>
         <span id="solution-label"></span>
+      </div>
+
+      <!-- スコア行（解が見つかったときだけ表示） -->
+      <div id="score-row" class="small p-2 rounded" style="display:none;background:var(--bs-light,#f8f9fa)">
+        <i class="bi bi-graph-down-arrow me-1 text-success"></i>
+        スコア最小化中: <strong id="score-label">–</strong>
+        <span id="score-hint" class="text-muted ms-1"></span>
       </div>
     </div>
   </div>
@@ -32,59 +51,170 @@
 
 <script>
 (function () {
-  const MAX_SEC = 25.0;
-  const periodId = {{ period.id }};
+  // ── 定数 ──────────────────────────────────────────────────────────────
+  const MAX_SEC_P1 = 25.0;   // フェーズ1の最大秒数
+  const MAX_SEC_P2 = 15.0;   // フェーズ2の最大秒数
+  const TIMEOUT_SEC = 90;    // これを超えたら異常とみなす
   const scheduleUrl = "{{ url_for('schedule.index', period_id=period.id) }}";
-  const bar = document.getElementById('prog-bar');
-  const elapsedLabel = document.getElementById('elapsed-label');
-  const solutionLabel = document.getElementById('solution-label');
-  const statusMsg = document.getElementById('status-msg');
 
-  function setBar(pct, animate) {
-    bar.style.transition = animate ? 'width 0.8s ease-out' : 'none';
-    bar.style.width = Math.min(100, pct) + '%';
+  // ── DOM ───────────────────────────────────────────────────────────────
+  const bar         = document.getElementById('prog-bar');
+  const pctLabel    = document.getElementById('pct-label');
+  const phaseLabel  = document.getElementById('phase-label');
+  const elapsedLabel= document.getElementById('elapsed-label');
+  const solutionLabel=document.getElementById('solution-label');
+  const statusMsg   = document.getElementById('status-msg');
+  const scoreRow    = document.getElementById('score-row');
+  const scoreLabel  = document.getElementById('score-label');
+  const scoreHint   = document.getElementById('score-hint');
+
+  // ── 状態 ──────────────────────────────────────────────────────────────
+  const pageStart = Date.now();       // ページ読み込み基点
+  let phase2Start = null;             // フェーズ2に入った wall-clock
+  let lastServerElapsed = 0;          // 最後にサーバーから受け取った elapsed
+  let lastServerAt = Date.now();      // そのときのクライアント時刻
+  let currentPhase = 1;
+  let prevObj = null;
+  let rafId = null;
+
+  // ── バー描画 ──────────────────────────────────────────────────────────
+  function setBar(pct) {
+    const p = Math.min(100, Math.max(0, pct));
+    bar.style.width = p + '%';
+    pctLabel.textContent = Math.round(p) + '%';
   }
 
+  // ── クライアント側アニメーション（60fps） ──────────────────────────────
+  function tick() {
+    const nowMs = Date.now();
+
+    if (currentPhase === 1) {
+      // サーバー elapsed + クライアント補間
+      const clientDelta = (nowMs - lastServerAt) / 1000;
+      const estimated = lastServerElapsed + clientDelta;
+      setBar(Math.min(95, (estimated / MAX_SEC_P1) * 100));
+      elapsedLabel.textContent = estimated.toFixed(1) + '秒経過 / 最大' + MAX_SEC_P1 + '秒';
+    } else {
+      // フェーズ2: phase2Start からの経過
+      if (phase2Start !== null) {
+        const p2elapsed = (nowMs - phase2Start) / 1000;
+        setBar(Math.min(95, (p2elapsed / MAX_SEC_P2) * 100));
+        elapsedLabel.textContent = p2elapsed.toFixed(1) + '秒経過 / 最大' + MAX_SEC_P2 + '秒';
+      }
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+
+  // ── サーバー更新を反映 ─────────────────────────────────────────────────
+  function applyGenerating(data) {
+    const newPhase = data.phase || 1;
+
+    if (newPhase === 2 && currentPhase === 1) {
+      // フェーズ切り替え
+      currentPhase = 2;
+      phase2Start = Date.now();
+      phaseLabel.innerHTML =
+        '<i class="bi bi-arrow-repeat me-1"></i>ステップ 2/2: ベストエフォートで再構築中';
+      phaseLabel.classList.replace('text-primary', 'text-warning');
+      bar.classList.replace('bg-primary', 'bg-warning');
+      statusMsg.innerHTML =
+        '<span class="text-warning small">制約を緩和して実行可能なシフトを生成しています…</span>';
+      solutionLabel.textContent = '';
+      scoreRow.style.display = 'none';
+      return;
+    }
+
+    if (newPhase === 1) {
+      lastServerElapsed = data.elapsed || 0;
+      lastServerAt = Date.now();
+
+      const n = data.solutions || 0;
+      if (n > 0) {
+        solutionLabel.textContent = '解 ' + n + ' 件発見';
+        if (n === 1) {
+          statusMsg.innerHTML =
+            '<span class="text-primary small fw-semibold">初期解を発見 — より良い解を探索中…</span>';
+        } else {
+          statusMsg.innerHTML =
+            '<span class="text-primary small fw-semibold">解を改善中（' + n + ' 回更新）</span>';
+        }
+      } else {
+        statusMsg.innerHTML =
+          '<span class="text-muted small">制約を満たす初期解を探索中…</span>';
+      }
+
+      // スコア表示
+      const obj = data.obj;
+      if (obj !== undefined && obj >= 0) {
+        scoreRow.style.display = '';
+        scoreLabel.textContent = obj.toLocaleString();
+        if (prevObj !== null && obj < prevObj) {
+          const diff = prevObj - obj;
+          scoreHint.textContent = '(▼' + diff.toLocaleString() + ' 改善)';
+        } else {
+          scoreHint.textContent = '';
+        }
+        prevObj = obj;
+      }
+    }
+  }
+
+  // ── 完了・エラー処理 ───────────────────────────────────────────────────
+  function finish(ok, msg) {
+    cancelAnimationFrame(rafId);
+    setBar(100);
+    bar.classList.remove('progress-bar-animated', 'progress-bar-striped',
+                          'bg-primary', 'bg-warning');
+    bar.style.transition = 'width 0.5s ease-out';
+    if (ok) {
+      bar.classList.add('bg-success');
+      phaseLabel.innerHTML = '<i class="bi bi-check-circle me-1"></i>生成完了';
+      phaseLabel.classList.remove('text-primary', 'text-warning');
+      phaseLabel.classList.add('text-success');
+      elapsedLabel.textContent = '完了';
+      statusMsg.innerHTML =
+        '<span class="text-success fw-semibold">シフト表に移動します…</span>';
+      setTimeout(() => { window.location.href = scheduleUrl; }, 800);
+    } else {
+      bar.classList.add('bg-danger');
+      phaseLabel.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>生成失敗';
+      phaseLabel.classList.remove('text-primary', 'text-warning');
+      phaseLabel.classList.add('text-danger');
+      elapsedLabel.textContent = 'エラー';
+      statusMsg.innerHTML =
+        '<span class="text-danger small">' + (msg || '生成に失敗しました') + '</span>';
+    }
+  }
+
+  function showTimeout() {
+    cancelAnimationFrame(rafId);
+    bar.classList.remove('progress-bar-animated', 'bg-primary', 'bg-warning');
+    bar.classList.add('bg-secondary');
+    phaseLabel.innerHTML = '<i class="bi bi-clock-history me-1"></i>応答なし';
+    phaseLabel.className = 'fw-semibold text-secondary';
+    elapsedLabel.textContent = 'タイムアウト';
+    statusMsg.innerHTML =
+      '<span class="text-muted small">ページを再読み込みして再度お試しください。</span>';
+  }
+
+  // ── ポーリング ────────────────────────────────────────────────────────
   function poll() {
+    if ((Date.now() - pageStart) / 1000 > TIMEOUT_SEC) {
+      showTimeout();
+      return;
+    }
+
     fetch("{{ url_for('generate.status', period_id=period.id) }}")
       .then(r => r.json())
       .then(data => {
         if (data.status === 'done') {
-          setBar(100, true);
-          bar.classList.remove('progress-bar-animated', 'bg-primary');
-          bar.classList.add('bg-success');
-          elapsedLabel.textContent = '完了';
-          statusMsg.textContent = '生成完了！シフト表に移動します…';
-          setTimeout(() => { window.location.href = scheduleUrl; }, 800);
-
+          finish(true);
         } else if (data.status === 'failed') {
-          setBar(100, false);
-          bar.classList.remove('progress-bar-animated', 'bg-primary');
-          bar.classList.add('bg-danger');
-          elapsedLabel.textContent = 'エラー';
-          statusMsg.textContent = 'エラー: ' + (data.message || '生成に失敗しました');
-
+          finish(false, data.message);
         } else {
-          // generating: elapsed はコールバックが初めて呼ばれてから届く
-          const elapsed = data.elapsed || 0;
-          if (elapsed > 0) {
-            const pct = Math.min(95, (elapsed / MAX_SEC) * 100);
-            setBar(pct, true);
-            elapsedLabel.textContent = elapsed.toFixed(1) + '秒経過 / 最大約' + MAX_SEC + '秒';
-          } else {
-            // まだコールバック未着火＝可能解すら見つかっていない
-            elapsedLabel.textContent = '解を探索中…';
-          }
-
-          if (data.solutions > 0) {
-            solutionLabel.textContent = '解 ' + data.solutions + ' 個発見';
-            if (data.solutions === 1) {
-              statusMsg.textContent = '初期解を発見。より良い解を探索中…';
-            } else {
-              statusMsg.textContent = '解を改善中…（' + data.solutions + ' 回更新）';
-            }
-          }
-
+          applyGenerating(data);
           setTimeout(poll, 2000);
         }
       })
