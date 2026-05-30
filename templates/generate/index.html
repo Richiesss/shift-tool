@@ -1,5 +1,22 @@
 {% extends "base.html" %}
 {% block title %}シフト自動生成 - SDU-Shift{% endblock %}
+{% block head %}
+<style>
+  .help-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #e0f2fe; color: #0369a1;
+    font-size: .68rem; font-weight: 700;
+    border: 1px solid #7dd3fc; cursor: pointer;
+    vertical-align: middle; margin-left: 5px;
+    flex-shrink: 0; line-height: 1;
+  }
+  .help-btn:hover { background: #bae6fd; }
+  /* ポップオーバーのスタイル調整 */
+  .popover { max-width: 280px; font-size: .82rem; }
+  .popover-header { font-size: .85rem; font-weight: 600; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-lightning-fill me-2"></i>シフト自動生成</h1>
@@ -32,21 +49,72 @@
     <!-- 優先度設定 -->
     <div class="card mb-3">
       <div class="card-body">
-        <h6 class="card-title text-muted mb-3">優先度設定</h6>
+        <h6 class="card-title text-muted mb-2">優先度設定</h6>
+        <p class="text-muted small mb-3">
+          各項目の重みを「低・中・高」で調整できます。
+          <span class="help-btn"
+                data-bs-toggle="popover"
+                data-bs-trigger="click"
+                data-bs-placement="bottom"
+                data-bs-title="優先度の見方"
+                data-bs-content="「高」にすると、その目標の達成をより重視してシフトを組みます。複数の目標が競合する場合は、重みが高いものが優先されます。">?</span>
+        </p>
+
+        {% set help_texts = {
+          'cost_scale': {
+            'title': '人件費最小化',
+            'body':  '総勤務時間の合計を少なくすることを優先します。「高」にすると短時間シフトのスタッフが優先配置され、人件費を抑えられます。ただし希望充当率が下がる場合があります。',
+          },
+          'pt_pref_scale': {
+            'title': 'アルバイト希望充当',
+            'body':  'アルバイトが希望した時間帯にできるだけ入れるよう配慮します。「高」にすると希望を尊重しやすくなりますが、人件費が増える可能性があります。',
+          },
+          'double_penalty_scale': {
+            'title': '正社員 両掛け持ち回避',
+            'body':  '正社員が同じ日に朝食とディナーの両方に入る「両掛け持ち」をできるだけ避けます。「高」にすると特定の人への連続勤務集中を防げます。',
+          },
+          'balance_scale': {
+            'title': '人員バランス均等化',
+            'body':  '各スタッフの総勤務回数が均等になるよう調整します。「高」にすると特定のスタッフに勤務が偏らないシフトになります。',
+          },
+          'late_night_scale': {
+            'title': '深夜勤務分散',
+            'body':  'ディナー時間帯（22時以降）の勤務が特定のスタッフに集中しないよう分散させます。「高」にすると深夜シフトが均等に割り振られます。',
+          },
+        } %}
+
         {% for key, label in [
-          ('cost_scale', '人件費最小化'),
-          ('pt_pref_scale', 'アルバイト希望充当'),
-          ('double_penalty_scale', '正社員両掛け持ち回避'),
-          ('balance_scale', '人員バランス均等化'),
-          ('late_night_scale', '深夜勤務分散'),
+          ('cost_scale',           '人件費最小化'),
+          ('pt_pref_scale',        'アルバイト希望充当'),
+          ('double_penalty_scale', '正社員 両掛け持ち回避'),
+          ('balance_scale',        '人員バランス均等化'),
+          ('late_night_scale',     '深夜勤務分散'),
         ] %}
-        <div class="mb-2">
-          <label class="form-label small fw-semibold mb-1">{{ label }}</label>
-          <select name="{{ key }}" class="form-select form-select-sm">
-            {% for v in priority_scale.keys() %}
-            <option value="{{ v }}" {{ 'selected' if v == '中' else '' }}>{{ v }}</option>
+        {% set h = help_texts[key] %}
+        <div class="mb-3">
+          <div class="d-flex align-items-center mb-1">
+            <label class="form-label small fw-semibold mb-0">{{ label }}</label>
+            <span class="help-btn"
+                  data-bs-toggle="popover"
+                  data-bs-trigger="click"
+                  data-bs-placement="auto"
+                  data-bs-title="{{ h.title }}"
+                  data-bs-content="{{ h.body }}">?</span>
+          </div>
+          <div class="d-flex gap-1">
+            {% for v, v_label, v_cls in [
+              ('低', '低　（重視しない）',    'btn-outline-secondary'),
+              ('中', '中　（バランス）',       'btn-outline-primary'),
+              ('高', '高　（最優先）',         'btn-outline-danger'),
+            ] %}
+            <label class="flex-grow-1 text-center" style="cursor:pointer">
+              <input type="radio" name="{{ key }}" value="{{ v }}"
+                     class="btn-check" autocomplete="off"
+                     {{ 'checked' if v == '中' else '' }}>
+              <span class="btn {{ v_cls }} btn-sm w-100">{{ v }}</span>
+            </label>
             {% endfor %}
-          </select>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -57,7 +125,33 @@
         <i class="bi bi-lightning-fill me-1"></i>シフトを生成する
       </button>
     </div>
-    <div class="text-muted small text-center mt-2">※ 生成には数十秒かかる場合があります</div>
+    <p class="text-muted small text-center mt-2">
+      ※ 生成には数十秒かかる場合があります
+    </p>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // すべてのポップオーバーを初期化
+  document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+    const pop = new bootstrap.Popover(el, { html: false, sanitize: true });
+    // 他のポップオーバーを開いたら残りを閉じる
+    el.addEventListener('shown.bs.popover', () => {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(other => {
+        if (other !== el) bootstrap.Popover.getInstance(other)?.hide();
+      });
+    });
+  });
+  // ポップオーバー外タップで閉じる
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-bs-toggle="popover"]') &&
+        !e.target.closest('.popover')) {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+        bootstrap.Popover.getInstance(el)?.hide();
+      });
+    }
+  });
+</script>
 {% endblock %}
