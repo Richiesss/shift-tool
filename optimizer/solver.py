@@ -728,8 +728,13 @@ def _solve_best_effort(
     logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s")
     status = solver.solve(model)
     status_name = solver.status_name(status)
+    try:
+        nb = solver.num_branches() if callable(solver.num_branches) else solver.num_branches
+        nc = solver.num_conflicts() if callable(solver.num_conflicts) else solver.num_conflicts
+    except Exception:
+        nb = nc = "?"
     logger.info(f"  [フェーズ2 CP-SAT 求解完了] status={status_name}  "
-                f"branches={solver.num_branches()}  conflicts={solver.num_conflicts()}")
+                f"branches={nb}  conflicts={nc}")
 
     warnings: list[str] = []
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
