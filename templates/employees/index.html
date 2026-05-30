@@ -36,8 +36,11 @@
         <div class="d-flex gap-1">
           <a href="{{ url_for('employees.edit', emp_id=emp.id) }}" class="btn btn-outline-primary btn-sm">編集</a>
           {% if emp.is_active %}
-          <form method="post" action="{{ url_for('employees.archive', emp_id=emp.id) }}" onsubmit="return confirm('アーカイブしますか？')">
-            <button class="btn btn-outline-danger btn-sm">削除</button>
+          <form method="post" action="{{ url_for('employees.archive', emp_id=emp.id) }}"
+                onsubmit="return confirm('{{ emp.name }} をアーカイブしますか？\n（後から復元できます）')">
+            <button class="btn btn-outline-secondary btn-sm">
+              <i class="bi bi-archive me-1"></i>アーカイブ
+            </button>
           </form>
           {% else %}
           <form method="post" action="{{ url_for('employees.restore', emp_id=emp.id) }}">

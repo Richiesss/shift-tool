@@ -86,6 +86,14 @@
     {% endif %}
   </div>
 
+  {% if not employees %}
+  <div class="alert alert-info mx-0 mb-3">
+    <i class="bi bi-info-circle me-2"></i>
+    表示するスタッフがいません。
+    <a href="{{ url_for('employees.index') }}" class="alert-link">スタッフ管理</a>からスタッフを登録してください。
+  </div>
+  {% endif %}
+
   <!-- シフトグリッド -->
   <div class="sched-grid">
     <table class="table table-bordered table-sm mb-0">
@@ -168,16 +176,26 @@ function editNote(el) {
   el.replaceWith(input); input.focus();
   function save() {
     const note = input.value.trim();
-    fetch(`/schedule/${periodId}/note`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({date, note})
-    });
     const span = document.createElement('span');
     span.className = 'note-cell d-block small text-muted';
     span.style.cssText = 'cursor:pointer;min-height:18px';
-    span.dataset.date = date; span.dataset.period = periodId;
+    span.dataset.date = date;
+    span.dataset.period = periodId;
     span.onclick = function(){ editNote(this); };
-    span.textContent = note; input.replaceWith(span);
+    span.textContent = note;
+    input.replaceWith(span);
+    fetch(`/schedule/${periodId}/note`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({date, note})
+    }).then(() => {
+      span.style.transition = 'background .15s';
+      span.style.background = '#bbf7d0';
+      setTimeout(() => { span.style.background = ''; }, 800);
+    }).catch(() => {
+      span.style.background = '#fecaca';
+      setTimeout(() => { span.style.background = ''; }, 1500);
+    });
   }
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
