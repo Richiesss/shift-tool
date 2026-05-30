@@ -60,8 +60,23 @@
    1人フォーカスモード
 ══════════════════════════════════════════════════ #}
 
+{# 名前検索 #}
+<div class="px-3 pt-2 pb-1 position-relative">
+  <div class="input-group input-group-sm">
+    <span class="input-group-text"><i class="bi bi-search"></i></span>
+    <input type="text" id="emp-search" class="form-control"
+           placeholder="スタッフ名で検索…" autocomplete="off"
+           oninput="filterEmps(this.value)" onfocus="showDropdown()"
+           onblur="setTimeout(hideDropdown,150)">
+  </div>
+  <div id="emp-dropdown"
+       class="position-absolute start-0 end-0 mx-3 bg-white border rounded shadow-sm"
+       style="display:none;z-index:9999;max-height:200px;overflow-y:auto">
+  </div>
+</div>
+
 {# 進捗バー #}
-<div class="px-3 pt-2">
+<div class="px-3 pt-1">
   <div class="d-flex justify-content-between small text-muted mb-1">
     <span>入力済み <strong>{{ filled_count }}</strong> / {{ employees|length }} 人</span>
     <span>{{ emp_idx + 1 }} / {{ employees|length }}</span>
@@ -285,6 +300,42 @@ function applyBulk(empId) {
     sel.value = pattern;
     toggleCustom(sel, sel.name.replace(`pattern_${empId}_`, empId + '_'));
   });
+}
+
+// ── 名前検索 ──────────────────────────────────────────
+const EMP_LIST = [
+  {% for e in employees %}
+  { name: {{ e.name | tojson }}, idx: {{ loop.index0 }} },
+  {% endfor %}
+];
+const BASE_URL = "{{ url_for('shifts.input', period_id=period.id) }}";
+
+function filterEmps(q) {
+  const dropdown = document.getElementById('emp-dropdown');
+  const hits = q.trim()
+    ? EMP_LIST.filter(e => e.name.includes(q.trim()))
+    : EMP_LIST;
+  renderDropdown(hits, dropdown);
+  dropdown.style.display = hits.length ? 'block' : 'none';
+}
+
+function showDropdown() {
+  const q = document.getElementById('emp-search').value;
+  filterEmps(q || '');
+}
+
+function hideDropdown() {
+  document.getElementById('emp-dropdown').style.display = 'none';
+}
+
+function renderDropdown(hits, dropdown) {
+  dropdown.innerHTML = hits.map(e =>
+    `<a href="${BASE_URL}?emp_idx=${e.idx}"
+        class="d-block px-3 py-2 text-decoration-none text-dark"
+        style="cursor:pointer"
+        onmouseover="this.style.background='#f1f5f9'"
+        onmouseout="this.style.background=''">${e.name}</a>`
+  ).join('');
 }
 </script>
 {% endblock %}
