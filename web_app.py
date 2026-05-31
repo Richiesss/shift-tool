@@ -8,7 +8,7 @@ from flask import Flask, g, session, redirect, url_for, request
 from flask_compress import Compress
 from cache import cache
 from db.database import initialize_db
-from auth import APP_PASSWORD
+from auth import APP_PASSWORD, SESSION_VERSION
 
 
 def create_app():
@@ -45,7 +45,8 @@ def create_app():
         exempt = {"auth.login", "auth.login_post", "static"}
         if request.endpoint in exempt:
             return
-        if not session.get("authenticated"):
+        if not session.get("authenticated") or session.get("sv") != SESSION_VERSION:
+            session.clear()
             return redirect(url_for("auth.login", next=request.path))
 
     from routes.employees import bp as emp_bp
