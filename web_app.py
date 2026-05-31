@@ -3,10 +3,12 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from flask import Flask, g
+from datetime import timedelta
+from flask import Flask, g, session, redirect, url_for, request
 from flask_compress import Compress
 from cache import cache
 from db.database import initialize_db
+from auth import APP_PASSWORD
 
 
 def create_app():
@@ -28,6 +30,23 @@ def create_app():
         _c.close()
     except Exception:
         pass
+
+    from routes.auth_routes import bp as auth_bp
+    app.register_blueprint(auth_bp)
+
+    # セッション有効期限：30日
+    app.permanent_session_lifetime = timedelta(days=30)
+
+    # 認証チェック（ログイン・静的ファイルは除外）
+    @app.before_request
+    def require_login():
+        if not APP_PASSWORD:
+            return  # パスワード未設定なら全開放
+        exempt = {"auth.login", "auth.login_post", "static"}
+        if request.endpoint in exempt:
+            return
+        if not session.get("authenticated"):
+            return redirect(url_for("auth.login", next=request.path))
 
     from routes.employees import bp as emp_bp
     from routes.shifts import bp as shifts_bp
