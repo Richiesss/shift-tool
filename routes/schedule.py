@@ -189,9 +189,11 @@ def stats(period_id):
         counts[a.employee_id]["total"] += 1
     cols = ["B/H","B/K","D/H","D/K"]
     col_labels = {"B/H":"朝食ホール","B/K":"朝食キッチン","D/H":"ディナーホール","D/K":"ディナーキッチン"}
+    col_totals = {c: sum(counts[e.id][c] for e in employees) for c in cols}
     return render_template("schedule/stats.html",
         period=period, employees=employees, counts=counts,
-        cols=cols, col_labels=col_labels,
+        cols=cols, col_labels=col_labels, col_totals=col_totals,
+        total_assignments=len(assignments),
         periods=repo.get_all_periods())
 
 

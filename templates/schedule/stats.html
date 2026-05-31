@@ -54,9 +54,9 @@
         <tr class="table-light fw-bold">
           <td class="text-start">合計</td>
           {% for c in cols %}
-          <td>{{ employees | map(attribute='id') | map('extract', counts) | map(attribute=c) | select | list | length }}</td>
+          <td>{{ col_totals[c] }}</td>
           {% endfor %}
-          <td>{{ assignments | length }}</td>
+          <td>{{ total_assignments }}</td>
         </tr>
       </tbody>
     </table>
