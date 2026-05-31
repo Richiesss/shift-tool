@@ -210,11 +210,11 @@
       <i class="bi bi-chevron-down shortage-chevron ms-auto"></i>
     </div>
     <div class="shortage-body" id="shortage-body" style="display:none">
-      {% for (slot_lbl, pos_lbl), chips in shortage_groups.items() %}
+      {% for group in shortage_groups %}
       <div class="shortage-row">
-        <span class="shortage-label">{{ slot_lbl }}<span class="shortage-sep">/</span>{{ pos_lbl }}</span>
+        <span class="shortage-label">{{ group.slot }}<span class="shortage-sep">/</span>{{ group.pos }}</span>
         <div class="shortage-chips">
-          {% for c in chips %}
+          {% for c in group.chips %}
           <span class="shortage-chip {{ 'chip-staff' if c.is_staff else 'chip-leader' }}"
                 title="{{ c.count }}名 / 最低{{ c.min }}名{% if not c.is_staff %}（リーダー{{ c.leaders }}名 / 最低{{ c.min_leader }}名）{% endif %}">
             {{ c.label }}

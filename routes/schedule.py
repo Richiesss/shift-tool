@@ -112,16 +112,15 @@ def index(period_id):
     _DAY_JP = ['月','火','水','木','金','土','日']
     _SLOTS  = [('breakfast','朝食'), ('dinner','ディナー')]
     _POSES  = [('hall','ホール'), ('kitchen','キッチン')]
-    shortage_groups = {}   # (slot_lbl, pos_lbl) -> list of chip dicts
+    _bucket = {}   # (slot_lbl, pos_lbl) -> list of chip dicts
     for d in dates:
         ds = d.isoformat()
-        dlabel = d.strftime('%-m/%-d') + '(' + _DAY_JP[d.weekday()] + ')'
+        dlabel = f"{d.month}/{d.day}({_DAY_JP[d.weekday()]})"
         for sv, sl in _SLOTS:
             for pv, pl in _POSES:
                 st = staffing.get((ds, sv, pv), {})
                 if st.get('short_staff') or st.get('short_leader'):
-                    key = (sl, pl)
-                    shortage_groups.setdefault(key, []).append({
+                    _bucket.setdefault((sl, pl), []).append({
                         'label':      dlabel,
                         'date':       ds,
                         'is_staff':   bool(st.get('short_staff')),
@@ -130,7 +129,12 @@ def index(period_id):
                         'leaders':    st.get('leaders', 0),
                         'min_leader': st.get('min_leader', 0),
                     })
-    total_shortage = sum(len(v) for v in shortage_groups.values())
+    # Jinja2 はネストしたタプル展開不可のためリスト化して渡す
+    shortage_groups = [
+        {'slot': sl, 'pos': pl, 'chips': chips}
+        for (sl, pl), chips in _bucket.items()
+    ]
+    total_shortage = sum(len(g['chips']) for g in shortage_groups)
 
     # ポジションタブでメンバーを絞り込む
     # 兼任（primary_position=None or can_work_both_positions=True）は両タブに表示
