@@ -1,6 +1,8 @@
+import logging
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from auth import APP_PASSWORD, SESSION_VERSION
 
+logger = logging.getLogger(__name__)
 bp = Blueprint("auth", __name__)
 
 
@@ -13,16 +15,18 @@ def login():
 
 @bp.post("/login")
 def login_post():
-    # 入力パスワードも strip して比較
     pwd = request.form.get("password", "").strip()
     next_url = request.args.get("next") or url_for("employees.index")
+    # デバッグログ（パスワード本体は出力しない）
+    logger.warning("LOGIN attempt: input_len=%d, expected_len=%d, match=%s",
+                   len(pwd), len(APP_PASSWORD), pwd == APP_PASSWORD)
     if APP_PASSWORD and pwd == APP_PASSWORD:
         session.clear()
         session["authenticated"] = True
         session["sv"] = SESSION_VERSION
         session.permanent = True
         return redirect(next_url)
-    flash("パスワードが違います", "error")
+    flash(f"パスワードが違います（入力: {len(pwd)}文字 / 設定: {len(APP_PASSWORD)}文字）", "error")
     return render_template("auth/login.html")
 
 
