@@ -76,6 +76,49 @@
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: #cbd5e1; }
+
+  /* ── 担当編集モーダル ── */
+  .asgn-modal-content {
+    background: #1e293b; color: white; border: none; border-radius: 16px;
+  }
+  .asgn-section {
+    padding: .65rem 0;
+    border-bottom: 1px solid #334155;
+  }
+  .asgn-section:last-child { border-bottom: none; }
+  .asgn-section-label {
+    font-size: .68rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: #64748b; margin-bottom: .55rem;
+  }
+  .asgn-pos-btn {
+    background: #0f172a; border: 1px solid #334155; color: #94a3b8;
+    border-radius: 10px; padding: .65rem .4rem; font-size: .82rem;
+    transition: all .15s; cursor: pointer;
+  }
+  .asgn-pos-btn:hover  { background: #1e40af; border-color: #1e40af; color: white; }
+  .asgn-pos-btn.hall   { background: #1d4ed8; border-color: #1d4ed8; color: white; }
+  .asgn-pos-btn.kitchen{ background: #15803d; border-color: #15803d; color: white; }
+  .reinf-pos-toggle .btn-check:checked + .btn-outline-primary {
+    background: #1d4ed8; color: white;
+  }
+  .reinf-pos-toggle .btn-check:checked + .btn-outline-success {
+    background: #15803d; color: white;
+  }
+  .reinf-time {
+    background: #0f172a; border-color: #334155; color: white; font-size: .9rem;
+  }
+  .reinf-time:focus {
+    background: #0f172a; color: white; border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56,189,248,.15);
+  }
+  .preset-chip {
+    display: inline-block; background: #334155; color: #94a3b8;
+    border-radius: 20px; padding: 2px 10px; font-size: .72rem;
+    cursor: pointer; transition: all .15s; user-select: none;
+  }
+  .preset-chip:hover, .preset-chip.active {
+    background: #38bdf8; color: #0f172a;
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -287,37 +330,73 @@
 
 <!-- 担当編集モーダル -->
 <div class="modal fade" id="assignModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h6 class="modal-title" id="assignModalTitle"></h6>
-        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+  <div class="modal-dialog modal-dialog-centered" style="max-width:340px">
+    <div class="modal-content asgn-modal-content">
+
+      <!-- ヘッダー -->
+      <div class="modal-header border-secondary py-2 px-3">
+        <div>
+          <div class="fw-semibold" id="asgn-name" style="font-size:.95rem"></div>
+          <div class="small text-muted" id="asgn-sub"></div>
+        </div>
+        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body p-2">
-        <div id="assign-btns" class="d-grid gap-2">
-          <button class="btn btn-outline-primary btn-sm" onclick="doAssign('hall')">
-            <i class="bi bi-people me-1"></i>ホール担当にする
-          </button>
-          <button class="btn btn-outline-success btn-sm" onclick="doAssign('kitchen')">
-            <i class="bi bi-fire me-1"></i>キッチン担当にする
-          </button>
-          <hr class="my-1">
-          <div class="small text-muted mb-1">応援（カスタム時間）</div>
-          <div class="d-flex gap-1 align-items-center">
-            <input type="time" id="reinf-start" class="form-control form-control-sm" style="width:50%">
-            <span class="small">〜</span>
-            <input type="time" id="reinf-end"   class="form-control form-control-sm" style="width:50%">
-          </div>
-          <div class="d-flex gap-1">
-            <button class="btn btn-outline-secondary btn-sm flex-grow-1" onclick="doReinf('hall')">H応援</button>
-            <button class="btn btn-outline-secondary btn-sm flex-grow-1" onclick="doReinf('kitchen')">K応援</button>
+
+      <div class="modal-body px-3 py-2">
+
+        <!-- ① 通常担当 -->
+        <div class="asgn-section">
+          <div class="asgn-section-label">通常担当</div>
+          <div class="d-flex gap-2">
+            <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-hall"
+                    onclick="doAssign('hall')">
+              <i class="bi bi-people-fill d-block mb-1" style="font-size:1.4rem"></i>ホール
+            </button>
+            <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-kitchen"
+                    onclick="doAssign('kitchen')">
+              <i class="bi bi-fire d-block mb-1" style="font-size:1.4rem"></i>キッチン
+            </button>
           </div>
         </div>
-        <div id="remove-btn" class="d-grid mt-2" style="display:none!important">
-          <button class="btn btn-outline-danger btn-sm" onclick="doRemove()">
+
+        <!-- ② 応援追加 -->
+        <div class="asgn-section">
+          <div class="asgn-section-label">応援で追加（カスタム時間）</div>
+
+          <!-- ポジション選択 -->
+          <div class="btn-group reinf-pos-toggle w-100 mb-2" role="group">
+            <input type="radio" class="btn-check" name="reinf-pos" id="rp-hall" value="hall" checked>
+            <label class="btn btn-outline-primary btn-sm" for="rp-hall">
+              <i class="bi bi-people me-1"></i>ホール
+            </label>
+            <input type="radio" class="btn-check" name="reinf-pos" id="rp-kitchen" value="kitchen">
+            <label class="btn btn-outline-success btn-sm" for="rp-kitchen">
+              <i class="bi bi-fire me-1"></i>キッチン
+            </label>
+          </div>
+
+          <!-- 時間入力 -->
+          <div class="small text-muted mb-1">時間帯
+            <span id="preset-chips" class="ms-2"></span>
+          </div>
+          <div class="d-flex align-items-center gap-1 mb-2">
+            <input type="time" id="reinf-start" class="form-control form-control-sm reinf-time">
+            <span class="text-muted small">〜</span>
+            <input type="time" id="reinf-end"   class="form-control form-control-sm reinf-time">
+          </div>
+
+          <button class="btn btn-primary w-100" onclick="doReinf()">
+            <i class="bi bi-person-plus me-1"></i>応援として追加
+          </button>
+        </div>
+
+        <!-- ③ 担当を外す（割当済みの場合のみ） -->
+        <div id="remove-section" class="asgn-section" style="display:none">
+          <button class="btn btn-outline-danger w-100 btn-sm" onclick="doRemove()">
             <i class="bi bi-x-circle me-1"></i>担当を外す
           </button>
         </div>
+
       </div>
     </div>
   </div>
@@ -406,20 +485,61 @@ function parseT(s) {
 }
 
 let _modal = null;
-let _cell  = null; // 現在操作中のセル
+let _cell  = null;
+
+// スロット別プリセット時間
+const SLOT_PRESETS = {
+  breakfast: [
+    { label: '全時間', start: '06:00', end: '11:00' },
+    { label: '早番',   start: '06:00', end: '09:00' },
+    { label: '遅番',   start: '09:00', end: '11:00' },
+  ],
+  dinner: [
+    { label: '全時間', start: '17:00', end: '22:00' },
+    { label: '早番',   start: '17:00', end: '20:00' },
+    { label: '遅番',   start: '19:00', end: '22:00' },
+  ],
+};
 
 function openAssignModal(cell) {
   _cell = cell;
-  const name = cell.dataset.empName;
-  const ds   = cell.dataset.date;
-  const slotJp = cell.dataset.slot === 'breakfast' ? '朝食' : 'ディナー';
-  document.getElementById('assignModalTitle').textContent = `${name}  ${ds.slice(5).replace('-','/')}（${slotJp}）`;
+  const { empName, date, slot, assigned, pos } = cell.dataset;
+  const slotJp = slot === 'breakfast' ? '朝食' : 'ディナー';
 
-  const assigned = cell.dataset.assigned === 'true';
-  document.getElementById('remove-btn').style.display = assigned ? 'grid' : 'none';
+  document.getElementById('asgn-name').textContent = empName;
+  document.getElementById('asgn-sub').textContent  =
+    date.slice(5).replace('-', '/') + '（' + slotJp + '）';
+
+  // 通常担当ボタン：現在の割当ポジションをハイライト
+  document.getElementById('btn-hall').className    =
+    'asgn-pos-btn flex-grow-1 text-center' + (pos === 'hall'    ? ' hall'    : '');
+  document.getElementById('btn-kitchen').className =
+    'asgn-pos-btn flex-grow-1 text-center' + (pos === 'kitchen' ? ' kitchen' : '');
+
+  // プリセットチップを生成
+  const presets = SLOT_PRESETS[slot] || [];
+  const chipsEl = document.getElementById('preset-chips');
+  chipsEl.innerHTML = presets.map(p =>
+    `<span class="preset-chip" onclick="applyPreset('${p.start}','${p.end}',this)">${p.label}</span>`
+  ).join(' ');
+
+  // デフォルトで全時間をセット
+  if (presets.length) applyPreset(presets[0].start, presets[0].end, null);
+
+  // 担当を外すボタン
+  document.getElementById('remove-section').style.display =
+    assigned === 'true' ? 'block' : 'none';
 
   if (!_modal) _modal = new bootstrap.Modal(document.getElementById('assignModal'));
   _modal.show();
+}
+
+function applyPreset(start, end, el) {
+  document.getElementById('reinf-start').value = start;
+  document.getElementById('reinf-end').value   = end;
+  // アクティブチップ切替
+  document.querySelectorAll('.preset-chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
 }
 
 function doAssign(pos) {
@@ -427,10 +547,17 @@ function doAssign(pos) {
   callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot, position: pos, action: 'add' });
 }
 
-function doReinf(pos) {
+function doReinf() {
   const start = document.getElementById('reinf-start').value;
   const end   = document.getElementById('reinf-end').value;
-  if (!start || !end) { alert('開始・終了時刻を入力してください'); return; }
+  if (!start || !end) {
+    document.getElementById('reinf-start').classList.add('is-invalid');
+    document.getElementById('reinf-end').classList.add('is-invalid');
+    return;
+  }
+  document.getElementById('reinf-start').classList.remove('is-invalid');
+  document.getElementById('reinf-end').classList.remove('is-invalid');
+  const pos = document.querySelector('input[name="reinf-pos"]:checked').value;
   const d = _cell.dataset;
   callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot, position: pos,
                action: 'add', is_reinforcement: true, reinf_start: start, reinf_end: end });
