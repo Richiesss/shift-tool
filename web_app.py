@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from datetime import timedelta
 from flask import Flask, g, session, redirect, url_for, request
 from flask_compress import Compress
+from flask_session import Session as FlaskSession
 from cache import cache
 from db.database import initialize_db
 from auth import APP_PASSWORD, SESSION_VERSION
@@ -16,6 +17,21 @@ def create_app():
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
     Compress(app)
     cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
+
+    # サーバーサイドセッション（ファイルストア）
+    # Cookie にはセッションIDのみ保存 → プロキシ/マルチワーカー環境でも安定動作
+    os.makedirs("/tmp/flask_sessions", exist_ok=True)
+    app.config.update(
+        SESSION_TYPE="filesystem",
+        SESSION_FILE_DIR="/tmp/flask_sessions",
+        SESSION_FILE_THRESHOLD=500,
+        SESSION_PERMANENT=True,
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+        SESSION_USE_SIGNER=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+    )
+    FlaskSession(app)
 
     initialize_db()
 
@@ -33,9 +49,6 @@ def create_app():
 
     from routes.auth_routes import bp as auth_bp
     app.register_blueprint(auth_bp)
-
-    # セッション有効期限：30日
-    app.permanent_session_lifetime = timedelta(days=30)
 
     # 認証チェック（ログイン・静的ファイルは除外）
     @app.before_request
