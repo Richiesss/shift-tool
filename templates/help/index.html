@@ -252,46 +252,81 @@
 
   <!-- ── 開発者情報 ── -->
   <div class="help-section" id="dev">
-    <div class="small text-muted fw-semibold mb-2" style="letter-spacing:.05em;text-transform:uppercase">
+    <div style="font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:.6rem">
       開発者情報・連絡先
     </div>
     <div class="dev-card">
+
+      <!-- 開発者プロフィール -->
       <div class="d-flex align-items-center gap-3 mb-3">
         <div class="dev-avatar">👨‍💻</div>
         <div>
-          <div class="fw-semibold" style="font-size:1rem">SDU-Shift 開発チーム</div>
-          <span class="version-badge mt-1">v1.0  Flask + OR-Tools</span>
+          <div style="font-size:1.05rem;font-weight:700;color:#f1f5f9">島野 凌</div>
+          <div style="font-size:.8rem;color:#94a3b8;margin-top:1px">個人開発 / SDU-Shift</div>
+          <span class="version-badge" style="margin-top:4px;display:inline-block">v1.0 &nbsp;Flask + OR-Tools</span>
         </div>
       </div>
 
+      <!-- 開発の背景 -->
+      <div style="background:#0f172a;border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem">
+        <div style="font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#38bdf8;margin-bottom:.5rem">
+          開発の背景
+        </div>
+        <p style="font-size:.85rem;color:#cbd5e1;line-height:1.75;margin:0">
+          恋人が飲食店でのシフト作成に毎回多くの時間を費やしているのを見て、
+          <strong style="color:#f1f5f9">「シフト作成という無駄な時間を極力ゼロにしたい」</strong>という思いからこのアプリを開発しました。
+          スタッフの希望を自動で収集・最適化し、数十秒でシフトを生成することで、
+          本来の業務に集中できる環境を目指しています。
+        </p>
+      </div>
+
+      <!-- 連絡先 -->
+      <div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem">
+        連絡先
+      </div>
       <div class="dev-contact">
-        <div class="small text-muted mb-1" style="letter-spacing:.04em;text-transform:uppercase;font-size:.68rem">連絡先</div>
         <a href="mailto:m1m02530125@oit.ac.jp">
-          <i class="bi bi-envelope-fill" style="color:#38bdf8"></i>
-          m1m02530125@oit.ac.jp
+          <i class="bi bi-envelope-fill" style="color:#38bdf8;width:18px"></i>
+          <span style="color:#e2e8f0">m1m02530125@oit.ac.jp</span>
         </a>
         <a href="https://github.com/Richiesss/shift-tool" target="_blank" rel="noopener">
-          <i class="bi bi-github" style="color:#94a3b8"></i>
-          github.com/Richiesss/shift-tool
+          <i class="bi bi-github" style="color:#94a3b8;width:18px"></i>
+          <span style="color:#e2e8f0">github.com/Richiesss/shift-tool</span>
         </a>
-      </div>
-
-      <hr style="border-color:#334155;margin:1rem 0 .75rem">
-
-      <div class="small text-muted" style="line-height:1.8">
-        <div class="mb-1">
-          <i class="bi bi-info-circle me-1" style="color:#38bdf8"></i>
-          バグ報告・機能要望は上記メールまたは GitHub Issues へ
-        </div>
-        <div class="mb-1">
-          <i class="bi bi-tools me-1" style="color:#38bdf8"></i>
-          技術スタック：Flask / PostgreSQL (Neon) / OR-Tools CP-SAT / Bootstrap 5
-        </div>
-        <div>
-          <i class="bi bi-cloud me-1" style="color:#38bdf8"></i>
-          ホスティング：HuggingFace Spaces（無料プラン）
+        <div style="display:flex;align-items:center;gap:.5rem;padding:.35rem 0;font-size:.85rem">
+          <i class="bi bi-chat-fill" style="color:#06c755;width:18px"></i>
+          <span style="color:#e2e8f0">LINE（知人の方はこちらからでも）</span>
         </div>
       </div>
+
+      <hr style="border-color:#334155;margin:.85rem 0">
+
+      <!-- バグ報告 -->
+      <div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem">
+        バグ報告・機能要望
+      </div>
+      <div style="font-size:.83rem;color:#94a3b8;line-height:1.7;margin-bottom:1rem">
+        上記メール、GitHub Issues、または島野個人のLINEにてお気軽にご連絡ください。
+      </div>
+
+      <!-- 技術情報 -->
+      <div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem">
+        技術スタック
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for tag, color in [
+          ('Flask',                '#38bdf8'),
+          ('PostgreSQL (Neon)',    '#4ade80'),
+          ('OR-Tools CP-SAT',     '#fb923c'),
+          ('Bootstrap 5',         '#a78bfa'),
+          ('HuggingFace Spaces',  '#fbbf24'),
+        ] %}
+        <span style="background:#334155;color:{{ color }};border-radius:6px;padding:3px 10px;font-size:.75rem;font-weight:600">
+          {{ tag }}
+        </span>
+        {% endfor %}
+      </div>
+
     </div>
   </div>
 
