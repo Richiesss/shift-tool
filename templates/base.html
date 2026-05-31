@@ -138,6 +138,7 @@
     ('schedule.list_periods','bi-calendar3',      'シフト表'),
     ('customers.list_periods','bi-cup-hot-fill',  '客数管理'),
     ('settings.index',       'bi-gear-fill',      '設定'),
+    ('help.index',           'bi-question-circle','ヘルプ'),
   ] %}
   {% for endpoint, icon, label in nav_items %}
   <a href="{{ url_for(endpoint) }}"
@@ -155,7 +156,8 @@
 <!-- Mobile Bottom Nav -->
 {% set _in_drawer = request.endpoint and (
     request.endpoint.startswith('customers') or
-    request.endpoint.startswith('settings')
+    request.endpoint.startswith('settings') or
+    request.endpoint.startswith('help')
 ) %}
 <div class="bottom-nav">
   {% for endpoint, icon, label in [
@@ -184,8 +186,9 @@
   <div class="drawer-title">メニュー</div>
 
   {% for endpoint, icon, label, desc in [
-    ('customers.list_periods', 'bi-cup-hot-fill',  '客数管理',  '予約客数の入力'),
-    ('settings.index',         'bi-gear-fill',     '設定',      'シフト制約・アプリ設定'),
+    ('customers.list_periods', 'bi-cup-hot-fill',    '客数管理',  '予約客数の入力'),
+    ('settings.index',         'bi-gear-fill',       '設定',      'シフト制約・アプリ設定'),
+    ('help.index',             'bi-question-circle', 'ヘルプ',    '使い方・開発者情報'),
   ] %}
   <a href="{{ url_for(endpoint) }}"
      class="{{ 'active' if request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) else '' }}"

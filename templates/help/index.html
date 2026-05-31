@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% block title %}ヘルプ - SDU-Shift{% endblock %}
+{% block head %}
+<style>
+  .help-hero {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: white; padding: 2rem 1rem 1.5rem; text-align: center;
+    border-bottom: 1px solid #334155;
+  }
+  .help-hero .app-icon { font-size: 3rem; margin-bottom: .5rem; }
+  .help-hero h2 { font-size: 1.3rem; font-weight: 700; margin: 0 0 .25rem; }
+  .help-hero p  { color: #94a3b8; font-size: .85rem; margin: 0; }
+
+  .help-section { margin-bottom: 1rem; }
+
+  .help-card {
+    background: white; border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden;
+  }
+  .help-card-header {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .85rem 1rem; cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: background .15s; user-select: none;
+  }
+  .help-card-header:hover { background: #f8fafc; }
+  .help-card-header.open  { border-bottom-color: #e2e8f0; }
+  .help-card-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+  .help-card-title { font-weight: 600; font-size: .95rem; flex-grow: 1; }
+  .help-card-chevron { color: #94a3b8; font-size: .8rem; transition: transform .2s; }
+  .help-card-chevron.open { transform: rotate(180deg); }
+  .help-card-body { padding: 1rem; display: none; font-size: .88rem; line-height: 1.7; }
+  .help-card-body.open { display: block; }
+
+  .step-list { list-style: none; padding: 0; margin: 0; }
+  .step-list li {
+    display: flex; gap: .75rem; padding: .4rem 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .step-list li:last-child { border-bottom: none; }
+  .step-num {
+    width: 22px; height: 22px; background: #0ea5e9; color: white;
+    border-radius: 50%; font-size: .72rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .tip-box {
+    background: #f0f9ff; border-left: 3px solid #0ea5e9;
+    border-radius: 0 8px 8px 0; padding: .6rem .85rem;
+    font-size: .82rem; color: #0c4a6e; margin-top: .75rem;
+  }
+  .warn-box {
+    background: #fffbeb; border-left: 3px solid #f59e0b;
+    border-radius: 0 8px 8px 0; padding: .6rem .85rem;
+    font-size: .82rem; color: #78350f; margin-top: .75rem;
+  }
+  kbd {
+    background: #1e293b; color: white; border-radius: 4px;
+    padding: 1px 6px; font-size: .78rem; font-family: monospace;
+  }
+
+  /* 開発者カード */
+  .dev-card {
+    background: #1e293b; color: white; border-radius: 12px;
+    padding: 1.25rem; margin-top: .5rem;
+  }
+  .dev-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; flex-shrink: 0;
+  }
+  .dev-contact a {
+    display: flex; align-items: center; gap: .5rem;
+    color: #94a3b8; text-decoration: none; font-size: .85rem;
+    padding: .35rem 0; transition: color .15s;
+  }
+  .dev-contact a:hover { color: #38bdf8; }
+  .version-badge {
+    display: inline-block; background: #334155; color: #94a3b8;
+    border-radius: 20px; padding: 2px 10px; font-size: .72rem;
+    font-family: monospace;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- ヒーロー -->
+<div class="help-hero">
+  <div class="app-icon">🍽️</div>
+  <h2>SDU-Shift</h2>
+  <p>飲食店向けシフト管理アプリ　ヘルプ</p>
+</div>
+
+<div class="content">
+
+  <!-- ── 目次 ── -->
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    {% for anchor, label, color in [
+      ('#staff',    'スタッフ管理',   '#dbeafe'),
+      ('#shift',    '希望シフト',     '#dcfce7'),
+      ('#generate', '自動生成',       '#fef9c3'),
+      ('#schedule', 'シフト表',       '#ede9fe'),
+      ('#customer', '客数管理',       '#fee2e2'),
+      ('#settings', '設定',           '#e2e8f0'),
+      ('#dev',      '開発者情報',     '#1e293b'),
+    ] %}
+    <a href="{{ anchor }}" class="text-decoration-none">
+      <span style="background:{{ color }};color:#1e293b;border-radius:20px;
+                   padding:3px 12px;font-size:.78rem;font-weight:600;
+                   {% if anchor == '#dev' %}color:white{% endif %}">
+        {{ label }}
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+
+  {# ── セクションマクロ ── #}
+  {% macro section(id, icon, icon_bg, title, content_id) %}
+  <div class="help-section" id="{{ id }}">
+    <div class="help-card">
+      <div class="help-card-header" onclick="toggleCard(this, '{{ content_id }}')">
+        <div class="help-card-icon" style="background:{{ icon_bg }}">
+          <i class="bi {{ icon }}"></i>
+        </div>
+        <span class="help-card-title">{{ title }}</span>
+        <i class="bi bi-chevron-down help-card-chevron"></i>
+      </div>
+      <div class="help-card-body" id="{{ content_id }}">
+  {% endmacro %}
+
+  {# スタッフ管理 #}
+  {{ section('staff', 'bi-people-fill', '#dbeafe', 'スタッフ管理', 'body-staff') }}
+        <ul class="step-list">
+          <li><span class="step-num">1</span><div><strong>スタッフを追加</strong>する — 「＋ スタッフを追加」ボタンから名前・ポジション・リーダー設定などを入力。</div></li>
+          <li><span class="step-num">2</span><div><strong>並び順を変更</strong>する — 各カード左端の <i class="bi bi-grip-vertical text-muted"></i> をドラッグして順番を入れ替えられます。</div></li>
+          <li><span class="step-num">3</span><div><strong>アーカイブ</strong>する — 退職・長期休暇などのスタッフはアーカイブにすることで一覧から非表示になります。データは保持されます。</div></li>
+        </ul>
+        <div class="tip-box">
+          <i class="bi bi-lightbulb-fill me-1"></i>
+          <strong>リーダー設定</strong>：自動生成時にリーダー最低人数の制約が適用されます。ポジションごとに設定できます。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# 希望シフト入力 #}
+  {{ section('shift', 'bi-pencil-square', '#dcfce7', '希望シフト入力', 'body-shift') }}
+        <ul class="step-list">
+          <li><span class="step-num">1</span><div><strong>期間を作成</strong>する — 年月を選び「前半（1〜15日）」または「後半（16〜末日）」を選択。</div></li>
+          <li><span class="step-num">2</span><div><strong>希望を入力</strong>する — スタッフ名で検索して個別入力、または「全員一覧」で一括確認。</div></li>
+          <li><span class="step-num">3</span><div><strong>CSVでインポート</strong>する — GoogleフォームなどからエクスポートしたCSVをそのまま読み込めます。</div></li>
+        </ul>
+        <div class="tip-box">
+          <i class="bi bi-lightbulb-fill me-1"></i>
+          <strong>入力モード：</strong>
+          1人フォーカスモード（デフォルト）では名前を検索して1人ずつ入力。全員一覧モードはスクロールで全員を一度に確認できます。
+        </div>
+        <div class="warn-box">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          最新4期間分が一覧に表示されます。それ以前は「すべて表示」から確認できます。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# 自動生成 #}
+  {{ section('generate', 'bi-lightning-fill', '#fef9c3', 'シフト自動生成', 'body-generate') }}
+        <ul class="step-list">
+          <li><span class="step-num">1</span><div><strong>希望シフトを入力済みの期間</strong>を選択する。</div></li>
+          <li><span class="step-num">2</span><div><strong>優先度を設定</strong>する（各項目の <i class="bi bi-question-circle text-muted"></i> をタップすると詳細説明が表示されます）。</div></li>
+          <li><span class="step-num">3</span><div><strong>「生成開始」</strong>ボタンを押す。最大25秒で最適なシフトを算出します。</div></li>
+        </ul>
+
+        <div class="mt-2 mb-1 small fw-semibold text-muted">優先度設定の意味</div>
+        <table class="table table-sm table-bordered" style="font-size:.82rem">
+          <thead class="table-light"><tr><th>設定項目</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>希望シフト尊重</td><td>スタッフの希望日程をどれだけ重視するか</td></tr>
+            <tr><td>公平な配分</td><td>出勤日数・朝食/ディナーの偏りを均す度合い</td></tr>
+            <tr><td>連続出勤回避</td><td>同じスタッフが連日出勤しないよう制限する強さ</td></tr>
+            <tr><td>固定パターン</td><td>各スタッフに設定した固定シフトパターンの適用度</td></tr>
+          </tbody>
+        </table>
+        <div class="warn-box">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          生成中は他の画面に移動しても構いません。完了後に「シフト表」から結果を確認してください。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# シフト表 #}
+  {{ section('schedule', 'bi-calendar3', '#ede9fe', 'シフト表', 'body-schedule') }}
+        <ul class="step-list">
+          <li><span class="step-num">1</span><div><strong>朝食/ディナー・ホール/キッチン</strong>のタブで表示を切り替えます。</div></li>
+          <li><span class="step-num">2</span><div><strong>セルをタップ</strong>すると手動で担当を追加・変更できます。</div></li>
+          <li><span class="step-num">3</span><div><strong>日付ヘッダーをタップ</strong>するとその日の全員のタイムラインを確認できます。</div></li>
+          <li><span class="step-num">4</span><div>右上のボタンから <strong>Excel / PDF</strong> でエクスポートできます。</div></li>
+        </ul>
+
+        <div class="mt-2 mb-1 small fw-semibold text-muted">人員不足アラート</div>
+        <p class="mb-1">ページ上部に不足がある場合はカードが表示されます。タップするとスロット×ポジション別の不足日チップが展開されます。</p>
+        <div class="d-flex gap-2 flex-wrap mb-2" style="font-size:.8rem">
+          <span style="background:#fecaca;color:#991b1b;border-radius:4px;padding:2px 8px;font-weight:600">赤：人員不足</span>
+          <span style="background:#fde68a;color:#92400e;border-radius:4px;padding:2px 8px;font-weight:600">黄：リーダー不足</span>
+        </div>
+
+        <div class="mt-2 mb-1 small fw-semibold text-muted">応援要員の追加</div>
+        <p class="mb-0">セルをタップ →「応援で追加」セクションで時間帯を指定して追加。プリセット（全時間/早番/遅番）で素早く設定できます。</p>
+      </div>
+    </div>
+  </div>
+
+  {# 客数管理 #}
+  {{ section('customer', 'bi-cup-hot-fill', '#fee2e2', '客数管理', 'body-customer') }}
+        <ul class="step-list">
+          <li><span class="step-num">1</span><div>期間を選択して各日の<strong>予約客数（朝食・ディナー）</strong>を入力します。</div></li>
+          <li><span class="step-num">2</span><div>閾値を超えると<strong>赤</strong>、以下は<strong>緑</strong>で色分け表示されます。</div></li>
+          <li><span class="step-num">3</span><div>閾値は「設定」ページの<strong>客数閾値</strong>から変更できます。</div></li>
+        </ul>
+        <div class="tip-box">
+          <i class="bi bi-lightbulb-fill me-1"></i>
+          客数の多い日を一目で把握してシフト配置の参考にしてください。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# 設定 #}
+  {{ section('settings', 'bi-gear-fill', '#e2e8f0', '設定', 'body-settings') }}
+        <table class="table table-sm table-bordered" style="font-size:.82rem">
+          <thead class="table-light"><tr><th>項目</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>シフト制約</td><td>各スロット×ポジションの最低人数・最低リーダー数を設定</td></tr>
+            <tr><td>客数閾値</td><td>客数管理の色分け基準を朝食/ディナー別に設定</td></tr>
+            <tr><td>バックアップ</td><td>全データをJSONファイルでダウンロード</td></tr>
+            <tr><td>リストア</td><td>バックアップJSONからデータを復元（既存データは上書き）</td></tr>
+          </tbody>
+        </table>
+        <div class="warn-box">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          リストアを実行すると既存のデータはすべて置き換わります。事前にバックアップを取ることを推奨します。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 開発者情報 ── -->
+  <div class="help-section" id="dev">
+    <div class="small text-muted fw-semibold mb-2" style="letter-spacing:.05em;text-transform:uppercase">
+      開発者情報・連絡先
+    </div>
+    <div class="dev-card">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="dev-avatar">👨‍💻</div>
+        <div>
+          <div class="fw-semibold" style="font-size:1rem">SDU-Shift 開発チーム</div>
+          <span class="version-badge mt-1">v1.0  Flask + OR-Tools</span>
+        </div>
+      </div>
+
+      <div class="dev-contact">
+        <div class="small text-muted mb-1" style="letter-spacing:.04em;text-transform:uppercase;font-size:.68rem">連絡先</div>
+        <a href="mailto:m1m02530125@oit.ac.jp">
+          <i class="bi bi-envelope-fill" style="color:#38bdf8"></i>
+          m1m02530125@oit.ac.jp
+        </a>
+        <a href="https://github.com/Richiesss/shift-tool" target="_blank" rel="noopener">
+          <i class="bi bi-github" style="color:#94a3b8"></i>
+          github.com/Richiesss/shift-tool
+        </a>
+      </div>
+
+      <hr style="border-color:#334155;margin:1rem 0 .75rem">
+
+      <div class="small text-muted" style="line-height:1.8">
+        <div class="mb-1">
+          <i class="bi bi-info-circle me-1" style="color:#38bdf8"></i>
+          バグ報告・機能要望は上記メールまたは GitHub Issues へ
+        </div>
+        <div class="mb-1">
+          <i class="bi bi-tools me-1" style="color:#38bdf8"></i>
+          技術スタック：Flask / PostgreSQL (Neon) / OR-Tools CP-SAT / Bootstrap 5
+        </div>
+        <div>
+          <i class="bi bi-cloud me-1" style="color:#38bdf8"></i>
+          ホスティング：HuggingFace Spaces（無料プラン）
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- フッター余白 -->
+  <div style="height:1rem"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCard(header, bodyId) {
+  const body    = document.getElementById(bodyId);
+  const chevron = header.querySelector('.help-card-chevron');
+  const isOpen  = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  header.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
+}
+
+// アンカーリンクで自動展開
+(function() {
+  const hash = location.hash;
+  if (!hash) return;
+  const section = document.querySelector(hash);
+  if (!section) return;
+  const header = section.querySelector('.help-card-header');
+  if (header) {
+    const bodyId = header.getAttribute('onclick').match(/'([^']+)'\s*\)/)[1];
+    toggleCard(header, bodyId);
+    setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  }
+})();
+</script>
+{% endblock %}

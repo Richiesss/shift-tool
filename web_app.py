@@ -73,6 +73,7 @@ def create_app():
     from routes.customers import bp as cust_bp
     from routes.settings_routes import bp as settings_bp
     from routes.export_routes import bp as export_bp
+    from routes.help_routes import bp as help_bp
 
     app.register_blueprint(emp_bp)
     app.register_blueprint(shifts_bp)
@@ -81,6 +82,7 @@ def create_app():
     app.register_blueprint(cust_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(help_bp)
 
     @app.teardown_appcontext
     def close_db(error):
