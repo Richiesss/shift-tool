@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}CSVインポート - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('shifts.input', period_id=period.id) }}" class="text-white me-2">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h1 class="fs-6"><i class="bi bi-filetype-csv me-1"></i>Google Forms CSVインポート</h1>
+</div>
+<div class="content">
+  <div class="alert alert-info small mb-3">
+    <strong>対応フォーマット：</strong>
+    Google フォームの回答をスプレッドシートで開き「ファイル → ダウンロード → CSV」でエクスポートしたファイルを使用します。<br>
+    必須列：<code>タイムスタンプ</code>、<code>お名前</code>（スタッフ登録名と一致）、各日付列（例：<code>4月1日(月)の出勤希望</code>）
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">
+        {{ period.start_date }} 〜 {{ period.end_date }} へのインポート
+      </h6>
+      <form method="post" enctype="multipart/form-data"
+            action="{{ url_for('shifts.import_csv', period_id=period.id) }}">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">CSVファイル</label>
+          <input type="file" name="csv_file" accept=".csv" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">取込みモード</label>
+          <div class="d-flex flex-column gap-1">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="merge" value="fill" id="m-fill" checked>
+              <label class="form-check-label" for="m-fill">
+                <strong>未入力のみ追加</strong>
+                <span class="text-muted small">— 既に入力済みの日付は変更しない</span>
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="merge" value="overwrite" id="m-over">
+              <label class="form-check-label" for="m-over">
+                <strong>全て上書き</strong>
+                <span class="text-muted small">— CSVの内容で全日付を置き換える</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-upload me-1"></i>インポート実行
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-2">登録スタッフ一覧（{{ employees|length }}名）</h6>
+      <div class="d-flex flex-wrap gap-1">
+        {% for e in employees %}
+        <span class="badge bg-secondary">{{ e.name }}</span>
+        {% endfor %}
+      </div>
+      <div class="text-muted small mt-2">CSVの「お名前」列がこの名前と完全一致する必要があります</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

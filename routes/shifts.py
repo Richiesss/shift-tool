@@ -120,3 +120,55 @@ def save(period_id):
         return redirect(url_for("shifts.input", period_id=period_id, emp_idx=next_idx))
     flash("希望シフトを保存しました", "success")
     return redirect(url_for("shifts.input", period_id=period_id))
+
+
+@bp.get("/<int:period_id>/import")
+def import_csv_form(period_id):
+    period = repo.get_period(period_id)
+    if not period:
+        return redirect(url_for("shifts.index"))
+    employees = repo.get_all_employees(active_only=True)
+    return render_template("shifts/import_csv.html", period=period, employees=employees)
+
+
+@bp.post("/<int:period_id>/import")
+def import_csv(period_id):
+    period = repo.get_period(period_id)
+    if not period:
+        return redirect(url_for("shifts.index"))
+    employees = repo.get_all_employees(active_only=True)
+    f = request.files.get("csv_file")
+    if not f:
+        flash("CSVファイルを選択してください", "error")
+        return redirect(url_for("shifts.import_csv_form", period_id=period_id))
+    merge = request.form.get("merge", "fill")
+    try:
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
+            f.save(tmp.name)
+            tmp_path = tmp.name
+        from utils.forms_csv_parser import parse_forms_csv
+        result = parse_forms_csv(tmp_path, period, employees)
+        os.unlink(tmp_path)
+    except Exception as e:
+        flash(f"CSVの解析に失敗しました: {e}", "error")
+        return redirect(url_for("shifts.import_csv_form", period_id=period_id))
+
+    if not result.requests:
+        flash("取込み可能なデータがありませんでした", "warning")
+        return redirect(url_for("shifts.import_csv_form", period_id=period_id))
+
+    if merge == "overwrite":
+        repo.save_shift_requests(period_id, result.requests)
+    else:
+        # fill: 既存データがない日付のみ追加
+        existing = repo.get_shift_requests(period_id)
+        existing_keys = {(r.employee_id, r.date) for r in existing}
+        new_reqs = [r for r in result.requests if (r.employee_id, r.date) not in existing_keys]
+        repo.save_shift_requests(period_id, new_reqs)
+
+    n_matched = len(result.matched)
+    flash(f"{n_matched}名分の希望シフトを取込みました", "success")
+    if result.unmatched_names:
+        flash(f"マッチしなかった名前: {', '.join(result.unmatched_names)}", "warning")
+    return redirect(url_for("shifts.input", period_id=period_id))

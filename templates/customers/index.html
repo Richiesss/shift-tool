@@ -34,18 +34,36 @@
             {% set ds = d|string %}
             {% set cnt = counts.get(ds, {}) %}
             {% set dow = d.weekday() %}
+            {% set b_val = cnt.get('breakfast', 0) %}
+            {% set d_val = cnt.get('dinner', 0) %}
             <tr class="{{ 'table-primary' if dow == 5 else 'table-danger' if dow == 6 else '' }}">
               <td>
                 {{ d.strftime('%m/%d') }}
                 <small class="text-muted">{{ ['月','火','水','木','金','土','日'][dow] }}</small>
               </td>
               <td>
-                <input type="number" name="b_{{ ds }}" value="{{ cnt.get('breakfast', 0) }}"
-                       class="form-control form-control-sm text-center" min="0" style="width:80px">
+                <div class="d-flex align-items-center gap-1">
+                  <input type="number" name="b_{{ ds }}" value="{{ b_val }}"
+                         class="form-control form-control-sm text-center" min="0" style="width:75px"
+                         oninput="colorCell(this, {{ thresh_b }})">
+                  {% if thresh_b > 0 %}
+                  <span class="badge {{ 'bg-danger' if b_val >= thresh_b else 'bg-success' }} badge-sm">
+                    {{ '↑' if b_val >= thresh_b else '↓' }}{{ thresh_b }}
+                  </span>
+                  {% endif %}
+                </div>
               </td>
               <td>
-                <input type="number" name="d_{{ ds }}" value="{{ cnt.get('dinner', 0) }}"
-                       class="form-control form-control-sm text-center" min="0" style="width:80px">
+                <div class="d-flex align-items-center gap-1">
+                  <input type="number" name="d_{{ ds }}" value="{{ d_val }}"
+                         class="form-control form-control-sm text-center" min="0" style="width:75px"
+                         oninput="colorCell(this, {{ thresh_d }})">
+                  {% if thresh_d > 0 %}
+                  <span class="badge {{ 'bg-danger' if d_val >= thresh_d else 'bg-success' }} badge-sm">
+                    {{ '↑' if d_val >= thresh_d else '↓' }}{{ thresh_d }}
+                  </span>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% endfor %}
@@ -54,5 +72,24 @@
       </div>
     </div>
   </form>
+  <div class="small text-muted mt-2">
+    <span class="badge bg-danger me-1">↑閾値</span>閾値以上で増員が推奨されます
+    <span class="badge bg-success ms-2 me-1">↓閾値</span>閾値未満
+  </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function colorCell(input, threshold) {
+  const v = parseInt(input.value) || 0;
+  input.style.background = (threshold > 0 && v >= threshold) ? '#fee2e2' : '';
+  const badge = input.parentElement.querySelector('.badge');
+  if (badge) {
+    badge.className = 'badge badge-sm ' + (v >= threshold ? 'bg-danger' : 'bg-success');
+    badge.textContent = (v >= threshold ? '↑' : '↓') + threshold;
+  }
+}
+document.querySelectorAll('input[name^="b_"]').forEach(el => colorCell(el, {{ thresh_b }}));
+document.querySelectorAll('input[name^="d_"]').forEach(el => colorCell(el, {{ thresh_d }}));
+</script>
 {% endblock %}

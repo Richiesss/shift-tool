@@ -22,12 +22,12 @@ def index(period_id):
     periods = repo.get_all_periods()
     dates = period.date_range()
     counts = repo.get_reservation_counts(period_id)
+    thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
+    thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
     return render_template(
         "customers/index.html",
-        period=period,
-        periods=periods,
-        dates=dates,
-        counts=counts,
+        period=period, periods=periods, dates=dates, counts=counts,
+        thresh_b=thresh_b, thresh_d=thresh_d,
     )
 
 

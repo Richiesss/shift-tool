@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}月次集計 - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('schedule.index', period_id=period.id) }}" class="text-white me-2">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h1 class="fs-6"><i class="bi bi-bar-chart-fill me-1"></i>月次集計</h1>
+</div>
+<div class="content">
+  <!-- 期間選択 -->
+  <div class="mb-3">
+    <select class="form-select form-select-sm" style="max-width:220px"
+            onchange="location.href='/schedule/'+this.value+'/stats'">
+      {% for p in periods %}
+      <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
+        {{ p.start_date }} 〜 {{ p.end_date }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered text-center mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th class="text-start" style="min-width:90px">名前</th>
+          {% for c in cols %}
+          <th>{{ col_labels[c] }}</th>
+          {% endfor %}
+          <th class="table-secondary">合計</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        {% set ec = counts[emp.id] %}
+        <tr>
+          <td class="text-start fw-semibold">{{ emp.name }}</td>
+          {% for c in cols %}
+          <td>
+            {% set n = ec[c] %}
+            {% if n > 0 %}
+            <span class="badge {{ 'bg-primary' if 'H' in c.split('/')[0] else 'bg-success' }}
+                               bg-opacity-75">{{ n }}</span>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="fw-bold table-secondary">{{ ec['total'] or 0 }}</td>
+        </tr>
+        {% endfor %}
+        <!-- 合計行 -->
+        <tr class="table-light fw-bold">
+          <td class="text-start">合計</td>
+          {% for c in cols %}
+          <td>{{ employees | map(attribute='id') | map('extract', counts) | map(attribute=c) | select | list | length }}</td>
+          {% endfor %}
+          <td>{{ assignments | length }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-3 small text-muted">
+    <span class="badge bg-primary bg-opacity-75 me-1">B/H</span>朝食ホール
+    <span class="badge bg-success bg-opacity-75 me-1">B/K</span>朝食キッチン
+    <span class="badge bg-primary bg-opacity-75 me-1">D/H</span>ディナーホール
+    <span class="badge bg-success bg-opacity-75 me-1">D/K</span>ディナーキッチン
+  </div>
+</div>
+{% endblock %}

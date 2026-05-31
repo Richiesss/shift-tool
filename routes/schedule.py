@@ -95,8 +95,10 @@ def index(period_id):
     for a in assignments:
         asgn_map.setdefault(a.date, {}).setdefault(a.time_slot.value, []).append(a)
 
-    slot = request.args.get("slot", "breakfast")
-    pos  = request.args.get("pos",  "hall")
+    from datetime import date as _date
+    slot  = request.args.get("slot", "breakfast")
+    pos   = request.args.get("pos",  "hall")
+    today = _date.today().isoformat()
     notes = repo.get_schedule_notes(period_id)
     shift_requests = repo.get_shift_requests(period_id)
     time_map = _build_time_map(shift_requests)
@@ -128,6 +130,7 @@ def index(period_id):
         notes=notes,
         time_map=time_map,
         staffing=staffing,
+        today=today,
         TimeSlot=TimeSlot,
         Position=Position,
     )
@@ -148,7 +151,13 @@ def assign(period_id):
             repo.remove_assignment(period_id, emp_id, date_str, slot)
         else:
             pos = Position(pos_val)
-            a = ShiftAssignment(employee_id=emp_id, date=date_str, time_slot=slot, position=pos)
+            is_reinf   = bool(data.get("is_reinforcement", False))
+            reinf_start = data.get("reinf_start") or None
+            reinf_end   = data.get("reinf_end")   or None
+            a = ShiftAssignment(
+                employee_id=emp_id, date=date_str, time_slot=slot, position=pos,
+                is_reinforcement=is_reinf, reinf_start=reinf_start, reinf_end=reinf_end,
+            )
             repo.add_assignment(period_id, a)
         return jsonify({"ok": True})
     except Exception as e:
@@ -162,6 +171,28 @@ def save_note(period_id):
     note = data.get("note", "")
     repo.save_schedule_note(period_id, date_str, note)
     return jsonify({"ok": True})
+
+
+@bp.get("/<int:period_id>/stats")
+def stats(period_id):
+    period = repo.get_period(period_id)
+    if not period:
+        return redirect(url_for("schedule.list_periods"))
+    employees  = repo.get_all_employees(active_only=True)
+    assignments = repo.get_assignments(period_id)
+    from utils.constants import TimeSlot, Position
+    from collections import defaultdict
+    counts = defaultdict(lambda: defaultdict(int))
+    for a in assignments:
+        key = f"{a.time_slot.value[0].upper()}/{a.position.value[0].upper()}"
+        counts[a.employee_id][key] += 1
+        counts[a.employee_id]["total"] += 1
+    cols = ["B/H","B/K","D/H","D/K"]
+    col_labels = {"B/H":"朝食ホール","B/K":"朝食キッチン","D/H":"ディナーホール","D/K":"ディナーキッチン"}
+    return render_template("schedule/stats.html",
+        period=period, employees=employees, counts=counts,
+        cols=cols, col_labels=col_labels,
+        periods=repo.get_all_periods())
 
 
 @bp.post("/<int:period_id>/confirm")

@@ -17,6 +17,9 @@
   .sched-grid thead th.emp-col { z-index: 3; background: #0f172a; }
   .sat td, .sat th { background: #eff6ff !important; }
   .sun td, .sun th { background: #fff1f2 !important; }
+  /* 今日の列 */
+  .sched-grid thead th.today-col { background: #1d4ed8 !important; color: #fff !important; }
+  .sched-grid td.today-col { background: #eff6ff !important; }
   /* 人員不足の日付ヘッダー */
   .sched-grid thead th.short-staff  { background: #991b1b !important; color: #fef2f2 !important; }
   .sched-grid thead th.short-leader { background: #92400e !important; color: #fffbeb !important; }
@@ -43,6 +46,9 @@
     </a>
     <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-file-earmark-pdf"></i>
+    </a>
+    <a href="{{ url_for('schedule.stats', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
+      <i class="bi bi-bar-chart-fill"></i>
     </a>
     {% endif %}
   </div>
@@ -147,10 +153,13 @@
           <th class="emp-col">名前</th>
           {% for d in dates %}
           {% set dow = d.weekday() %}
-          {% set st = staffing.get((d.isoformat(), slot, pos), {}) %}
+          {% set ds_h = d.isoformat() %}
+          {% set st = staffing.get((ds_h, slot, pos), {}) %}
           {% set hdr_cls = 'short-staff' if st.get('short_staff') else 'short-leader' if st.get('short_leader') else '' %}
-          <th class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} {{ hdr_cls }}">
-            {{ d.strftime('%m/%d') }}<br>
+          {% set is_today = ds_h == today %}
+          <th class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} {{ hdr_cls }} {{ 'today-col' if is_today else '' }}"
+              style="cursor:pointer" onclick="openTimeline('{{ ds_h }}')">
+            {{ '★ ' if is_today else '' }}{{ d.strftime('%m/%d') }}<br>
             <small>{{ ['月','火','水','木','金','土','日'][dow] }}</small>
             {% if st %}
             {% set badge_cls = 'count-short' if st.short_staff else 'count-leader' if st.short_leader else 'count-ok' %}
@@ -182,7 +191,16 @@
           {% set dow = d.weekday() %}
           {% set day_assignments = asgn_map.get(ds, {}).get(slot, []) %}
           {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
-          <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
+          <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell"
+              style="cursor:pointer"
+              data-emp-id="{{ emp.id }}"
+              data-emp-name="{{ emp.name }}"
+              data-date="{{ ds }}"
+              data-slot="{{ slot }}"
+              data-pos="{{ emp_asgn.position.value if emp_asgn else '' }}"
+              data-assigned="{{ 'true' if emp_asgn else 'false' }}"
+              data-reinf="{{ 'true' if emp_asgn and emp_asgn.is_reinforcement else 'false' }}"
+              onclick="openAssignModal(this)">
             {% if emp_asgn %}
               {% set pos_label = 'H' if pos == 'hall' else 'K' %}
               {% set chip_cls = 'chip-hall' if pos == 'hall' else 'chip-kitchen' %}
@@ -191,12 +209,14 @@
               {% else %}
                 {% set t = time_map.get((emp_asgn.employee_id, ds, slot), '') %}
               {% endif %}
-              <span class="{{ chip_cls }}">{{ pos_label }}</span>
+              <span class="{{ chip_cls }}{% if emp_asgn.is_reinforcement %} opacity-75{% endif %}">
+                {{ pos_label }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% endif %}
+              </span>
               {% if t %}
               <div style="font-size:.65rem;color:#475569;line-height:1.2;margin-top:1px">{{ t }}</div>
               {% endif %}
             {% else %}
-              <span class="chip-empty">—</span>
+              <span class="chip-empty">+</span>
             {% endif %}
           </td>
           {% endfor %}
@@ -216,7 +236,178 @@
   {% endif %}
 </div>
 
+<!-- タイムラインモーダル -->
+<div class="modal fade" id="timelineModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="timelineTitle"></h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-2" id="timelineBody" style="overflow-x:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 担当編集モーダル -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="assignModalTitle"></h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-2">
+        <div id="assign-btns" class="d-grid gap-2">
+          <button class="btn btn-outline-primary btn-sm" onclick="doAssign('hall')">
+            <i class="bi bi-people me-1"></i>ホール担当にする
+          </button>
+          <button class="btn btn-outline-success btn-sm" onclick="doAssign('kitchen')">
+            <i class="bi bi-fire me-1"></i>キッチン担当にする
+          </button>
+          <hr class="my-1">
+          <div class="small text-muted mb-1">応援（カスタム時間）</div>
+          <div class="d-flex gap-1 align-items-center">
+            <input type="time" id="reinf-start" class="form-control form-control-sm" style="width:50%">
+            <span class="small">〜</span>
+            <input type="time" id="reinf-end"   class="form-control form-control-sm" style="width:50%">
+          </div>
+          <div class="d-flex gap-1">
+            <button class="btn btn-outline-secondary btn-sm flex-grow-1" onclick="doReinf('hall')">H応援</button>
+            <button class="btn btn-outline-secondary btn-sm flex-grow-1" onclick="doReinf('kitchen')">K応援</button>
+          </div>
+        </div>
+        <div id="remove-btn" class="d-grid mt-2" style="display:none!important">
+          <button class="btn btn-outline-danger btn-sm" onclick="doRemove()">
+            <i class="bi bi-x-circle me-1"></i>担当を外す
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+// ── タイムライン ─────────────────────────────────────
+const TL_ASGN = {
+  {% for ds, slot_map in asgn_map.items() %}
+  "{{ ds }}": {
+    {% for sv, alist in slot_map.items() %}
+    "{{ sv }}": [
+      {% for a in alist %}
+      { emp: {{ emp_map[a.employee_id].name | tojson }},
+        pos: "{{ a.position.value }}",
+        reinf: {{ 'true' if a.is_reinforcement else 'false' }},
+        rs: {{ (a.reinf_start or '') | tojson }},
+        re: {{ (a.reinf_end   or '') | tojson }},
+        t:  {{ time_map.get((a.employee_id, ds, sv), '') | tojson }}
+      },
+      {% endfor %}
+    ],
+    {% endfor %}
+  },
+  {% endfor %}
+};
+
+function openTimeline(ds) {
+  const day = TL_ASGN[ds] || {};
+  const dow = ['月','火','水','木','金','土','日'];
+  const d = new Date(ds);
+  document.getElementById('timelineTitle').textContent =
+    ds.slice(5).replace('-','/') + '（' + dow[d.getDay()] + '）　タイムライン';
+
+  const hours = Array.from({length:18}, (_,i)=>i+5); // 5〜22
+  let html = '<table class="table table-bordered table-sm" style="min-width:500px;font-size:.78rem">';
+  html += '<thead class="table-dark"><tr><th style="width:90px">スタッフ</th>';
+  hours.forEach(h => { html += `<th class="text-center px-0" style="width:28px">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  const allItems = [
+    ...(day['breakfast'] || []).map(a=>({...a, slot:'breakfast'})),
+    ...(day['dinner']    || []).map(a=>({...a, slot:'dinner'})),
+  ];
+  allItems.sort((a,b)=>a.emp.localeCompare(b.emp));
+
+  const SLOT_RANGE = { breakfast:[6,11], dinner:[17,23] };
+  allItems.forEach(a => {
+    let s, e;
+    if (a.reinf && a.rs && a.re) {
+      s = parseT(a.rs); e = parseT(a.re);
+    } else if (a.t) {
+      const m = a.t.match(/(\d+:\d+)[〜~](\d+:\d+)/);
+      if (m) { s = parseT(m[1]); e = parseT(m[2]); }
+    }
+    if (!s) [s,e] = SLOT_RANGE[a.slot];
+    const clr = a.pos==='hall' ? '#dbeafe' : '#dcfce7';
+    const lbl = a.pos==='hall' ? 'H' : 'K';
+    html += `<tr><td>${a.emp}${a.reinf?'<sup>応</sup>':''}</td>`;
+    hours.forEach(h => {
+      const inRange = h >= s && h < e;
+      html += `<td style="background:${inRange?clr:''};text-align:center">${inRange?lbl:''}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  if (allItems.length === 0) {
+    html += `<tr><td colspan="${hours.length+1}" class="text-center text-muted">配置なし</td></tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('timelineBody').innerHTML = html;
+  new bootstrap.Modal(document.getElementById('timelineModal')).show();
+}
+
+function parseT(s) {
+  const [h,m] = s.split(':').map(Number);
+  return h + (m>=30 ? 0.5 : 0);
+}
+
+let _modal = null;
+let _cell  = null; // 現在操作中のセル
+
+function openAssignModal(cell) {
+  _cell = cell;
+  const name = cell.dataset.empName;
+  const ds   = cell.dataset.date;
+  const slotJp = cell.dataset.slot === 'breakfast' ? '朝食' : 'ディナー';
+  document.getElementById('assignModalTitle').textContent = `${name}  ${ds.slice(5).replace('-','/')}（${slotJp}）`;
+
+  const assigned = cell.dataset.assigned === 'true';
+  document.getElementById('remove-btn').style.display = assigned ? 'grid' : 'none';
+
+  if (!_modal) _modal = new bootstrap.Modal(document.getElementById('assignModal'));
+  _modal.show();
+}
+
+function doAssign(pos) {
+  const d = _cell.dataset;
+  callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot, position: pos, action: 'add' });
+}
+
+function doReinf(pos) {
+  const start = document.getElementById('reinf-start').value;
+  const end   = document.getElementById('reinf-end').value;
+  if (!start || !end) { alert('開始・終了時刻を入力してください'); return; }
+  const d = _cell.dataset;
+  callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot, position: pos,
+               action: 'add', is_reinforcement: true, reinf_start: start, reinf_end: end });
+}
+
+function doRemove() {
+  const d = _cell.dataset;
+  callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot, position: d.pos, action: 'remove' });
+}
+
+function callAssign(payload) {
+  const periodId = {{ period.id if period else 0 }};
+  fetch(`/schedule/${periodId}/assign`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(res => {
+    if (res.ok) { _modal.hide(); location.reload(); }
+    else alert('エラー: ' + (res.error || '不明'));
+  });
+}
+
 function editNote(el) {
   const date = el.dataset.date;
   const periodId = el.dataset.period;

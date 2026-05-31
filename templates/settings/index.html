@@ -82,5 +82,30 @@
   </div>
 
 </form>
+
+<!-- バックアップ / リストア -->
+<div class="card mb-3">
+  <div class="card-body">
+    <h6 class="card-title text-muted mb-3">バックアップ / リストア</h6>
+    <div class="d-flex flex-column gap-2">
+      <a href="{{ url_for('settings.backup') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-cloud-download me-1"></i>バックアップをダウンロード（JSON）
+      </a>
+      <form method="post" action="{{ url_for('settings.restore') }}"
+            enctype="multipart/form-data"
+            onsubmit="return confirm('現在のデータは全て置き換えられます。続けますか？')">
+        <div class="d-flex gap-2">
+          <input type="file" name="backup_file" accept=".json" class="form-control form-control-sm" required>
+          <button type="submit" class="btn btn-outline-warning btn-sm text-nowrap">
+            <i class="bi bi-cloud-upload me-1"></i>リストア
+          </button>
+        </div>
+      </form>
+    </div>
+    <div class="text-muted small mt-2">
+      ※ リストアすると現在のデータは全て上書きされます
+    </div>
+  </div>
+</div>
 </div>
 {% endblock %}
