@@ -10,7 +10,6 @@
     <div class="card-body">
       <h6 class="card-title text-muted mb-3">新しい期間を作成</h6>
       <form method="post" action="{{ url_for('shifts.new_period') }}" id="new-period-form">
-        <!-- 年月セレクター -->
         <div class="d-flex gap-2 mb-3">
           <select name="year" id="sel-year" class="form-select" onchange="updatePreview()"></select>
           <select name="month" id="sel-month" class="form-select" onchange="updatePreview()">
@@ -19,7 +18,6 @@
             {% endfor %}
           </select>
         </div>
-        <!-- 前半・後半 -->
         <div class="d-grid gap-2">
           <button type="submit" name="half" value="first"
                   class="btn btn-outline-primary d-flex align-items-center justify-content-between px-3">
@@ -37,24 +35,75 @@
   </div>
 
   <!-- 既存の期間一覧 -->
-  <h6 class="text-muted mb-2">既存の期間</h6>
+  <div class="d-flex align-items-center mb-2">
+    <h6 class="text-muted mb-0 flex-grow-1">既存の期間</h6>
+    {% if has_older and not show_all %}
+    <a href="?all=1" class="btn btn-link btn-sm text-muted p-0">
+      <i class="bi bi-chevron-down me-1"></i>すべて表示
+    </a>
+    {% elif show_all %}
+    <a href="?" class="btn btn-link btn-sm text-muted p-0">
+      <i class="bi bi-chevron-up me-1"></i>折りたたむ
+    </a>
+    {% endif %}
+  </div>
+
   {% for period in periods %}
   <div class="card mb-2">
-    <div class="card-body py-2 px-3 d-flex align-items-center">
+    <div class="card-body py-2 px-3 d-flex align-items-center gap-2">
       <div class="flex-grow-1">
         <div class="fw-semibold">{{ period.start_date }} 〜 {{ period.end_date }}</div>
         <span class="badge {{ 'bg-success' if period.status == 'confirmed' else 'bg-secondary' }}">
           {{ '確定' if period.status == 'confirmed' else '下書き' }}
         </span>
       </div>
-      <a href="{{ url_for('shifts.input', period_id=period.id) }}" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('shifts.input', period_id=period.id) }}"
+         class="btn btn-outline-primary btn-sm">
         入力する
       </a>
+      <button type="button" class="btn btn-outline-danger btn-sm"
+              onclick="confirmDelete({{ period.id }}, '{{ period.start_date }} 〜 {{ period.end_date }}')">
+        <i class="bi bi-trash3"></i>
+      </button>
     </div>
   </div>
   {% else %}
   <div class="text-center text-muted py-4">期間がありません</div>
   {% endfor %}
+
+  {% if has_older and not show_all %}
+  <div class="text-center text-muted small py-1">
+    <i class="bi bi-info-circle me-1"></i>最新4期間を表示中
+    （<a href="?all=1" class="text-muted">すべて表示</a>）
+  </div>
+  {% endif %}
+</div>
+
+<!-- 削除確認モーダル -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:#1e293b;color:white;border:none;">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>期間の削除</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="deleteModalBody" class="mb-1"></p>
+        <p class="text-danger small mb-0">
+          <i class="bi bi-exclamation-circle me-1"></i>
+          この期間の希望シフトデータもすべて削除されます。元に戻せません。
+        </p>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <form id="deleteForm" method="post">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash3 me-1"></i>削除する
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -65,7 +114,6 @@
   const yearSel  = document.getElementById('sel-year');
   const monthSel = document.getElementById('sel-month');
 
-  // 年セレクター：今年 ±1 年
   for (let y = today.getFullYear() - 1; y <= today.getFullYear() + 1; y++) {
     const opt = document.createElement('option');
     opt.value = y; opt.textContent = y + '年';
@@ -87,8 +135,15 @@
     document.getElementById('preview-second').textContent
       = fmt(y, m, 16) + ' 〜 ' + fmt(y, m, lastDay(y, m));
   };
-
   updatePreview();
 })();
+
+function confirmDelete(periodId, label) {
+  document.getElementById('deleteModalBody').textContent
+    = `「${label}」を削除しますか？`;
+  document.getElementById('deleteForm').action
+    = `/shifts/${periodId}/delete`;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
 </script>
 {% endblock %}

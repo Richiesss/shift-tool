@@ -11,7 +11,26 @@ bp = Blueprint("shifts", __name__, url_prefix="/shifts")
 @bp.get("/")
 def index():
     periods = repo.get_all_periods()
-    return render_template("shifts/index.html", periods=periods)
+    # 新しい順に並べて最新4件と残りを分ける
+    sorted_periods = sorted(periods, key=lambda p: p.start_date, reverse=True)
+    recent  = sorted_periods[:4]
+    older   = sorted_periods[4:]
+    show_all = request.args.get("all", type=int, default=0)
+    return render_template("shifts/index.html",
+                           periods=recent if not show_all else sorted_periods,
+                           has_older=bool(older),
+                           show_all=show_all)
+
+
+@bp.post("/<int:period_id>/delete")
+def delete_period(period_id):
+    period = repo.get_period(period_id)
+    if not period:
+        flash("期間が見つかりません", "error")
+        return redirect(url_for("shifts.index"))
+    repo.delete_period(period_id)
+    flash(f"{period.start_date} 〜 {period.end_date} の期間を削除しました", "success")
+    return redirect(url_for("shifts.index"))
 
 
 @bp.post("/period/new")
