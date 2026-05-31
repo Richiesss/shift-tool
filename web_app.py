@@ -50,6 +50,10 @@ def create_app():
     from routes.auth_routes import bp as auth_bp
     app.register_blueprint(auth_bp)
 
+    @app.context_processor
+    def inject_auth():
+        return {"auth_enabled": bool(APP_PASSWORD)}
+
     # 認証チェック（ログイン・静的ファイルは除外）
     @app.before_request
     def require_login():
