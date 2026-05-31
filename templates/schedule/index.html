@@ -28,6 +28,48 @@
   .count-ok     { background: #bbf7d0; color: #166534; }
   .count-short  { background: #fecaca; color: #991b1b; }
   .count-leader { background: #fde68a; color: #92400e; }
+
+  /* ── 人員不足サマリーカード ── */
+  .shortage-card {
+    background: #1e293b; border-radius: 10px;
+    overflow: hidden; border-left: 4px solid #f59e0b;
+  }
+  .shortage-header {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .55rem .85rem; cursor: pointer;
+    user-select: none;
+  }
+  .shortage-header:hover { background: rgba(255,255,255,.04); }
+  .shortage-icon { color: #f59e0b; font-size: 1rem; line-height: 1; }
+  .shortage-title { color: #e2e8f0; font-weight: 600; font-size: .85rem; }
+  .shortage-count {
+    background: #f59e0b; color: #1e293b; font-size: .7rem;
+    font-weight: 700; border-radius: 20px; padding: 1px 8px;
+  }
+  .shortage-chevron { color: #64748b; font-size: .8rem; transition: transform .2s; }
+  .shortage-chevron.open { transform: rotate(180deg); }
+  .shortage-body { padding: .5rem .85rem .75rem; border-top: 1px solid #334155; }
+  .shortage-row {
+    display: flex; align-items: flex-start; gap: .6rem;
+    padding: .3rem 0; border-bottom: 1px solid #1e3a5f22;
+  }
+  .shortage-row:last-of-type { border-bottom: none; }
+  .shortage-label {
+    color: #94a3b8; font-size: .75rem; white-space: nowrap;
+    min-width: 80px; padding-top: 2px;
+  }
+  .shortage-sep { color: #475569; margin: 0 2px; }
+  .shortage-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .shortage-chip {
+    font-size: .72rem; font-weight: 600; border-radius: 4px;
+    padding: 2px 6px; cursor: default; white-space: nowrap;
+  }
+  .chip-staff  { background: #fecaca; color: #991b1b; }
+  .chip-leader { background: #fde68a; color: #92400e; }
+  .shortage-legend {
+    display: flex; gap: 6px; margin-top: .5rem; padding-top: .4rem;
+    border-top: 1px solid #334155;
+  }
   /* 土日ヘッダーの文字色：薄背景に白はNG → 濃色に上書き */
   .sched-grid thead th.sat { color: #1e40af !important; }
   .sched-grid thead th.sun { color: #991b1b !important; }
@@ -108,40 +150,34 @@
   </div>
   {% endif %}
 
-  {# ── 人員不足サマリーバナー ── #}
-  {% set shortage_items = [] %}
-  {% for d in dates %}
-    {% set ds = d.isoformat() %}
-    {% set dow_lbl = ['月','火','水','木','金','土','日'][d.weekday()] %}
-    {% set dlabel = d.strftime('%m/%d') + '(' + dow_lbl + ')' %}
-    {% for sv, sl_name in [('breakfast','朝食'), ('dinner','ディナー')] %}
-      {% for pv, pos_name in [('hall','ホール'), ('kitchen','キッチン')] %}
-        {% set st = staffing.get((ds, sv, pv), {}) %}
-        {% if st.short_staff %}
-          {% set _ = shortage_items.append(dlabel ~ ' ' ~ sl_name ~ ' ' ~ pos_name ~ '：' ~ st.count ~ '名（最低' ~ st.min ~ '名必要）') %}
-        {% elif st.short_leader %}
-          {% set _ = shortage_items.append(dlabel ~ ' ' ~ sl_name ~ ' ' ~ pos_name ~ '：リーダー' ~ st.leaders ~ '名（最低' ~ st.min_leader ~ '名必要）') %}
-        {% endif %}
+  {# ── 人員不足サマリー ── #}
+  {% if total_shortage > 0 %}
+  <div class="shortage-card mb-3">
+    <div class="shortage-header" onclick="toggleShortage(this)">
+      <span class="shortage-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+      <span class="shortage-title">人員不足</span>
+      <span class="shortage-count">{{ total_shortage }}件</span>
+      <i class="bi bi-chevron-down shortage-chevron ms-auto"></i>
+    </div>
+    <div class="shortage-body" id="shortage-body" style="display:none">
+      {% for (slot_lbl, pos_lbl), chips in shortage_groups.items() %}
+      <div class="shortage-row">
+        <span class="shortage-label">{{ slot_lbl }}<span class="shortage-sep">/</span>{{ pos_lbl }}</span>
+        <div class="shortage-chips">
+          {% for c in chips %}
+          <span class="shortage-chip {{ 'chip-staff' if c.is_staff else 'chip-leader' }}"
+                title="{{ c.count }}名 / 最低{{ c.min }}名{% if not c.is_staff %}（リーダー{{ c.leaders }}名 / 最低{{ c.min_leader }}名）{% endif %}">
+            {{ c.label }}
+          </span>
+          {% endfor %}
+        </div>
+      </div>
       {% endfor %}
-    {% endfor %}
-  {% endfor %}
-  {% if shortage_items %}
-  <div class="alert alert-warning alert-dismissible fade show mb-3 p-2" role="alert">
-    <div class="d-flex align-items-center gap-2 mb-1" data-bs-toggle="collapse"
-         data-bs-target="#shortage-list" style="cursor:pointer">
-      <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
-      <strong>{{ shortage_items|length }} 件の人員不足があります</strong>
-      <i class="bi bi-chevron-down ms-auto small"></i>
+      <div class="shortage-legend">
+        <span class="shortage-chip chip-staff">人員不足</span>
+        <span class="shortage-chip chip-leader">リーダー不足</span>
+      </div>
     </div>
-    <div class="collapse" id="shortage-list">
-      <ul class="mb-0 ps-3 small mt-1">
-        {% for item in shortage_items %}
-        <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <button type="button" class="btn-close btn-sm position-absolute top-0 end-0 m-2"
-            data-bs-dismiss="alert"></button>
   </div>
   {% endif %}
 
@@ -308,6 +344,14 @@ const TL_ASGN = {
   },
   {% endfor %}
 };
+
+function toggleShortage(header) {
+  const body    = document.getElementById('shortage-body');
+  const chevron = header.querySelector('.shortage-chevron');
+  const open    = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chevron.classList.toggle('open', open);
+}
 
 function openTimeline(ds) {
   const day = TL_ASGN[ds] || {};

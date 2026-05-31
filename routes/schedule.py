@@ -108,6 +108,30 @@ def index(period_id):
     constraints   = repo.get_shift_constraints()
     staffing      = _compute_staffing(assignments, all_employees, dates, constraints)
 
+    # 人員不足をスロット×ポジション別に集計
+    _DAY_JP = ['月','火','水','木','金','土','日']
+    _SLOTS  = [('breakfast','朝食'), ('dinner','ディナー')]
+    _POSES  = [('hall','ホール'), ('kitchen','キッチン')]
+    shortage_groups = {}   # (slot_lbl, pos_lbl) -> list of chip dicts
+    for d in dates:
+        ds = d.isoformat()
+        dlabel = d.strftime('%-m/%-d') + '(' + _DAY_JP[d.weekday()] + ')'
+        for sv, sl in _SLOTS:
+            for pv, pl in _POSES:
+                st = staffing.get((ds, sv, pv), {})
+                if st.get('short_staff') or st.get('short_leader'):
+                    key = (sl, pl)
+                    shortage_groups.setdefault(key, []).append({
+                        'label':      dlabel,
+                        'date':       ds,
+                        'is_staff':   bool(st.get('short_staff')),
+                        'count':      st.get('count', 0),
+                        'min':        st.get('min', 0),
+                        'leaders':    st.get('leaders', 0),
+                        'min_leader': st.get('min_leader', 0),
+                    })
+    total_shortage = sum(len(v) for v in shortage_groups.values())
+
     # ポジションタブでメンバーを絞り込む
     # 兼任（primary_position=None or can_work_both_positions=True）は両タブに表示
     filtered_employees = [
@@ -130,6 +154,8 @@ def index(period_id):
         notes=notes,
         time_map=time_map,
         staffing=staffing,
+        shortage_groups=shortage_groups,
+        total_shortage=total_shortage,
         today=today,
         TimeSlot=TimeSlot,
         Position=Position,
