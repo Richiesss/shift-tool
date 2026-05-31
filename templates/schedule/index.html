@@ -123,7 +123,14 @@
 {% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1 class="fs-6"><i class="bi bi-calendar3 me-1"></i>シフト表</h1>
+  <div>
+    <div class="fs-6 fw-semibold"><i class="bi bi-calendar3 me-1"></i>シフト表</div>
+    {% if period %}
+    <div style="font-size:.72rem;color:#94a3b8;line-height:1.2">
+      {{ period.start_date }} 〜 {{ period.end_date }}
+    </div>
+    {% endif %}
+  </div>
   <div class="ms-auto d-flex gap-1">
     {% if period %}
     <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
@@ -424,6 +431,26 @@ const TL_ASGN = {
   {% endfor %}
 };
 
+// スクロール復元 or 今日の列へ自動スクロール
+(function() {
+  const grid = document.querySelector('.sched-grid');
+  if (!grid) return;
+  const saved = sessionStorage.getItem('schedScroll');
+  if (saved) {
+    const { top, left } = JSON.parse(saved);
+    grid.scrollTop = top;
+    grid.scrollLeft = left;
+    sessionStorage.removeItem('schedScroll');
+  } else {
+    const todayTh = grid.querySelector('thead th.today-col');
+    if (todayTh) {
+      // 名前列（sticky）の幅分だけ余白を引く
+      const empColW = grid.querySelector('thead th.emp-col')?.offsetWidth || 90;
+      grid.scrollLeft = Math.max(0, todayTh.offsetLeft - empColW - 8);
+    }
+  }
+})();
+
 function toggleShortage(header) {
   const body    = document.getElementById('shortage-body');
   const chevron = header.querySelector('.shortage-chevron');
@@ -570,13 +597,28 @@ function doRemove() {
 
 function callAssign(payload) {
   const periodId = {{ period.id if period else 0 }};
+  // スクロール位置を保存してリロード後に復元
+  const grid = document.querySelector('.sched-grid');
+  if (grid) sessionStorage.setItem('schedScroll',
+    JSON.stringify({ top: grid.scrollTop, left: grid.scrollLeft }));
   fetch(`/schedule/${periodId}/assign`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
   }).then(r => r.json()).then(res => {
     if (res.ok) { _modal.hide(); location.reload(); }
-    else alert('エラー: ' + (res.error || '不明'));
+    else showToast('エラー: ' + (res.error || '不明'), 'danger');
   });
+}
+
+function showToast(msg, type) {
+  const tc = document.querySelector('.toast-container');
+  if (!tc) return;
+  const el = document.createElement('div');
+  el.className = `toast show align-items-center text-bg-${type} border-0`;
+  el.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+  tc.appendChild(el);
+  setTimeout(() => bootstrap.Toast.getOrCreateInstance(el).hide(), 4000);
 }
 
 function editNote(el) {

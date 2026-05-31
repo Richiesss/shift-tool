@@ -2,8 +2,16 @@
 {% block title %}客数管理 - SDU-Shift{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1><i class="bi bi-cup-hot-fill me-2"></i>客数管理</h1>
-  <button form="cust-form" type="submit" class="btn btn-primary btn-sm ms-auto">
+  <div>
+    <div class="fw-semibold"><i class="bi bi-cup-hot-fill me-2"></i>客数管理</div>
+    {% if period %}
+    <div style="font-size:.72rem;color:#94a3b8;line-height:1.2">
+      {{ period.start_date }} 〜 {{ period.end_date }}
+    </div>
+    {% endif %}
+  </div>
+  <button form="cust-form" type="submit" class="btn btn-primary btn-sm ms-auto"
+          data-loading="保存中…">
     <i class="bi bi-floppy-fill"></i> 保存
   </button>
 </div>

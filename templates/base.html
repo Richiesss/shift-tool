@@ -93,7 +93,20 @@
     .btn-primary:hover { background: #0284c7; border-color: #0284c7; }
     .badge-hall { background: #dbeafe; color: #1d4ed8; }
     .badge-kitchen { background: #dcfce7; color: #15803d; }
-    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 9999; }
+    /* トースト：PC は右上、モバイルはボトムナビの上中央 */
+    .toast-container {
+      position: fixed; top: 1rem; right: 1rem; z-index: 9999;
+    }
+    @media (max-width: 767px) {
+      .toast-container {
+        top: auto; right: auto; left: 50%;
+        bottom: calc(var(--nav-h) + var(--safe-bottom) + .75rem);
+        transform: translateX(-50%);
+        min-width: min(320px, 90vw);
+      }
+    }
+    /* ローディングボタン */
+    .btn-loading { pointer-events: none; opacity: .75; }
 
     /* ── デスクトップサイドバー ────────────────────────── */
     .sidebar { display: none; }
@@ -258,6 +271,18 @@
     const len = t.querySelector('.toast-body')?.textContent.length || 0;
     const delay = Math.min(7000, Math.max(5000, len * 50));
     setTimeout(() => { bootstrap.Toast.getOrCreateInstance(t).hide(); }, delay);
+  });
+
+  // ── フォーム送信ボタンのローディング状態 ─────────────
+  document.querySelectorAll('[data-loading]').forEach(btn => {
+    const form = btn.form || btn.closest('form');
+    if (form) form.addEventListener('submit', () => {
+      btn.disabled = true;
+      btn.classList.add('btn-loading');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>'
+                    + (btn.dataset.loading || '処理中…');
+    });
   });
 
   // ── PWA service worker ────────────────────────────────
