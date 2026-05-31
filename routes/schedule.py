@@ -136,13 +136,14 @@ def index(period_id):
     ]
     total_shortage = sum(len(g['chips']) for g in shortage_groups)
 
-    # ポジションタブでメンバーを絞り込む
-    # 兼任（primary_position=None or can_work_both_positions=True）は両タブに表示
+    # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
+    assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot}
+
+    # ポジション × スロットでメンバーを絞り込む
     filtered_employees = [
         e for e in employees
-        if e.primary_position is None
-        or e.can_work_both_positions
-        or e.primary_position.value == pos
+        if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
+        and (e.primary_timeslot is None or e.primary_timeslot.value == slot or e.id in assigned_in_slot)
     ]
 
     return render_template(
