@@ -1,9 +1,19 @@
 import logging
+from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, make_response
 from auth import APP_PASSWORD, SESSION_VERSION
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("auth", __name__)
+
+
+def _safe_next(url: str) -> str:
+    """next パラメータを相対パスのみに限定してオープンリダイレクトを防ぐ"""
+    parsed = urlparse(url)
+    # scheme や netloc が含まれる（外部URL）場合はデフォルトに戻す
+    if parsed.scheme or parsed.netloc:
+        return url_for("employees.index")
+    return url or url_for("employees.index")
 
 
 def _login_page(**kwargs):
@@ -24,8 +34,9 @@ def login():
 @bp.post("/login")
 def login_post():
     pwd = request.form.get("password", "").strip()
-    # next は hidden フィールドでも query param でも受け取る
-    next_url = request.form.get("next") or request.args.get("next") or url_for("employees.index")
+    # next は hidden フィールドでも query param でも受け取る（外部URLは除外）
+    raw_next = request.form.get("next") or request.args.get("next") or ""
+    next_url = _safe_next(raw_next)
 
     logger.warning("LOGIN attempt: input_len=%d, expected_len=%d, match=%s",
                    len(pwd), len(APP_PASSWORD), pwd == APP_PASSWORD)
@@ -37,7 +48,8 @@ def login_post():
         session.permanent = True
         return redirect(next_url)
 
-    flash(f"パスワードが違います（入力: {len(pwd)}文字 / 設定: {len(APP_PASSWORD)}文字）", "error")
+    # パスワード長は漏らさない
+    flash("パスワードが違います", "error")
     return _login_page()
 
 

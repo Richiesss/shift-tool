@@ -199,8 +199,8 @@ def update_period_gen_status(period_id: int, status: str, message: str = ""):
     """app_context / キャッシュ不要な低レベル DB 更新（コールバックスレッドから安全に呼べる）"""
     from db.database import Connection
     conn = Connection()
-    # 生成完了時は needs_regen をリセット
-    if status == "done":
+    # 生成完了・失敗時はともに needs_regen をリセット（failedは新しいシフトがない）
+    if status in ("done", "failed"):
         conn.execute(
             "UPDATE schedule_periods SET gen_status=?, gen_message=?, needs_regen=0 WHERE id=?",
             (status, message, period_id)
