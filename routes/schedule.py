@@ -146,6 +146,8 @@ def index(period_id):
         and (e.primary_timeslot is None or e.primary_timeslot.value == slot or e.id in assigned_in_slot)
     ]
 
+    needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
+
     return render_template(
         "schedule/index.html",
         period=period,
@@ -161,6 +163,7 @@ def index(period_id):
         staffing=staffing,
         shortage_groups=shortage_groups,
         total_shortage=total_shortage,
+        needs_regen=needs_regen,
         today=today,
         TimeSlot=TimeSlot,
         Position=Position,

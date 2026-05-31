@@ -19,15 +19,18 @@ def index(period_id):
     if not period:
         flash("期間が見つかりません", "error")
         return redirect(url_for("shifts.index"))
-    periods = repo.get_all_periods()
-    dates = period.date_range()
-    counts = repo.get_reservation_counts(period_id)
+    periods  = repo.get_all_periods()
+    dates    = period.date_range()
+    counts   = repo.get_reservation_counts(period_id)
     thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
     thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
+    gen      = repo.get_period_gen_status(period_id)
+    schedule_generated = gen["status"] == "done"
     return render_template(
         "customers/index.html",
         period=period, periods=periods, dates=dates, counts=counts,
         thresh_b=thresh_b, thresh_d=thresh_d,
+        schedule_generated=schedule_generated,
     )
 
 
@@ -40,8 +43,14 @@ def save(period_id):
     dates = period.date_range()
     for d in dates:
         ds = str(d)
-        b = int(request.form.get(f"b_{ds}", 0) or 0)
+        b  = int(request.form.get(f"b_{ds}", 0) or 0)
         dn = int(request.form.get(f"d_{ds}", 0) or 0)
         repo.save_reservation_count(period_id, ds, b, dn)
-    flash("予約客数を保存しました", "success")
+    # 生成済みシフトがある場合は再生成フラグを立てる
+    gen = repo.get_period_gen_status(period_id)
+    if gen["status"] == "done":
+        repo.set_period_needs_regen(period_id, True)
+        flash("予約客数を保存しました。シフトが生成済みのため、再生成を推奨します。", "warning")
+    else:
+        flash("予約客数を保存しました", "success")
     return redirect(url_for("customers.index", period_id=period_id))

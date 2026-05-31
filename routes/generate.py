@@ -11,7 +11,32 @@ bp = Blueprint("generate", __name__, url_prefix="/generate")
 @bp.get("/")
 def index():
     periods = repo.get_all_periods()
-    return render_template("generate/index.html", periods=periods, result=None, priority_scale=PRIORITY_SCALE)
+    employees_count = len(repo.get_all_employees(active_only=True))
+    # 各期間の前提条件チェック情報を事前計算
+    period_checklist = {}
+    for p in periods:
+        requests     = repo.get_shift_requests(p.id)
+        filled       = len({r.employee_id for r in requests})
+        counts       = repo.get_reservation_counts(p.id)
+        has_counts   = any(
+            c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
+            for c in counts.values()
+        )
+        gen = repo.get_period_gen_status(p.id)
+        period_checklist[p.id] = {
+            "filled":       filled,
+            "total":        employees_count,
+            "has_counts":   has_counts,
+            "gen_status":   gen["status"],
+            "needs_regen":  gen["needs_regen"],
+        }
+    return render_template(
+        "generate/index.html",
+        periods=periods,
+        period_checklist=period_checklist,
+        result=None,
+        priority_scale=PRIORITY_SCALE,
+    )
 
 
 @bp.post("/run")

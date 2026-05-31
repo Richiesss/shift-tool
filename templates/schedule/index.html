@@ -200,6 +200,20 @@
   </div>
   {% endif %}
 
+  {# ── 再生成推奨バナー ── #}
+  {% if needs_regen %}
+  <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+       style="background:#1e293b;border-left:4px solid #f59e0b">
+    <i class="bi bi-arrow-repeat text-warning mt-1" style="flex-shrink:0"></i>
+    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6">
+      このシフトの生成後に<strong style="color:#fbbf24">予約客数が更新</strong>されました。<br>
+      増員条件が変わっている可能性があります。
+      <a href="{{ url_for('generate.index') }}" class="btn btn-warning btn-sm ms-2 py-0 px-2"
+         style="font-size:.78rem">再生成する</a>
+    </div>
+  </div>
+  {% endif %}
+
   {# ── 人員不足サマリー ── #}
   {% if total_shortage > 0 %}
   <div class="shortage-card mb-3">

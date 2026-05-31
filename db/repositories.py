@@ -198,14 +198,20 @@ def _save_fixed_unavailable_dates(conn, emp: Employee):
 def update_period_gen_status(period_id: int, status: str, message: str = ""):
     """app_context / キャッシュ不要な低レベル DB 更新（コールバックスレッドから安全に呼べる）"""
     from db.database import Connection
-    conn = Connection()          # get_connection() を使わず直接生成（g / cache 不要）
-    conn.execute(
-        "UPDATE schedule_periods SET gen_status=?, gen_message=? WHERE id=?",
-        (status, message, period_id)
-    )
+    conn = Connection()
+    # 生成完了時は needs_regen をリセット
+    if status == "done":
+        conn.execute(
+            "UPDATE schedule_periods SET gen_status=?, gen_message=?, needs_regen=0 WHERE id=?",
+            (status, message, period_id)
+        )
+    else:
+        conn.execute(
+            "UPDATE schedule_periods SET gen_status=?, gen_message=? WHERE id=?",
+            (status, message, period_id)
+        )
     conn.commit()
     conn.close()
-    # キャッシュ無効化は app_context が確実にある場合のみ試みる
     try:
         cache.delete_memoized(get_period, period_id)
         cache.delete_memoized(get_all_periods)
@@ -213,18 +219,26 @@ def update_period_gen_status(period_id: int, status: str, message: str = ""):
         pass
 
 
+def set_period_needs_regen(period_id: int, value: bool):
+    conn = get_connection()
+    conn.execute("UPDATE schedule_periods SET needs_regen=? WHERE id=?", (int(value), period_id))
+    conn.commit()
+    conn.close()
+
+
 def get_period_gen_status(period_id: int) -> dict:
     conn = get_connection()
     row = conn.execute(
-        "SELECT gen_status, gen_message FROM schedule_periods WHERE id=?", (period_id,)
+        "SELECT gen_status, gen_message, needs_regen FROM schedule_periods WHERE id=?", (period_id,)
     ).fetchone()
     conn.close()
     if not row:
-        return {"status": "unknown", "message": ""}
+        return {"status": "unknown", "message": "", "needs_regen": False}
     keys = row.keys()
     return {
-        "status":  row["gen_status"]  if "gen_status"  in keys else "idle",
-        "message": row["gen_message"] if "gen_message" in keys else "",
+        "status":      row["gen_status"]   if "gen_status"   in keys else "idle",
+        "message":     row["gen_message"]  if "gen_message"  in keys else "",
+        "needs_regen": bool(row["needs_regen"]) if "needs_regen" in keys else False,
     }
 
 @cache.memoize(timeout=180)

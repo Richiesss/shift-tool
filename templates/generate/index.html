@@ -35,7 +35,8 @@
     <div class="card mb-3">
       <div class="card-body">
         <h6 class="card-title text-muted mb-3">対象期間</h6>
-        <select name="period_id" class="form-select" required>
+        <select name="period_id" id="period-sel" class="form-select" required
+                onchange="updateChecklist(this.value)">
           <option value="">選択してください</option>
           {% for p in periods %}
           <option value="{{ p.id }}" {{ 'selected' if selected_period_id == p.id else '' }}>
@@ -43,6 +44,23 @@
           </option>
           {% endfor %}
         </select>
+
+        <!-- 前提条件チェックリスト -->
+        <div id="checklist" class="mt-3" style="display:none">
+          <div class="small fw-semibold text-muted mb-2">前提条件</div>
+          <div id="chk-requests" class="d-flex align-items-center gap-2 mb-1 small">
+            <i class="bi bi-circle" style="font-size:1rem"></i>
+            <span></span>
+          </div>
+          <div id="chk-counts" class="d-flex align-items-center gap-2 mb-1 small">
+            <i class="bi bi-circle" style="font-size:1rem"></i>
+            <span></span>
+          </div>
+          <div id="chk-regen" class="d-flex align-items-center gap-2 small" style="display:none!important">
+            <i class="bi bi-arrow-repeat text-warning" style="font-size:1rem"></i>
+            <span style="color:#f59e0b">客数が更新されています。再生成を推奨します。</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -133,6 +151,47 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+const CHECKLIST = {{ period_checklist | tojson }};
+
+function updateChecklist(pid) {
+  const box = document.getElementById('checklist');
+  if (!pid || !CHECKLIST[pid]) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const d = CHECKLIST[pid];
+
+  // 希望シフト
+  const rEl = document.getElementById('chk-requests');
+  const ok1 = d.filled > 0;
+  rEl.querySelector('i').className = ok1
+    ? 'bi bi-check-circle-fill text-success'
+    : 'bi bi-exclamation-circle-fill text-danger';
+  rEl.querySelector('span').textContent =
+    `希望シフト入力：${d.filled} / ${d.total} 人`;
+  rEl.querySelector('span').style.color = ok1 ? '#22c55e' : '#ef4444';
+
+  // 客数
+  const cEl = document.getElementById('chk-counts');
+  const ok2 = d.has_counts;
+  cEl.querySelector('i').className = ok2
+    ? 'bi bi-check-circle-fill text-success'
+    : 'bi bi-dash-circle text-warning';
+  cEl.querySelector('span').textContent = ok2
+    ? '予約客数：入力済み'
+    : '予約客数：未入力（増員判定が無効になります）';
+  cEl.querySelector('span').style.color = ok2 ? '#22c55e' : '#f59e0b';
+
+  // 再生成
+  const rg = document.getElementById('chk-regen');
+  rg.style.display = d.needs_regen ? 'flex' : 'none';
+}
+
+// ページ読み込み時にも実行
+document.addEventListener('DOMContentLoaded', () => {
+  updateChecklist(document.getElementById('period-sel').value);
+});
+</script>
+
 <script>
   // すべてのポップオーバーを初期化
   document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {

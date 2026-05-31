@@ -253,6 +253,7 @@ _MIGRATIONS = [
     ("schedule_periods",  "gen_status",                 "TEXT NOT NULL DEFAULT 'idle'"),
     ("schedule_periods",  "gen_message",                "TEXT NOT NULL DEFAULT ''"),
     ("employees",         "display_order",              "INTEGER NOT NULL DEFAULT 0"),
+    ("schedule_periods",  "needs_regen",                "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _INDEXES = [
