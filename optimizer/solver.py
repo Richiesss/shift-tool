@@ -484,7 +484,7 @@ def solve(
     # ── 求解 ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 25.0
-    solver.parameters.num_search_workers = 2
+    solver.parameters.num_search_workers = 1
     solver.parameters.log_search_progress = False
     logger.info(f"  [CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s "
                 f"workers={solver.parameters.num_search_workers}")
@@ -723,7 +723,7 @@ def _solve_best_effort(
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 15.0
-    solver.parameters.num_search_workers = 2
+    solver.parameters.num_search_workers = 1
     solver.parameters.log_search_progress = False
     logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s")
     status = solver.solve(model)
