@@ -60,6 +60,7 @@ def get_employee(employee_id: int) -> Optional[Employee]:
 def save_employee(emp: Employee) -> Employee:
     conn = get_connection()
     pp   = emp.primary_position.value if emp.primary_position else None
+    op   = emp.output_position.value  if emp.output_position  else None
     pt   = emp.primary_timeslot.value if emp.primary_timeslot else None
     both = int(emp.can_work_both_positions)
     opn     = int(emp.can_open)
@@ -68,13 +69,13 @@ def save_employee(emp: Employee) -> Employee:
     avail_d = int(emp.always_available_dinner)
     if emp.id is None:
         emp.id = conn.execute_insert(
-            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, cln, avail_b, avail_d, 1)
+            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, 1)
         )
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, pt, both, opn, cln, avail_b, avail_d, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, int(emp.is_active), emp.id)
         )
     _save_fixed_patterns(conn, emp)
     _save_fixed_unavailable_dates(conn, emp)
@@ -114,6 +115,7 @@ def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employe
     eid = row["id"]
     keys = row.keys()
     pp_val   = row["primary_position"]   if "primary_position"   in keys and row["primary_position"] else None
+    op_val   = row["output_position"]    if "output_position"    in keys and row["output_position"]  else None
     pt_val   = row["primary_timeslot"]   if "primary_timeslot"   in keys and row["primary_timeslot"] else None
     return Employee(
         id=eid, name=row["name"],
@@ -121,6 +123,7 @@ def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employe
         hall_skill=SkillLevel(row["hall_skill"]),
         kitchen_skill=SkillLevel(row["kitchen_skill"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
+        output_position=PrimaryPosition(op_val) if op_val else None,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         can_work_both_positions=bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False,
         can_open=bool(row["can_open"]) if "can_open" in keys else False,
@@ -147,6 +150,7 @@ def _row_to_employee(row, conn) -> Employee:
     ).fetchall()
     keys = row.keys()
     pp_val   = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
+    op_val   = row["output_position"]  if "output_position"  in keys and row["output_position"]  else None
     pt_val   = row["primary_timeslot"] if "primary_timeslot" in keys and row["primary_timeslot"] else None
     both_val = bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False
     open_val    = bool(row["can_open"])    if "can_open"    in keys else False
@@ -160,6 +164,7 @@ def _row_to_employee(row, conn) -> Employee:
         hall_skill=SkillLevel(row["hall_skill"]),
         kitchen_skill=SkillLevel(row["kitchen_skill"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
+        output_position=PrimaryPosition(op_val) if op_val else None,
         can_work_both_positions=both_val,
         can_open=open_val,
         can_cleanup=cleanup_val,

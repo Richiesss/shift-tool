@@ -75,6 +75,33 @@
         <div class="form-text">「両方」を選ぶとホール・キッチンどちらにも配置できます</div>
       </div>
 
+      <!-- 出力時の所属欄（両方選択時のみ表示） -->
+      <div class="mb-3" id="output-pos-block" style="display:none">
+        <label class="form-label fw-semibold">
+          シフト表・PDF上の所属欄
+          <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem">要設定</span>
+        </label>
+        {% set cur_op = emp.output_position.value if emp and emp.output_position else '' %}
+        <div class="d-flex gap-2">
+          <label class="pos-btn pos-hall flex-grow-1 text-center" id="op-hall-label">
+            <input type="radio" name="output_position" value="hall" class="d-none"
+                   {{ 'checked' if cur_op == 'hall' else '' }}
+                   onchange="onOutputPosChange()">
+            <i class="bi bi-people-fill d-block mb-1" style="font-size:1.1rem"></i>ホール欄
+          </label>
+          <label class="pos-btn pos-kitchen flex-grow-1 text-center" id="op-kitchen-label">
+            <input type="radio" name="output_position" value="kitchen" class="d-none"
+                   {{ 'checked' if cur_op == 'kitchen' else '' }}
+                   onchange="onOutputPosChange()">
+            <i class="bi bi-egg-fried d-block mb-1" style="font-size:1.1rem"></i>キッチン欄
+          </label>
+        </div>
+        <div class="form-text" style="color:#b45309">
+          <i class="bi bi-exclamation-circle me-1"></i>
+          PDF・Excelのシフト表でこのスタッフをどの欄に記載するか選択してください
+        </div>
+      </div>
+
       <!-- 習熟度（ポジションに応じて表示切替） -->
       <div class="row g-3" id="skill-row">
         <div class="col" id="hall-skill-block">
@@ -215,15 +242,27 @@ function onPositionChange() {
   const checked = document.querySelector('input[name="primary_position"]:checked');
   const pos = checked ? checked.value : '';
 
+  // 習熟度表示切替
   document.getElementById('hall-skill-block').style.display    = (pos === 'kitchen') ? 'none' : '';
   document.getElementById('kitchen-skill-block').style.display = (pos === 'hall')    ? 'none' : '';
 
+  // 出力ポジションブロック：両方の時のみ表示
+  document.getElementById('output-pos-block').style.display = (pos === '') ? '' : 'none';
+
+  // ポジションボタン選択状態
   ['pos-hall-label','pos-kitchen-label','pos-both-label'].forEach(id => {
     document.getElementById(id).classList.remove('selected');
   });
   if      (pos === 'hall')    document.getElementById('pos-hall-label').classList.add('selected');
   else if (pos === 'kitchen') document.getElementById('pos-kitchen-label').classList.add('selected');
   else                        document.getElementById('pos-both-label').classList.add('selected');
+}
+
+function onOutputPosChange() {
+  const checked = document.querySelector('input[name="output_position"]:checked');
+  const op = checked ? checked.value : '';
+  document.getElementById('op-hall-label').classList.toggle('selected', op === 'hall');
+  document.getElementById('op-kitchen-label').classList.toggle('selected', op === 'kitchen');
 }
 
 onPositionChange();

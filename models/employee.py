@@ -17,8 +17,9 @@ class Employee:
     employment_type: EmploymentType
     hall_skill: SkillLevel = SkillLevel.BEGINNER
     kitchen_skill: SkillLevel = SkillLevel.BEGINNER
-    primary_position: Optional[PrimaryPosition] = None   # None = 未設定（旧データ互換）
-    can_work_both_positions: bool = False                 # True = 兼務可（主所属外でも対応可）
+    primary_position: Optional[PrimaryPosition] = None   # None = 両方対応
+    output_position: Optional[PrimaryPosition] = None   # PDF/Excel出力時の所属欄（None→primary_positionで代替）
+    can_work_both_positions: bool = False                 # True = 兼務可
     can_open: bool = False                                # True = 朝食開店準備（5:45〜6:30）対応可
     can_cleanup: bool = False                             # True = 朝食片付け（10:00〜11:30）対応可
     always_available_breakfast: bool = False              # True = 朝食に希望提出不要・毎日出勤可

@@ -313,10 +313,12 @@ def export_pdf(
     n     = len(dates)
 
     # ── 従業員をキッチン／ホールに分類 ───────────────────────────────
-    kitchen_emps = [e for e in employees
-                    if e.primary_position == PrimaryPosition.KITCHEN]
-    hall_emps    = [e for e in employees
-                    if e.primary_position != PrimaryPosition.KITCHEN]
+    # output_position 優先、未設定なら primary_position で判断
+    def _out_pos(e):
+        return e.output_position or e.primary_position
+
+    kitchen_emps = [e for e in employees if _out_pos(e) == PrimaryPosition.KITCHEN]
+    hall_emps    = [e for e in employees if _out_pos(e) != PrimaryPosition.KITCHEN]
 
     # ── 列幅 ─────────────────────────────────────────────────────────
     page_w = landscape(A4)[0] - 2 * MARGIN

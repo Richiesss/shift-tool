@@ -100,9 +100,13 @@ def _form_to_employee(emp_id):
             patterns.append(FixedPattern(dow, b, d))
 
     pp_val = f.get("primary_position") or None
+    op_val = f.get("output_position")  or None
     pt_val = f.get("primary_timeslot") or None
     # 所属ポジションが「どちらでも」の場合は兼務可を自動でTrue
     can_work_both = (pp_val is None)
+    # 単一ポジションの場合は出力ポジションをそれに合わせる
+    if pp_val and not op_val:
+        op_val = pp_val
 
     return Employee(
         id=emp_id,
@@ -111,6 +115,7 @@ def _form_to_employee(emp_id):
         hall_skill=SkillLevel(f.get("hall_skill") or "novice"),
         kitchen_skill=SkillLevel(f.get("kitchen_skill") or "novice"),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
+        output_position=PrimaryPosition(op_val) if op_val else None,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         can_work_both_positions=can_work_both,
         can_open=bool(f.get("can_open")),
