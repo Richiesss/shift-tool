@@ -24,13 +24,13 @@ def index(period_id):
     counts   = repo.get_reservation_counts(period_id)
     thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
     thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
-    gen      = repo.get_period_gen_status(period_id)
-    schedule_generated = gen["status"] == "done"
+    gen         = repo.get_period_gen_status(period_id)
+    needs_regen = gen.get("needs_regen", False)
     return render_template(
         "customers/index.html",
         period=period, periods=periods, dates=dates, counts=counts,
         thresh_b=thresh_b, thresh_d=thresh_d,
-        schedule_generated=schedule_generated,
+        needs_regen=needs_regen,
     )
 
 
