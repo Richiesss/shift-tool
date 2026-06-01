@@ -86,11 +86,39 @@
 
     /* ── 共通 ──────────────────────────────────────────── */
     .page-header {
-      background: #1e293b; color: white;
-      padding: .75rem 1rem; position: sticky; top: 0; z-index: 100;
-      display: flex; align-items: center; gap: .5rem;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1a3a52 100%);
+      border-bottom: 1.5px solid rgba(148,163,184,.18);
+      box-shadow: 0 2px 16px rgba(0,0,0,.35);
+      color: white;
+      padding: .7rem 1rem;
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; gap: .65rem;
+      min-height: 54px;
     }
-    .page-header h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+    .page-header h1 {
+      font-size: 1rem; margin: 0; font-weight: 700; letter-spacing: .02em;
+    }
+    /* モバイルのみヘッダーにロゴ表示 */
+    .page-header .header-brand-logo {
+      width: 30px; height: 30px; object-fit: contain;
+      border-radius: 6px; flex-shrink: 0; opacity: .92;
+    }
+    @media (min-width: 768px) {
+      .page-header .header-brand-logo { display: none; }
+    }
+    /* ヘッダー右端のブランド名（デスクトップのみ） */
+    @media (min-width: 768px) {
+      .page-header::after {
+        content: 'SKY DINING UOMAN';
+        margin-left: auto;
+        font-size: .6rem; letter-spacing: .14em;
+        color: rgba(148,163,184,.35);
+        font-weight: 600; white-space: nowrap;
+        text-transform: uppercase; pointer-events: none;
+      }
+      /* アクション要素がある場合は after を非表示 */
+      .page-header:has(.ms-auto)::after { display: none; }
+    }
     .content { padding: 1rem; }
     .card { border: none; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-radius: 12px; }
     .btn-primary { background: #0ea5e9; border-color: #0ea5e9; }
@@ -288,6 +316,18 @@
                     + (btn.dataset.loading || '処理中…');
     });
   });
+
+  // ── モバイルヘッダーにロゴを挿入 ─────────────────────
+  (function() {
+    if (window.innerWidth >= 768) return;
+    const hdr = document.querySelector('.page-header');
+    if (!hdr) return;
+    const img = document.createElement('img');
+    img.src = '/static/icons/apple-touch-icon.png';
+    img.alt = '';
+    img.className = 'header-brand-logo';
+    hdr.insertBefore(img, hdr.firstChild);
+  })();
 
   // ── PWA service worker ────────────────────────────────
   if ('serviceWorker' in navigator) {
