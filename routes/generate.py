@@ -22,13 +22,10 @@ def index():
             c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
             for c in counts.values()
         )
-        gen = repo.get_period_gen_status(p.id)
         period_checklist[p.id] = {
-            "filled":       filled,
-            "total":        employees_count,
-            "has_counts":   has_counts,
-            "gen_status":   gen["status"],
-            "needs_regen":  gen["needs_regen"],
+            "filled":     filled,
+            "total":      employees_count,
+            "has_counts": has_counts,
         }
     resp = make_response(render_template(
         "generate/index.html",
@@ -54,13 +51,10 @@ def checklist(period_id):
         c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
         for c in counts.values()
     )
-    gen = repo.get_period_gen_status(period_id)
     return jsonify({
-        "filled":      filled,
-        "total":       employees_count,
-        "has_counts":  has_counts,
-        "gen_status":  gen["status"],
-        "needs_regen": gen["needs_regen"],
+        "filled":     filled,
+        "total":      employees_count,
+        "has_counts": has_counts,
     })
 
 

@@ -56,10 +56,6 @@
             <i class="bi bi-circle" style="font-size:1rem"></i>
             <span></span>
           </div>
-          <div id="chk-regen" class="d-flex align-items-center gap-2 small" style="display:none!important">
-            <i class="bi bi-arrow-repeat text-warning" style="font-size:1rem"></i>
-            <span style="color:#f59e0b">客数が更新されています。再生成を推奨します。</span>
-          </div>
         </div>
       </div>
     </div>
@@ -180,10 +176,6 @@ function applyChecklist(pid, d) {
     ? '予約客数：入力済み'
     : '予約客数：未入力（増員判定が無効になります）';
   cEl.querySelector('span').style.color = ok2 ? '#22c55e' : '#f59e0b';
-
-  // 再生成フラグ
-  const rg = document.getElementById('chk-regen');
-  rg.style.display = d.needs_regen ? 'flex' : 'none';
 }
 
 function updateChecklist(pid) {
