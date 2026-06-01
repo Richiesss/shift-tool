@@ -152,13 +152,13 @@
 
 {% block scripts %}
 <script>
-const CHECKLIST = {{ period_checklist | tojson }};
+// ページ埋め込みの初期データ（初回表示用）
+let CHECKLIST = {{ period_checklist | tojson }};
 
-function updateChecklist(pid) {
+function applyChecklist(pid, d) {
   const box = document.getElementById('checklist');
-  if (!pid || !CHECKLIST[pid]) { box.style.display = 'none'; return; }
+  if (!pid || !d) { box.style.display = 'none'; return; }
   box.style.display = 'block';
-  const d = CHECKLIST[pid];
 
   // 希望シフト
   const rEl = document.getElementById('chk-requests');
@@ -181,14 +181,35 @@ function updateChecklist(pid) {
     : '予約客数：未入力（増員判定が無効になります）';
   cEl.querySelector('span').style.color = ok2 ? '#22c55e' : '#f59e0b';
 
-  // 再生成
+  // 再生成フラグ
   const rg = document.getElementById('chk-regen');
   rg.style.display = d.needs_regen ? 'flex' : 'none';
 }
 
-// ページ読み込み時にも実行
+function updateChecklist(pid) {
+  if (!pid) { document.getElementById('checklist').style.display = 'none'; return; }
+  // サーバーから最新データを取得（bfcache や古いデータを回避）
+  fetch(`/generate/checklist/${pid}`)
+    .then(r => r.json())
+    .then(d => {
+      CHECKLIST[pid] = d;
+      applyChecklist(pid, d);
+    })
+    .catch(() => {
+      // フォールバック：ページ埋め込みデータで表示
+      applyChecklist(pid, CHECKLIST[pid]);
+    });
+}
+
+// 初回・bfcache から復元されたとき両方で最新化
 document.addEventListener('DOMContentLoaded', () => {
   updateChecklist(document.getElementById('period-sel').value);
+});
+window.addEventListener('pageshow', e => {
+  if (e.persisted) {
+    // bfcache から復元された場合は必ず再取得
+    updateChecklist(document.getElementById('period-sel').value);
+  }
 });
 </script>
 

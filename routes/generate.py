@@ -1,6 +1,6 @@
 import logging
 import threading
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, make_response
 from db import repositories as repo
 from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE, SolveProgressCallback
 from utils.solver_logger import logger, log_path
@@ -30,13 +30,38 @@ def index():
             "gen_status":   gen["status"],
             "needs_regen":  gen["needs_regen"],
         }
-    return render_template(
+    resp = make_response(render_template(
         "generate/index.html",
         periods=periods,
         period_checklist=period_checklist,
         result=None,
         priority_scale=PRIORITY_SCALE,
+    ))
+    # bfcache を無効化してページ再表示時に古い needs_regen が残らないようにする
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
+@bp.get("/checklist/<int:period_id>")
+def checklist(period_id):
+    """チェックリストを最新状態で返す軽量 API"""
+    employees_count = len(repo.get_all_employees(active_only=True))
+    requests_list   = repo.get_shift_requests(period_id)
+    filled          = len({r.employee_id for r in requests_list})
+    counts          = repo.get_reservation_counts(period_id)
+    has_counts      = any(
+        c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
+        for c in counts.values()
     )
+    gen = repo.get_period_gen_status(period_id)
+    return jsonify({
+        "filled":      filled,
+        "total":       employees_count,
+        "has_counts":  has_counts,
+        "gen_status":  gen["status"],
+        "needs_regen": gen["needs_regen"],
+    })
 
 
 @bp.post("/run")
