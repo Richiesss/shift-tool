@@ -455,7 +455,7 @@ const TL_ASGN = {
     {% for sv, alist in slot_map.items() %}
     "{{ sv }}": [
       {% for a in alist %}
-      { emp: {{ emp_map[a.employee_id].name | tojson }},
+      { emp: {{ (emp_map[a.employee_id].name if a.employee_id in emp_map else '(不明)') | tojson }},
         pos: "{{ a.position.value }}",
         reinf: {{ 'true' if a.is_reinforcement else 'false' }},
         rs: {{ (a.reinf_start or '') | tojson }},

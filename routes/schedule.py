@@ -86,7 +86,9 @@ def index(period_id):
 
     periods = repo.get_all_periods()
     employees = repo.get_all_employees(active_only=True)
-    emp_map = {e.id: e for e in employees}
+    # emp_map はアーカイブ済みスタッフも含める
+    # （アーカイブ前に生成されたシフトで参照される可能性があるため）
+    emp_map = {e.id: e for e in repo.get_all_employees(active_only=False)}
     assignments = repo.get_assignments(period_id)
     dates = period.date_range()
 
