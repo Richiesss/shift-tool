@@ -20,14 +20,15 @@
   /* 今日の列 */
   .sched-grid thead th.today-col { background: #1d4ed8 !important; color: #fff !important; }
   .sched-grid td.today-col { background: #eff6ff !important; }
-  /* 人員不足の日付ヘッダー */
-  .sched-grid thead th.short-staff  { background: #991b1b !important; color: #fef2f2 !important; }
-  .sched-grid thead th.short-leader { background: #92400e !important; color: #fffbeb !important; }
-  .count-badge { font-size: .65rem; font-weight: 700; border-radius: 3px;
-                 padding: 0 3px; display: inline-block; margin-top: 2px; }
+  /* 人員不足の日付ヘッダー：背景色の上書きをやめ下部ボーダーで表示
+     → 土曜（青）・日曜（赤）の背景はそのまま残り、色の混同を防ぐ */
+  .sched-grid thead th.short-staff  { box-shadow: inset 0 -4px 0 #ef4444 !important; }
+  .sched-grid thead th.short-leader { box-shadow: inset 0 -4px 0 #f59e0b !important; }
+  .count-badge { font-size: .65rem; font-weight: 800; border-radius: 4px;
+                 padding: 1px 4px; display: inline-block; margin-top: 2px; }
   .count-ok     { background: #bbf7d0; color: #166534; }
-  .count-short  { background: #fecaca; color: #991b1b; }
-  .count-leader { background: #fde68a; color: #92400e; }
+  .count-short  { background: #ef4444; color: white; }
+  .count-leader { background: #f59e0b; color: white; }
 
   /* ── 人員不足サマリーカード ── */
   .shortage-card {
@@ -70,9 +71,12 @@
     display: flex; gap: 6px; margin-top: .5rem; padding-top: .4rem;
     border-top: 1px solid #334155;
   }
-  /* 土日ヘッダーの文字色：薄背景に白はNG → 濃色に上書き */
+  /* 土日ヘッダーの文字色：背景が薄いため濃色に */
   .sched-grid thead th.sat { color: #1e40af !important; }
-  .sched-grid thead th.sun { color: #991b1b !important; }
+  .sched-grid thead th.sun { color: #be123c !important; }
+  /* 今日 + 土日が重なるケースの文字保証 */
+  .sched-grid thead th.today-col.sat,
+  .sched-grid thead th.today-col.sun { color: white !important; }
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: #cbd5e1; }
