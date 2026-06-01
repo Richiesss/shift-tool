@@ -42,6 +42,13 @@ def create_app():
         _c.execute(
             "UPDATE schedule_periods SET gen_status='idle', gen_message='' WHERE gen_status='generating'"
         )
+        # output_position と primary_position の不整合を修正
+        # (単一ポジション従業員の output_position が誤った値になっているケース)
+        _c.execute(
+            "UPDATE employees SET output_position = primary_position"
+            " WHERE primary_position IS NOT NULL"
+            " AND (output_position IS NULL OR output_position != primary_position)"
+        )
         _c.commit()
         _c.close()
     except Exception:
