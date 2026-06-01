@@ -101,16 +101,18 @@ def _form_to_employee(emp_id):
 
     pp_val = f.get("primary_position") or None
     pt_val = f.get("primary_timeslot") or None
+    # 所属ポジションが「どちらでも」の場合は兼務可を自動でTrue
+    can_work_both = (pp_val is None)
 
     return Employee(
         id=emp_id,
         name=f["name"].strip(),
         employment_type=EmploymentType(f["employment_type"]),
-        hall_skill=SkillLevel(f["hall_skill"]),
-        kitchen_skill=SkillLevel(f["kitchen_skill"]),
+        hall_skill=SkillLevel(f.get("hall_skill") or "novice"),
+        kitchen_skill=SkillLevel(f.get("kitchen_skill") or "novice"),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
-        can_work_both_positions=bool(f.get("can_work_both_positions")),
+        can_work_both_positions=can_work_both,
         can_open=bool(f.get("can_open")),
         can_cleanup=bool(f.get("can_cleanup")),
         always_available_breakfast=bool(f.get("always_available_breakfast")),

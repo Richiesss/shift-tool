@@ -1,5 +1,22 @@
 {% extends "base.html" %}
 {% block title %}{{ '従業員編集' if emp else '新規登録' }} - SDU-Shift{% endblock %}
+
+{% block head %}
+<style>
+  .pos-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: .7rem .5rem; border: 1.5px solid #e2e8f0;
+    border-radius: 10px; cursor: pointer; font-size: .85rem; font-weight: 500;
+    color: #64748b; transition: all .15s; user-select: none;
+    background: white; min-height: 70px;
+  }
+  .pos-btn:hover { border-color: #94a3b8; color: #1e293b; background: #f8fafc; }
+  .pos-btn.selected { border-color: #0ea5e9; background: #f0f9ff; color: #0284c7; font-weight: 600; }
+  .pos-btn.pos-hall.selected    { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
+  .pos-btn.pos-kitchen.selected { border-color: #15803d; background: #f0fdf4; color: #15803d; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <a href="{{ url_for('employees.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
@@ -8,6 +25,7 @@
 
 <div class="content">
 <form method="post">
+
   <!-- 基本情報 -->
   <div class="card mb-3">
     <div class="card-body">
@@ -15,7 +33,8 @@
 
       <div class="mb-3">
         <label class="form-label fw-semibold">氏名 <span class="text-danger">*</span></label>
-        <input type="text" name="name" class="form-control" value="{{ emp.name if emp else '' }}" required>
+        <input type="text" name="name" class="form-control"
+               value="{{ emp.name if emp else '' }}" required>
       </div>
 
       <div class="mb-3">
@@ -29,8 +48,36 @@
         </select>
       </div>
 
-      <div class="row g-3">
-        <div class="col-6">
+      <!-- 所属ポジション -->
+      <div class="mb-3">
+        <label class="form-label fw-semibold">所属ポジション</label>
+        {% set cur_pos = emp.primary_position.value if emp and emp.primary_position else '' %}
+        <div class="d-flex gap-2">
+          <label class="pos-btn pos-hall flex-grow-1 text-center" id="pos-hall-label">
+            <input type="radio" name="primary_position" value="hall" class="d-none"
+                   {{ 'checked' if cur_pos == 'hall' else '' }}
+                   onchange="onPositionChange()">
+            <i class="bi bi-people-fill d-block mb-1" style="font-size:1.3rem"></i>ホール
+          </label>
+          <label class="pos-btn pos-kitchen flex-grow-1 text-center" id="pos-kitchen-label">
+            <input type="radio" name="primary_position" value="kitchen" class="d-none"
+                   {{ 'checked' if cur_pos == 'kitchen' else '' }}
+                   onchange="onPositionChange()">
+            <i class="bi bi-egg-fried d-block mb-1" style="font-size:1.3rem"></i>キッチン
+          </label>
+          <label class="pos-btn flex-grow-1 text-center" id="pos-both-label">
+            <input type="radio" name="primary_position" value="" class="d-none"
+                   {{ 'checked' if cur_pos == '' else '' }}
+                   onchange="onPositionChange()">
+            <i class="bi bi-shuffle d-block mb-1" style="font-size:1.3rem"></i>両方
+          </label>
+        </div>
+        <div class="form-text">「両方」を選ぶとホール・キッチンどちらにも配置できます</div>
+      </div>
+
+      <!-- 習熟度（ポジションに応じて表示切替） -->
+      <div class="row g-3" id="skill-row">
+        <div class="col" id="hall-skill-block">
           <label class="form-label fw-semibold">ホール習熟度</label>
           <select name="hall_skill" class="form-select">
             {% for sl in skill_levels %}
@@ -40,7 +87,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-6">
+        <div class="col" id="kitchen-skill-block">
           <label class="form-label fw-semibold">キッチン習熟度</label>
           <select name="kitchen_skill" class="form-select">
             {% for sl in skill_levels %}
@@ -60,18 +107,6 @@
       <h6 class="card-title text-muted mb-3">勤務設定</h6>
 
       <div class="mb-3">
-        <label class="form-label fw-semibold">所属ポジション</label>
-        <select name="primary_position" class="form-select">
-          <option value="">どちらでも</option>
-          {% for pp in primary_positions %}
-          <option value="{{ pp.value }}" {{ 'selected' if emp and emp.primary_position == pp else '' }}>
-            {{ pp.label() }}
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div class="mb-3">
         <label class="form-label fw-semibold">勤務時間帯</label>
         <select name="primary_timeslot" class="form-select">
           <option value="">どちらでも</option>
@@ -84,11 +119,6 @@
       </div>
 
       <div class="d-flex flex-column gap-2">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" name="can_work_both_positions" id="cwbp"
-            {{ 'checked' if emp and emp.can_work_both_positions else '' }}>
-          <label class="form-check-label" for="cwbp">兼務可（主所属外ポジション対応可）</label>
-        </div>
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="can_open" id="co"
             {{ 'checked' if emp and emp.can_open else '' }}>
@@ -113,7 +143,7 @@
     </div>
   </div>
 
-  <!-- 固定パターン（アルバイトのみ有意） -->
+  <!-- 固定シフトパターン -->
   <div class="card mb-3">
     <div class="card-body">
       <h6 class="card-title text-muted mb-3">固定シフトパターン（アルバイト）</h6>
@@ -129,19 +159,15 @@
             <tr>
               <td class="fw-semibold">朝食</td>
               {% for i in range(7) %}
-              <td>
-                <input type="checkbox" name="fp_b_{{ i }}"
-                  {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).breakfast else '' }}>
-              </td>
+              <td><input type="checkbox" name="fp_b_{{ i }}"
+                {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).breakfast else '' }}></td>
               {% endfor %}
             </tr>
             <tr>
               <td class="fw-semibold">ディナー</td>
               {% for i in range(7) %}
-              <td>
-                <input type="checkbox" name="fp_d_{{ i }}"
-                  {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).dinner else '' }}>
-              </td>
+              <td><input type="checkbox" name="fp_d_{{ i }}"
+                {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).dinner else '' }}></td>
               {% endfor %}
             </tr>
           </tbody>
@@ -153,7 +179,7 @@
   <!-- 固定不可日 -->
   <div class="card mb-3">
     <div class="card-body">
-      <h6 class="card-title text-muted mb-3">固定不可日（毎年/毎月ではなく特定の日付）</h6>
+      <h6 class="card-title text-muted mb-3">固定不可日</h6>
       <div id="unavail-list" class="d-flex flex-wrap gap-2 mb-2">
         {% for d in (emp.fixed_unavailable_dates if emp else []) %}
         <div class="badge bg-secondary d-flex align-items-center gap-1 unavail-badge" style="font-size:.85rem">
@@ -174,15 +200,34 @@
   </div>
 
   <div class="d-grid gap-2">
-    <button type="submit" class="btn btn-primary btn-lg">
+    <button type="submit" class="btn btn-primary btn-lg" data-loading="保存中…">
       <i class="bi bi-check-lg me-1"></i>{{ '更新する' if emp else '登録する' }}
     </button>
     <a href="{{ url_for('employees.index') }}" class="btn btn-outline-secondary">キャンセル</a>
   </div>
 </form>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
+function onPositionChange() {
+  const checked = document.querySelector('input[name="primary_position"]:checked');
+  const pos = checked ? checked.value : '';
+
+  document.getElementById('hall-skill-block').style.display    = (pos === 'kitchen') ? 'none' : '';
+  document.getElementById('kitchen-skill-block').style.display = (pos === 'hall')    ? 'none' : '';
+
+  ['pos-hall-label','pos-kitchen-label','pos-both-label'].forEach(id => {
+    document.getElementById(id).classList.remove('selected');
+  });
+  if      (pos === 'hall')    document.getElementById('pos-hall-label').classList.add('selected');
+  else if (pos === 'kitchen') document.getElementById('pos-kitchen-label').classList.add('selected');
+  else                        document.getElementById('pos-both-label').classList.add('selected');
+}
+
+onPositionChange();
+
 function addUnavailDate() {
   const input = document.getElementById('new-unavail-date');
   const val = input.value;
