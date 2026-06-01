@@ -107,8 +107,18 @@ def restore_employee(employee_id: int):
 def reorder_employees(ordered_ids: list[int]):
     """ドラッグ&ドロップ後の並び順を保存する"""
     conn = get_connection()
+    n = len(ordered_ids)
+    # 表示中の従業員を 0, 1, 2 ... n-1 に設定
     for i, emp_id in enumerate(ordered_ids):
         conn.execute("UPDATE employees SET display_order=? WHERE id=?", (i, emp_id))
+    # リストに含まれていない従業員（非表示等）を必ず末尾へ
+    # display_order = n + id → 常に n-1 より大きい値になりリスト末尾に集まる
+    if ordered_ids:
+        ph = ",".join(["?"] * n)
+        conn.execute(
+            f"UPDATE employees SET display_order = ? + id WHERE id NOT IN ({ph})",
+            (n, *ordered_ids)
+        )
     conn.commit()
     conn.close()
     cache.delete_memoized(get_all_employees)
