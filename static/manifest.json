@@ -1,7 +1,7 @@
 {
   "name": "SDU-Shift",
   "short_name": "SDU-Shift",
-  "description": "飲食店向けシフト管理アプリ",
+  "description": "スタッフシフト管理",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
