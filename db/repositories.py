@@ -466,6 +466,7 @@ def save_app_setting(key: str, value: str):
     conn.commit()
     conn.close()
     cache.delete_memoized(get_app_setting, key)
+    cache.delete_memoized(get_all_app_settings)  # get_all_app_settings も無効化
 
 
 @cache.memoize(timeout=300)
