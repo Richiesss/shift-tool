@@ -104,8 +104,9 @@ def _form_to_employee(emp_id):
     pt_val = f.get("primary_timeslot") or None
     # 所属ポジションが「どちらでも」の場合は兼務可を自動でTrue
     can_work_both = (pp_val is None)
-    # 単一ポジションの場合は出力ポジションをそれに合わせる
-    if pp_val and not op_val:
+    # 単一ポジション（ホール/キッチン）の場合は output_position を必ず primary_position に合わせる
+    # （非表示の radio ボタンが古い値を送信する問題を防ぐ）
+    if pp_val:
         op_val = pp_val
 
     return Employee(

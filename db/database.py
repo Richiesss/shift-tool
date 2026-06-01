@@ -289,6 +289,17 @@ def initialize_db():
     if conn.backend == "postgres":
         conn._conn.autocommit = False
 
+    # 既存データの output_position 不整合を修正:
+    # primary_position が設定されているのに output_position が異なる or NULL の従業員を修正
+    try:
+        conn.execute(
+            "UPDATE employees SET output_position = primary_position"
+            " WHERE primary_position IS NOT NULL"
+            " AND (output_position IS NULL OR output_position != primary_position)"
+        )
+    except Exception:
+        pass
+
     for slot, pos, mn, mx, ml in [
         ("breakfast", "hall",    3, 4, 1),
         ("breakfast", "kitchen", 3, 3, 1),
