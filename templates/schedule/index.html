@@ -145,7 +145,7 @@
   <div class="ms-auto d-flex gap-1">
     {% if period %}
     <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
-      <i class="bi bi-file-earmark-excel"></i>
+      <i class="bi bi-file-earmark-spreadsheet"></i>
     </a>
     <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-file-earmark-pdf"></i>
@@ -188,7 +188,7 @@
         <i class="bi bi-people me-1"></i>ホール
       </a>
       <a href="?slot={{ slot }}&pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
-        <i class="bi bi-fire me-1"></i>キッチン
+        <i class="bi bi-egg-fried me-1"></i>キッチン
       </a>
     </div>
 
@@ -390,7 +390,7 @@
             </button>
             <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-kitchen"
                     onclick="selectPos('kitchen')">
-              <i class="bi bi-fire d-block mb-1" style="font-size:1.4rem"></i>キッチン
+              <i class="bi bi-egg-fried d-block mb-1" style="font-size:1.4rem"></i>キッチン
             </button>
           </div>
         </div>
