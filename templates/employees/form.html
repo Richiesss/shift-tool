@@ -82,19 +82,19 @@
           <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem">要設定</span>
         </label>
         {% set cur_op = emp.output_position.value if emp and emp.output_position else '' %}
+        <!-- hidden input で値を保持。ボタン onclick で更新 -->
+        <input type="hidden" name="output_position" id="output-pos-value" value="{{ cur_op }}">
         <div class="d-flex gap-2">
-          <label class="pos-btn pos-hall flex-grow-1 text-center" id="op-hall-label">
-            <input type="radio" name="output_position" value="hall" class="d-none"
-                   {{ 'checked' if cur_op == 'hall' else '' }}
-                   onchange="onOutputPosChange()">
+          <div class="pos-btn pos-hall flex-grow-1 text-center {{ 'selected' if cur_op == 'hall' else '' }}"
+               id="op-hall-btn"
+               onclick="selectOutputPos('hall')">
             <i class="bi bi-people-fill d-block mb-1" style="font-size:1.1rem"></i>ホール欄
-          </label>
-          <label class="pos-btn pos-kitchen flex-grow-1 text-center" id="op-kitchen-label">
-            <input type="radio" name="output_position" value="kitchen" class="d-none"
-                   {{ 'checked' if cur_op == 'kitchen' else '' }}
-                   onchange="onOutputPosChange()">
+          </div>
+          <div class="pos-btn pos-kitchen flex-grow-1 text-center {{ 'selected' if cur_op == 'kitchen' else '' }}"
+               id="op-kitchen-btn"
+               onclick="selectOutputPos('kitchen')">
             <i class="bi bi-egg-fried d-block mb-1" style="font-size:1.1rem"></i>キッチン欄
-          </label>
+          </div>
         </div>
         <div class="form-text" style="color:#b45309">
           <i class="bi bi-exclamation-circle me-1"></i>
@@ -258,11 +258,10 @@ function onPositionChange() {
   else                        document.getElementById('pos-both-label').classList.add('selected');
 }
 
-function onOutputPosChange() {
-  const checked = document.querySelector('input[name="output_position"]:checked');
-  const op = checked ? checked.value : '';
-  document.getElementById('op-hall-label').classList.toggle('selected', op === 'hall');
-  document.getElementById('op-kitchen-label').classList.toggle('selected', op === 'kitchen');
+function selectOutputPos(val) {
+  document.getElementById('output-pos-value').value = val;
+  document.getElementById('op-hall-btn').classList.toggle('selected', val === 'hall');
+  document.getElementById('op-kitchen-btn').classList.toggle('selected', val === 'kitchen');
 }
 
 onPositionChange();
