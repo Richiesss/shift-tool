@@ -2,7 +2,7 @@ from collections import defaultdict
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
 from models.schedule import ShiftAssignment
-from utils.constants import TimeSlot, Position
+from utils.constants import TimeSlot, Position, EmploymentType
 
 
 def _compute_staffing(assignments, employees, dates, constraints) -> dict:
@@ -141,12 +141,22 @@ def index(period_id):
     # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
     assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot}
 
-    # ポジション × スロットでメンバーを絞り込む
-    filtered_employees = [
+    # ポジション × スロットでメンバーを絞り込み、カテゴリ順に並び替え
+    # カテゴリ: 0=社員(正社員) / 1=兼任スタッフ(両方対応可) / 2=専任スタッフ(単一ポジション)
+    # カテゴリ内はスタッフ管理画面の display_order 順を維持（stable sort）
+    def _emp_category(e) -> int:
+        if e.employment_type == EmploymentType.FULL_TIME:
+            return 0
+        if e.primary_position is None or e.can_work_both_positions:
+            return 1
+        return 2
+
+    base = [
         e for e in employees
         if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
         and (e.primary_timeslot is None or e.primary_timeslot.value == slot or e.id in assigned_in_slot)
     ]
+    filtered_employees = sorted(base, key=_emp_category)
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
