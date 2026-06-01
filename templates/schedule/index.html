@@ -124,6 +124,9 @@
   }
   .time-mode-opt:hover { border-color: #475569; }
   .time-mode-opt.selected { border-color: #38bdf8; background: rgba(56,189,248,.07); }
+  .time-mode-opt.disabled {
+    opacity: .35; cursor: not-allowed; pointer-events: none;
+  }
   .time-mode-opt input[type=radio] { margin-top: 3px; accent-color: #38bdf8; flex-shrink: 0; }
   .time-mode-title { font-size: .88rem; font-weight: 600; color: #e2e8f0; line-height: 1.3; }
   .time-mode-sub   { font-size: .73rem; color: #64748b; }
@@ -311,6 +314,7 @@
               data-reinf-start="{{ emp_asgn.reinf_start if emp_asgn and emp_asgn.reinf_start else '' }}"
               data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
               data-shift-time="{{ time_map.get((emp.id, ds, slot), '') }}"
+              data-has-request="{{ 'true' if time_map.get((emp.id, ds, slot)) is not none else 'false' }}"
               onclick="openAssignModal(this)">
             {% if emp_asgn %}
               {% set pos_label = 'H' if pos == 'hall' else 'K' %}
@@ -586,7 +590,7 @@ function applyPreset(start, end, el) {
 
 function openAssignModal(cell) {
   _cell = cell;
-  const { empName, date, slot, assigned, pos, reinf, reinfStart, reinfEnd, shiftTime } = cell.dataset;
+  const { empName, date, slot, assigned, pos, reinf, reinfStart, reinfEnd, shiftTime, hasRequest } = cell.dataset;
   const slotJp = slot === 'breakfast' ? '朝食' : 'ディナー';
 
   document.getElementById('asgn-name').textContent = empName;
@@ -596,9 +600,17 @@ function openAssignModal(cell) {
   // ポジション選択
   selectPos(pos || 'hall');
 
+  // 「希望シフト通り」の有効/無効切替
+  const hasReq = hasRequest === 'true';
+  const optDef  = document.getElementById('opt-default');
+  const radioDef = optDef.querySelector('input[type=radio]');
+  radioDef.disabled = !hasReq;
+  optDef.classList.toggle('disabled', !hasReq);
+
   // 希望シフト時間ヒント
-  document.getElementById('shift-time-hint').textContent =
-    shiftTime ? shiftTime : '（希望シフト未提出）';
+  document.getElementById('shift-time-hint').textContent = hasReq
+    ? (shiftTime || '時間指定なし')
+    : '希望シフト未提出';
 
   // プリセットチップ生成
   const presets = SLOT_PRESETS[slot] || [];
@@ -612,6 +624,10 @@ function openAssignModal(cell) {
     setTimeMode('custom');
     document.getElementById('reinf-start').value = reinfStart;
     document.getElementById('reinf-end').value   = reinfEnd;
+  } else if (!hasReq) {
+    // 希望シフト未提出 → 時間指定モードを強制
+    setTimeMode('custom');
+    if (presets.length) applyPreset(presets[0].start, presets[0].end, null);
   } else {
     setTimeMode('default');
     if (presets.length) applyPreset(presets[0].start, presets[0].end, null);
