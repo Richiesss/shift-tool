@@ -69,8 +69,8 @@ def save_employee(emp: Employee) -> Employee:
     avail_d = int(emp.always_available_dinner)
     if emp.id is None:
         # 末尾に追加されるよう MAX(display_order)+1 をセット
-        row = conn.execute("SELECT COALESCE(MAX(display_order), -1) FROM employees").fetchone()
-        next_order = (row[0] if row else -1) + 1
+        row = conn.execute("SELECT COALESCE(MAX(display_order), -1) AS max_order FROM employees").fetchone()
+        next_order = (row["max_order"] if row else -1) + 1
         emp.id = conn.execute_insert(
             "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, 1, next_order)
