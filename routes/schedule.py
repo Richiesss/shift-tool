@@ -141,22 +141,23 @@ def index(period_id):
     # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
     assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot}
 
-    # ポジション × スロットでメンバーを絞り込み、カテゴリ順に並び替え
-    # カテゴリ: 0=社員(正社員) / 1=兼任スタッフ(両方対応可) / 2=専任スタッフ(単一ポジション)
+    # ポジション × スロットでメンバーを絞り込み、並び替え
+    # ルール: 1) 社員(正社員)が最上位
+    #         2) それ以降はスキルランク降順 リーダー→ベテラン→メンバー→ビギナー
     # カテゴリ内はスタッフ管理画面の display_order 順を維持（stable sort）
-    def _emp_category(e) -> int:
+    def _emp_sort_key(e) -> tuple:
         if e.employment_type == EmploymentType.FULL_TIME:
-            return 0
-        if e.primary_position is None or e.can_work_both_positions:
-            return 1
-        return 2
+            return (0, 0)          # 社員：最優先
+        # PART_TIME: スキルランク高いほど前（3-rank で昇順変換）
+        skill_rank = e.skill_for(pos).rank()  # leader=3, veteran=2, general=1, beginner=0
+        return (1, 3 - skill_rank)            # leader→0, veteran→1, general→2, beginner→3
 
     base = [
         e for e in employees
         if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
         and (e.primary_timeslot is None or e.primary_timeslot.value == slot or e.id in assigned_in_slot)
     ]
-    filtered_employees = sorted(base, key=_emp_category)
+    filtered_employees = sorted(base, key=_emp_sort_key)
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
