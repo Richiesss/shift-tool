@@ -66,7 +66,8 @@ def create_app():
         if request.endpoint in exempt:
             return
         if not session.get("authenticated") or session.get("sv") != SESSION_VERSION:
-            session.clear()
+            session.pop("authenticated", None)
+            session.pop("sv", None)
             return redirect(url_for("auth.login", next=request.path))
 
     from routes.employees import bp as emp_bp
