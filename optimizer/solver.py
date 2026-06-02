@@ -488,6 +488,26 @@ def solve(
         # ダミーで総勤務回数の二乗偏差を線形近似
         penalty_terms.append(balance_w * total_worked)
 
+    # P5: スロット別雇用形態優先度
+    # 朝食はアルバイト中心（社員を朝食に配置するコスト）
+    # ディナーは社員中心（アルバイトをディナーに配置するコスト）
+    # どうしても人員不足の場合はこのペナルティを超えて配置される（ソフト制約）
+    BREAKFAST_FT_COST = 80   # 社員が朝食に入るペナルティ
+    DINNER_PT_COST    = 50   # アルバイトがディナーに入るペナルティ
+    for emp in active_employees:
+        for ds in date_strs:
+            for pos in positions:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    # 社員の朝食配置を抑制（アルバイトで充足できる場合は社員不要）
+                    penalty_terms.append(
+                        BREAKFAST_FT_COST * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                    )
+                else:
+                    # アルバイトのディナー配置を抑制（社員中心のディナー）
+                    penalty_terms.append(
+                        DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
+                    )
+
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     # ── 求解 ────────────────────────────────────────────────────────────
