@@ -489,21 +489,21 @@ def solve(
         penalty_terms.append(balance_w * total_worked)
 
     # P5: スロット別雇用形態優先度
-    # 朝食はアルバイト中心（社員を朝食に配置するコスト）
-    # ディナーは社員中心（アルバイトをディナーに配置するコスト）
-    # どうしても人員不足の場合はこのペナルティを超えて配置される（ソフト制約）
-    BREAKFAST_FT_COST = 80   # 社員が朝食に入るペナルティ
-    DINNER_PT_COST    = 50   # アルバイトがディナーに入るペナルティ
+    # P1 の人件費コストは 1件あたり ~50,000（5時間×1000×10）のため、
+    # P5 も同オーダーにしないとソルバーに無視される。
+    # 朝食：社員配置 +30,000  → PT だけで最低人数を満たせる日は社員不使用
+    # ディナー：アルバイト配置 +20,000 → 社員を優先、不足時のみ PT
+    # 人員不足の場合はハード制約（最低人数）がこのペナルティを上回り配置される
+    BREAKFAST_FT_COST = 30_000
+    DINNER_PT_COST    = 20_000
     for emp in active_employees:
         for ds in date_strs:
             for pos in positions:
                 if emp.employment_type == EmploymentType.FULL_TIME:
-                    # 社員の朝食配置を抑制（アルバイトで充足できる場合は社員不要）
                     penalty_terms.append(
                         BREAKFAST_FT_COST * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
                     )
                 else:
-                    # アルバイトのディナー配置を抑制（社員中心のディナー）
                     penalty_terms.append(
                         DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
                     )
