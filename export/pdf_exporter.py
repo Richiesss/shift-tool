@@ -152,12 +152,19 @@ def _get_shift_text(
 
 
 def _slot_default(b_pos, d_pos) -> tuple[str, str]:
+    from db import repositories as repo
     if b_pos and d_pos:
-        return "6", "23"
+        s = _to_decimal(repo.get_app_setting("ft_breakfast_start", "06:00"))
+        e = _to_decimal(repo.get_app_setting("ft_dinner_end",      "22:00"))
+        return s, e
     elif b_pos:
-        return "6", "11"
+        s = _to_decimal(repo.get_app_setting("ft_breakfast_start", "06:00"))
+        e = _to_decimal(repo.get_app_setting("ft_breakfast_end",   "11:00"))
+        return s, e
     else:
-        return "17", "23"
+        s = _to_decimal(repo.get_app_setting("ft_dinner_start", "17:00"))
+        e = _to_decimal(repo.get_app_setting("ft_dinner_end",   "22:00"))
+        return s, e
 
 
 # ── メイン出力 ────────────────────────────────────────────────────────────

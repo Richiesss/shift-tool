@@ -172,6 +172,18 @@ def index(period_id):
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
+    # 社員デフォルト勤務時間（設定画面で変更可能）
+    ft_times = {
+        "breakfast": "{s}〜{e}".format(
+            s=repo.get_app_setting("ft_breakfast_start", "06:00"),
+            e=repo.get_app_setting("ft_breakfast_end",   "11:00"),
+        ),
+        "dinner": "{s}〜{e}".format(
+            s=repo.get_app_setting("ft_dinner_start", "17:00"),
+            e=repo.get_app_setting("ft_dinner_end",   "22:00"),
+        ),
+    }
+
     return render_template(
         "schedule/index.html",
         period=period,
@@ -189,6 +201,7 @@ def index(period_id):
         total_shortage=total_shortage,
         needs_regen=needs_regen,
         today=today,
+        ft_times=ft_times,
         TimeSlot=TimeSlot,
         Position=Position,
     )
