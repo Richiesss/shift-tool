@@ -164,3 +164,70 @@ def view_log():
         return jsonify({"log": tail, "path": path, "total_lines": len(lines)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/diag/<int:period_id>")
+def diag(period_id):
+    """シフト入力データの診断（DBの実データを確認）"""
+    from collections import defaultdict
+    from utils.constants import EmploymentType
+    try:
+        period = repo.get_period(period_id)
+        if not period:
+            return jsonify({"error": "期間が見つかりません"}), 404
+
+        employees = repo.get_all_employees(active_only=True)
+        requests  = repo.get_shift_requests(period_id)
+        dates     = [d.isoformat() for d in period.date_range()]
+
+        # pattern_id の分布
+        pattern_dist = defaultdict(int)
+        for r in requests:
+            pattern_dist[r.pattern_id or "(none)"] += 1
+
+        # 日付×スロット別の希望人数
+        by_date = {}
+        req_map = defaultdict(lambda: defaultdict(list))
+        for r in requests:
+            if r.pattern_id in ("off_request", "paid_leave"):
+                req_map[r.date]["off"].append(r.employee_id)
+            else:
+                if r.breakfast:
+                    req_map[r.date]["breakfast"].append(r.employee_id)
+                if r.dinner:
+                    req_map[r.date]["dinner"].append(r.employee_id)
+
+        for ds in dates:
+            by_date[ds] = {
+                "breakfast": len(req_map[ds]["breakfast"]),
+                "dinner":    len(req_map[ds]["dinner"]),
+                "off":       len(req_map[ds]["off"]),
+            }
+
+        ft_emps = [e for e in employees if e.employment_type == EmploymentType.FULL_TIME]
+        pt_emps = [e for e in employees if e.employment_type != EmploymentType.FULL_TIME]
+
+        # PT のうち希望提出ゼロの人
+        pt_submitted = {r.employee_id for r in requests if r.pattern_id not in ("off_request","paid_leave")}
+        pt_no_submit = [e.name for e in pt_emps if e.id not in pt_submitted]
+
+        # FT のうち off_request/paid_leave があるか
+        off_by_ft = defaultdict(list)
+        for r in requests:
+            if r.pattern_id in ("off_request", "paid_leave"):
+                emp = next((e for e in ft_emps if e.id == r.employee_id), None)
+                if emp:
+                    off_by_ft[emp.name].append(f"{r.date}({r.pattern_id})")
+
+        return jsonify({
+            "period": f"{period.start_date}〜{period.end_date}",
+            "employees": {"ft": len(ft_emps), "pt": len(pt_emps)},
+            "total_requests": len(requests),
+            "pattern_distribution": dict(pattern_dist),
+            "pt_no_submission": pt_no_submit,
+            "ft_off_requests": dict(off_by_ft),
+            "daily_request_counts": by_date,
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
