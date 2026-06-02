@@ -100,13 +100,17 @@ def solve(
     slots = list(TimeSlot)
     positions = list(Position)
 
-    # 希望シフトをキーでアクセス
+    # 希望シフト（アルバイト用）と社員の休希望・有休を分けて管理
     req_map: dict[tuple[int, str, str], bool] = {}
+    off_map: dict[tuple[int, str], bool] = {}   # 社員の休希望・有休
     for r in requests:
-        if r.breakfast:
-            req_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = True
-        if r.dinner:
-            req_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = True
+        if r.pattern_id in ("off_request", "paid_leave"):
+            off_map[(r.employee_id, r.date)] = True
+        else:
+            if r.breakfast:
+                req_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = True
+            if r.dinner:
+                req_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = True
 
     active_employees = [e for e in employees if e.is_active]
 
@@ -220,7 +224,11 @@ def solve(
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    # 社員：休希望・有休の日以外は常時出勤可
+                    can_work = not off_map.get((emp.id, ds), False) \
+                               and ds not in emp.fixed_unavailable_dates
+                elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = ds not in emp.fixed_unavailable_dates
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
                     can_work = ds not in emp.fixed_unavailable_dates
@@ -479,7 +487,7 @@ def solve(
         # ダミーで総勤務回数の二乗偏差を線形近似
         penalty_terms.append(balance_w * total_worked)
 
-    model.minimize(sum(penalty_terms))
+    model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     # ── 求解 ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
@@ -536,7 +544,7 @@ def solve(
         logger.info("  [フェーズ2] ベストエフォート求解開始")
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
-            req_map, req_hours, config, shift_constraints
+            req_map, off_map, req_hours, config, shift_constraints
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
         _log_assignment_summary(best_assignments, date_strs)
@@ -600,7 +608,7 @@ def _extract_assignments(solver, assign, active_employees, date_strs, slots, pos
 
 def _solve_best_effort(
     active_employees, date_strs, slots, positions,
-    req_map, req_hours, config: SolverConfig | None = None,
+    req_map, off_map, req_hours, config: SolverConfig | None = None,
     shift_constraints: dict | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
@@ -636,7 +644,10 @@ def _solve_best_effort(
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    can_work = not off_map.get((emp.id, ds), False) \
+                               and ds not in emp.fixed_unavailable_dates
+                elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = ds not in emp.fixed_unavailable_dates
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
                     can_work = ds not in emp.fixed_unavailable_dates
@@ -719,7 +730,7 @@ def _solve_best_effort(
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
                     penalty_terms.append(penalty * not_worked)
 
-    model.minimize(sum(penalty_terms))
+    model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 15.0

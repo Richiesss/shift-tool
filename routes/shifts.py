@@ -81,9 +81,13 @@ def input(period_id):
         prev_idx = emp_idx - 1 if emp_idx > 0 else None
         next_idx = emp_idx + 1 if emp_idx < len(employees) - 1 else None
 
-    # 入力済み従業員数（1日以上入力があるもの）
+    # 入力済み従業員数（社員は出勤前提なので常にカウント）
+    from utils.constants import EmploymentType as _ET
     filled_emp_ids = {r.employee_id for r in requests_list}
-    filled_count = sum(1 for e in employees if e.id in filled_emp_ids)
+    filled_count = sum(
+        1 for e in employees
+        if e.id in filled_emp_ids or e.employment_type == _ET.FULL_TIME
+    )
 
     return render_template(
         "shifts/input.html",
