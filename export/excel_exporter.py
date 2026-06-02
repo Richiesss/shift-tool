@@ -19,26 +19,28 @@ MED  = Side(style="medium", color="94A3B8")
 BORDER     = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 BORDER_MED = Border(left=MED,  right=MED,  top=MED,  bottom=MED)
 
-FILL_HDR     = PatternFill("solid", fgColor="1E3A5F")  # 濃紺（タイトル）
-FILL_NAME    = PatternFill("solid", fgColor="DBEAFE")  # 水色（名前列）
-FILL_SAT_H   = PatternFill("solid", fgColor="FDE68A")  # アンバー（土曜ヘッダー）
-FILL_SUN_H   = PatternFill("solid", fgColor="FECACA")  # 薄赤（日曜ヘッダー）
-FILL_WD_H    = PatternFill("solid", fgColor="BFDBFE")  # 水色（平日ヘッダー）
-FILL_SAT_D   = PatternFill("solid", fgColor="FFFBEB")  # 淡アンバー（土曜データ）
-FILL_SUN_D   = PatternFill("solid", fgColor="FFF5F5")  # 淡赤（日曜データ）
-FILL_LEAVE   = PatternFill("solid", fgColor="FEF3C7")  # 黄（有給）
-FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")  # 白（通常）
-FILL_EVEN    = PatternFill("solid", fgColor="F8FAFC")  # 薄グレー（偶数行）
-FILL_SUMMARY = PatternFill("solid", fgColor="F1F5F9")  # 集計行
+FILL_HDR     = PatternFill("solid", fgColor="1E3A5F")   # 濃紺（タイトル）
+FILL_NAME    = PatternFill("solid", fgColor="E0F2FE")   # 水色（名前列）
+FILL_SAT_H   = PatternFill("solid", fgColor="93C5FD")   # 青（土曜ヘッダー）
+FILL_SUN_H   = PatternFill("solid", fgColor="FCA5A5")   # 赤（日曜ヘッダー）
+FILL_WD_H    = PatternFill("solid", fgColor="E2E8F0")   # 薄グレー（平日ヘッダー）
+FILL_SAT_D   = PatternFill("solid", fgColor="EFF6FF")   # 極薄青（土曜データ）
+FILL_SUN_D   = PatternFill("solid", fgColor="FFF1F2")   # 極薄赤（日曜データ）
+FILL_LEAVE   = PatternFill("solid", fgColor="D1FAE5")   # 緑（有給）
+FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")   # 白（通常・白地）
+FILL_EVEN    = PatternFill("solid", fgColor="FFFFFF")   # 白（偶数行も白で統一）
+FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行
+# 備考欄：黄色網掛け（lightGray パターン × 黄色 on 白）
+FILL_MEMO    = PatternFill(patternType="lightGray", fgColor="FDE047", bgColor="FFFFFF")
 
 FONT_TITLE  = Font(color="FFFFFF", bold=True, size=12)
-FONT_HDR    = Font(color="1E3A5F", bold=True, size=9)
-FONT_SAT    = Font(color="92400E", bold=True, size=9)  # 土曜
-FONT_SUN    = Font(color="991B1B", bold=True, size=9)  # 日曜
+FONT_HDR    = Font(color="334155", bold=True, size=9)
+FONT_SAT    = Font(color="1D4ED8", bold=True, size=9)   # 土曜：青
+FONT_SUN    = Font(color="DC2626", bold=True, size=9)   # 日曜：赤
 FONT_NAME   = Font(bold=True, size=9)
 FONT_DATA   = Font(size=9)
-FONT_NOTE   = Font(size=8, bold=True)     # 備考付きシフト
-FONT_LEAVE  = Font(color="92400E", bold=True, size=9)
+FONT_NOTE   = Font(size=8, bold=True)
+FONT_LEAVE  = Font(color="166534", bold=True, size=9)   # 有給：緑
 FONT_OFF    = Font(color="9CA3AF", size=9)
 FONT_SUM    = Font(size=8)
 
@@ -182,6 +184,7 @@ def export_excel(
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
     req_map  = {(r.employee_id, r.date): r for r in requests}
+    notes    = repo.get_schedule_notes(period.id)  # 日付メモ
 
     wb = Workbook()
     ws = wb.active
@@ -231,9 +234,22 @@ def export_excel(
     ws.row_dimensions[3].height = 15
 
     # ──────────────────────────────────────────────────────────────────
-    # 行 4+: 従業員データ
+    # 行 4: 備考欄（黄色網掛け）
     # ──────────────────────────────────────────────────────────────────
-    R_DATA = 4
+    _cell(ws, 4, C_NAME_L, "備考", fill=FILL_MEMO,
+          font=Font(size=8, color="78350F", bold=True), align=ALIGN_C, border=BORDER)
+    _cell(ws, 4, C_NAME_R, "", fill=FILL_MEMO, border=BORDER)
+    for i, d in enumerate(dates):
+        col  = C_DATA + i
+        note = notes.get(d.isoformat(), "")
+        _cell(ws, 4, col, note, fill=FILL_MEMO,
+              font=Font(size=8, color="78350F"), align=ALIGN_L, border=BORDER)
+    ws.row_dimensions[4].height = 16
+
+    # ──────────────────────────────────────────────────────────────────
+    # 行 5+: 従業員データ
+    # ──────────────────────────────────────────────────────────────────
+    R_DATA = 5
     for row_idx, emp in enumerate(employees):
         r       = R_DATA + row_idx
         is_even = (row_idx % 2 == 1)

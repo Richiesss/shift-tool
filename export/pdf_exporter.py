@@ -23,19 +23,20 @@ DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
 
 # セルスタイル色
 COL_HDR_TITLE = colors.HexColor("#1E3A5F")   # タイトル背景
-COL_HDR_WD    = colors.HexColor("#BFDBFE")   # 平日ヘッダー
-COL_HDR_SAT   = colors.HexColor("#FDE68A")   # 土曜ヘッダー
-COL_HDR_SUN   = colors.HexColor("#FECACA")   # 日曜ヘッダー
-COL_NAME      = colors.HexColor("#DBEAFE")   # 氏名列
-COL_SAT_D     = colors.HexColor("#FFFBEB")   # 土曜データ（淡）
-COL_SUN_D     = colors.HexColor("#FFF5F5")   # 日曜データ（淡）
-COL_LEAVE     = colors.HexColor("#FEF3C7")   # 有給
-COL_EVEN      = colors.HexColor("#F8FAFC")   # 偶数行
+COL_HDR_WD    = colors.HexColor("#E2E8F0")   # 平日ヘッダー（薄グレー）
+COL_HDR_SAT   = colors.HexColor("#93C5FD")   # 土曜ヘッダー（青）
+COL_HDR_SUN   = colors.HexColor("#FCA5A5")   # 日曜ヘッダー（赤）
+COL_NAME      = colors.HexColor("#E0F2FE")   # 氏名列
+COL_SAT_D     = colors.HexColor("#EFF6FF")   # 土曜データ（極薄青）
+COL_SUN_D     = colors.HexColor("#FFF1F2")   # 日曜データ（極薄赤）
+COL_LEAVE     = colors.HexColor("#D1FAE5")   # 有給（緑）
+COL_EVEN      = colors.white                  # 偶数行も白（白地統一）
 COL_WHITE     = colors.white
 COL_GRID      = colors.HexColor("#CBD5E1")   # グリッド線
-COL_TXT_SAT   = colors.HexColor("#92400E")   # 土曜文字
-COL_TXT_SUN   = colors.HexColor("#991B1B")   # 日曜文字
+COL_TXT_SAT   = colors.HexColor("#1D4ED8")   # 土曜文字（青）
+COL_TXT_SUN   = colors.HexColor("#DC2626")   # 日曜文字（赤）
 COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
+COL_TXT_LEAVE = colors.HexColor("#166534")   # 有給文字（緑）
 
 
 # ── フォント登録 ─────────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ def _slot_default(b_pos, d_pos) -> tuple[str, str]:
 
 # ── メイン出力 ────────────────────────────────────────────────────────────
 
-COL_EVENT_BG = colors.HexColor("#FFFDE7")  # 行事行の背景（淡黄）
+COL_EVENT_BG = colors.HexColor("#FEF08A")  # 行事行（備考欄）の背景（黄色）
 
 
 def _build_block_table(
@@ -268,7 +269,7 @@ def _build_block_table(
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
             if style == "leave":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_LEAVE))
-                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_SAT))
+                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_LEAVE))
             elif style == "off":
                 if dow == 5:
                     cmds.append(("BACKGROUND", (col, r), (col, r), COL_SAT_D))
