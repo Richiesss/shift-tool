@@ -88,6 +88,7 @@ def run():
         double_penalty_scale=_scale("double_penalty_scale"),
         balance_scale=_scale("balance_scale"),
         late_night_scale=_scale("late_night_scale"),
+        slot_pref_scale=_scale("slot_pref_scale"),
     )
 
     # 生成中ステータスに更新してバックグラウンドで実行
