@@ -99,6 +99,32 @@ def create_app():
         from flask import jsonify
         return jsonify({"status": "ok"})
 
+    @app.errorhandler(500)
+    def internal_error(e):
+        import traceback, logging
+        logging.getLogger(__name__).error(
+            f"500 Internal Server Error: {e}\n{traceback.format_exc()}"
+        )
+        from flask import render_template_string
+        return render_template_string("""
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>エラー - SDU-Shift</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head><body style="background:#0f172a;color:white;min-height:100vh;display:flex;align-items:center;justify-content:center">
+<div class="text-center p-4">
+  <i class="bi bi-exclamation-triangle-fill" style="font-size:3rem;color:#f59e0b"></i>
+  <h2 class="mt-3">サーバーエラーが発生しました</h2>
+  <p class="text-muted">しばらく待ってから再度お試しください。</p>
+  <details class="text-start mt-3" style="max-width:600px;margin:0 auto">
+    <summary style="cursor:pointer;color:#94a3b8;font-size:.85rem">エラー詳細</summary>
+    <pre style="font-size:.75rem;color:#ef4444;background:#1e293b;padding:1rem;border-radius:8px;margin-top:.5rem;overflow:auto">{{ err }}</pre>
+  </details>
+  <a href="/" class="btn btn-primary mt-4">トップへ戻る</a>
+</div>
+</body></html>
+        """, err=str(e)), 500
+
     @app.get("/")
     def index():
         from flask import redirect, url_for

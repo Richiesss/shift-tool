@@ -81,21 +81,27 @@ class Connection:
         self.lastrowid = None
 
     def _pg_execute(self, sql: str, params):
-        import psycopg2
-        try:
-            cur = self._conn.cursor(cursor_factory=self._factory)
-            cur.execute(sql, params)
-            return cur
-        except psycopg2.OperationalError:
-            # stale connection — get a fresh one from pool
+        import psycopg2, time
+        last_exc = None
+        for attempt in range(3):
             try:
-                self._pool.putconn(self._conn, close=True)
-            except Exception:
-                pass
-            self._conn = self._pool.getconn()
-            cur = self._conn.cursor(cursor_factory=self._factory)
-            cur.execute(sql, params)
-            return cur
+                cur = self._conn.cursor(cursor_factory=self._factory)
+                cur.execute(sql, params)
+                return cur
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                last_exc = e
+                # stale/dead connection — get a fresh one from pool
+                try:
+                    self._pool.putconn(self._conn, close=True)
+                except Exception:
+                    pass
+                try:
+                    self._conn = self._pool.getconn()
+                except Exception:
+                    pass
+                if attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+        raise last_exc
 
     def execute(self, sql: str, params=()):
         if self.backend == "postgres":
