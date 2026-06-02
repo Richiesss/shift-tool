@@ -38,8 +38,10 @@ def save():
     settings_keys = [
         "reserv_threshold_breakfast", "reserv_extra_breakfast",
         "reserv_threshold_dinner", "reserv_extra_dinner",
-        "ft_breakfast_start", "ft_breakfast_end",
-        "ft_dinner_start",    "ft_dinner_end",
+        "ft_hall_breakfast_start",    "ft_hall_breakfast_end",
+        "ft_kitchen_breakfast_start", "ft_kitchen_breakfast_end",
+        "ft_hall_dinner_start",       "ft_hall_dinner_end",
+        "ft_kitchen_dinner_start",    "ft_kitchen_dinner_end",
     ]
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     repo.save_all_app_settings(new_settings)

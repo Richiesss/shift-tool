@@ -488,24 +488,83 @@ def solve(
         # ダミーで総勤務回数の二乗偏差を線形近似
         penalty_terms.append(balance_w * total_worked)
 
-    # P5: スロット別雇用形態優先度（大前提・固定値）
-    # P1 の人件費コスト（~50,000/件）の 10 倍以上に設定し、
-    # PT が充足できる日は事実上 FT が朝食に入れない強度にする。
-    # ハード制約（最低人数）はペナルティより優先されるため、
-    # PT が不足している場合のみ FT が朝食に配置される。
-    BREAKFAST_FT_COST = 500_000   # 社員が朝食に入るコスト（事実上禁止相当）
-    DINNER_PT_COST    = 300_000   # アルバイトがディナーに入るコスト（事実上禁止相当）
-    for emp in active_employees:
-        for ds in date_strs:
+    # P5: スロット別雇用形態優先度 + 条件付きハード制約
+    # ──────────────────────────────────────────────────────────────────
+    # ① PT が最低人数以上いる朝食：FT を物理的に配置不可（ハード制約）
+    # ② FT が最低人数以上いるディナー：PT を物理的に配置不可（ハード制約）
+    # ③ 上記を満たせない日のみ P5 ソフトペナルティで誘導
+    # ──────────────────────────────────────────────────────────────────
+    logger.info("  [P5 スロット別分業チェック]")
+    for ds in date_strs:
+        rc = reservation_counts.get(ds, {})
+        for slot in slots:
             for pos in positions:
-                if emp.employment_type == EmploymentType.FULL_TIME:
-                    penalty_terms.append(
-                        BREAKFAST_FT_COST * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                    )
+                c = shift_constraints.get((slot, pos), {})
+                base_min = c.get("min", 0)
+                if slot == TimeSlot.BREAKFAST and rc.get("breakfast", 0) >= reserv_thresh_b > 0:
+                    base_min += reserv_extra_b
+                elif slot == TimeSlot.DINNER and rc.get("dinner", 0) >= reserv_thresh_d > 0:
+                    base_min += reserv_extra_d
+
+                # PT の利用可能人数を数える
+                pt_avail = 0
+                for emp in active_employees:
+                    if emp.employment_type == EmploymentType.FULL_TIME:
+                        continue
+                    if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                        slot_ok = ds not in emp.fixed_unavailable_dates
+                    elif slot == TimeSlot.DINNER and emp.always_available_dinner:
+                        slot_ok = ds not in emp.fixed_unavailable_dates
+                    else:
+                        slot_ok = req_map.get((emp.id, ds, slot.value), False)
+                    if not slot_ok:
+                        continue
+                    if emp.primary_position is not None and not emp.can_work_both_positions:
+                        if emp.primary_position.value != pos.value:
+                            continue
+                    pt_avail += 1
+
+                # FT の利用可能人数を数える
+                ft_avail = 0
+                for emp in active_employees:
+                    if emp.employment_type != EmploymentType.FULL_TIME:
+                        continue
+                    if off_map.get((emp.id, ds), False) or ds in emp.fixed_unavailable_dates:
+                        continue
+                    if emp.primary_position is not None and not emp.can_work_both_positions:
+                        if emp.primary_position.value != pos.value:
+                            continue
+                    ft_avail += 1
+
+                slot_pos = f"{ds} {slot.value}/{pos.value}"
+
+                if slot == TimeSlot.BREAKFAST and pt_avail >= base_min:
+                    # 朝食：PT が充足 → FT を物理的に配置禁止
+                    for emp in active_employees:
+                        if emp.employment_type == EmploymentType.FULL_TIME:
+                            model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+                    logger.info(f"    {slot_pos}: PT={pt_avail}≥min={base_min} → FT配置禁止（ハード）")
+                elif slot == TimeSlot.DINNER and ft_avail >= base_min:
+                    # ディナー：FT が充足 → PT を物理的に配置禁止
+                    for emp in active_employees:
+                        if emp.employment_type != EmploymentType.FULL_TIME:
+                            model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+                    logger.info(f"    {slot_pos}: FT={ft_avail}≥min={base_min} → PT配置禁止（ハード）")
                 else:
-                    penalty_terms.append(
-                        DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
-                    )
+                    # 充足しない場合はソフトペナルティで誘導
+                    shortage_type = "PT不足" if slot == TimeSlot.BREAKFAST else "FT不足"
+                    logger.info(f"    {slot_pos}: {shortage_type}(PT={pt_avail},FT={ft_avail},min={base_min}) → ソフト誘導")
+                    BREAKFAST_FT_COST = 500_000
+                    DINNER_PT_COST    = 300_000
+                    for emp in active_employees:
+                        if slot == TimeSlot.BREAKFAST and emp.employment_type == EmploymentType.FULL_TIME:
+                            penalty_terms.append(
+                                BREAKFAST_FT_COST * assign[emp.id][ds][slot.value][pos.value]
+                            )
+                        elif slot == TimeSlot.DINNER and emp.employment_type != EmploymentType.FULL_TIME:
+                            penalty_terms.append(
+                                DINNER_PT_COST * assign[emp.id][ds][slot.value][pos.value]
+                            )
 
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 

@@ -172,16 +172,19 @@ def index(period_id):
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
-    # 社員デフォルト勤務時間（設定画面で変更可能）
+    # 社員デフォルト勤務時間（ポジション別・設定画面で変更可能）
+    def _ft_time(pos_key, slot_key):
+        s = repo.get_app_setting(f"ft_{pos_key}_{slot_key}_start",
+                                 "06:00" if slot_key == "breakfast" else "17:00")
+        e = repo.get_app_setting(f"ft_{pos_key}_{slot_key}_end",
+                                 "11:00" if slot_key == "breakfast" else "22:00")
+        return f"{s}〜{e}"
+
     ft_times = {
-        "breakfast": "{s}〜{e}".format(
-            s=repo.get_app_setting("ft_breakfast_start", "06:00"),
-            e=repo.get_app_setting("ft_breakfast_end",   "11:00"),
-        ),
-        "dinner": "{s}〜{e}".format(
-            s=repo.get_app_setting("ft_dinner_start", "17:00"),
-            e=repo.get_app_setting("ft_dinner_end",   "22:00"),
-        ),
+        "hall":    {"breakfast": _ft_time("hall",    "breakfast"),
+                    "dinner":    _ft_time("hall",    "dinner")},
+        "kitchen": {"breakfast": _ft_time("kitchen", "breakfast"),
+                    "dinner":    _ft_time("kitchen", "dinner")},
     }
 
     return render_template(

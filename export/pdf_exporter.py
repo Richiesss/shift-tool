@@ -152,19 +152,19 @@ def _get_shift_text(
 
 
 def _slot_default(b_pos, d_pos) -> tuple[str, str]:
+    """ポジション別のデフォルト勤務時間を返す（HH:MM を小数時刻に変換）"""
     from db import repositories as repo
+    pos_key = b_pos or d_pos or "hall"
     if b_pos and d_pos:
-        s = _to_decimal(repo.get_app_setting("ft_breakfast_start", "06:00"))
-        e = _to_decimal(repo.get_app_setting("ft_dinner_end",      "22:00"))
-        return s, e
+        s = _to_decimal(repo.get_app_setting(f"ft_{pos_key}_breakfast_start", "06:00"))
+        e = _to_decimal(repo.get_app_setting(f"ft_{pos_key}_dinner_end",      "22:00"))
     elif b_pos:
-        s = _to_decimal(repo.get_app_setting("ft_breakfast_start", "06:00"))
-        e = _to_decimal(repo.get_app_setting("ft_breakfast_end",   "11:00"))
-        return s, e
+        s = _to_decimal(repo.get_app_setting(f"ft_{pos_key}_breakfast_start", "06:00"))
+        e = _to_decimal(repo.get_app_setting(f"ft_{pos_key}_breakfast_end",   "11:00"))
     else:
-        s = _to_decimal(repo.get_app_setting("ft_dinner_start", "17:00"))
-        e = _to_decimal(repo.get_app_setting("ft_dinner_end",   "22:00"))
-        return s, e
+        s = _to_decimal(repo.get_app_setting(f"ft_{pos_key}_dinner_start", "17:00"))
+        e = _to_decimal(repo.get_app_setting(f"ft_{pos_key}_dinner_end",   "22:00"))
+    return s, e
 
 
 # ── メイン出力 ────────────────────────────────────────────────────────────
