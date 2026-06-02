@@ -33,7 +33,6 @@ class SolverConfig:
     double_penalty_scale: float = 1.0  # 正社員両掛け持ち回避
     balance_scale: float = 1.0         # 人員バランス均等化
     late_night_scale: float = 1.0      # 深夜勤務分散
-    slot_pref_scale: float = 1.0       # 朝食/ディナー分業（P5基準値のスケール）
 
 
 class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
@@ -489,13 +488,13 @@ def solve(
         # ダミーで総勤務回数の二乗偏差を線形近似
         penalty_terms.append(balance_w * total_worked)
 
-    # P5: スロット別雇用形態優先度（大前提：優先度設定はこの上に乗る）
-    # slot_pref_scale=1.0（中）が基準値。低・高で強弱を調整できる。
-    # 基準値は P1 の人件費コスト（~50,000/件）と同オーダーに設定済み。
-    BREAKFAST_FT_BASE = 30_000   # 社員が朝食に入る基本コスト
-    DINNER_PT_BASE    = 20_000   # アルバイトがディナーに入る基本コスト
-    BREAKFAST_FT_COST = max(1, int(BREAKFAST_FT_BASE * config.slot_pref_scale))
-    DINNER_PT_COST    = max(1, int(DINNER_PT_BASE    * config.slot_pref_scale))
+    # P5: スロット別雇用形態優先度（大前提・固定値）
+    # P1 の人件費コスト（~50,000/件）の 10 倍以上に設定し、
+    # PT が充足できる日は事実上 FT が朝食に入れない強度にする。
+    # ハード制約（最低人数）はペナルティより優先されるため、
+    # PT が不足している場合のみ FT が朝食に配置される。
+    BREAKFAST_FT_COST = 500_000   # 社員が朝食に入るコスト（事実上禁止相当）
+    DINNER_PT_COST    = 300_000   # アルバイトがディナーに入るコスト（事実上禁止相当）
     for emp in active_employees:
         for ds in date_strs:
             for pos in positions:
