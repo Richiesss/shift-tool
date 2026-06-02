@@ -105,7 +105,7 @@ def solve(
     # 社員の休希望（off_request）をキーでアクセス: (emp_id, date) -> True
     off_map: dict[tuple[int, str], bool] = {}
     for r in requests:
-        if r.pattern_id == "off_request":
+        if r.pattern_id in ("off_request", "paid_leave"):
             off_map[(r.employee_id, r.date)] = True
         else:
             if r.breakfast:
@@ -489,6 +489,23 @@ def solve(
         )
         # ダミーで総勤務回数の二乗偏差を線形近似
         penalty_terms.append(balance_w * total_worked)
+
+    # P5: スロット割り当て優先度
+    # 朝食はアルバイト優先（社員を朝食に割り当てるコスト）
+    # ディナーは社員優先（アルバイトをディナーに割り当てるコスト）
+    BREAKFAST_FT_COST = 60   # 社員が朝食に入るペナルティ
+    DINNER_PT_COST    = 40   # アルバイトがディナーに入るペナルティ
+    for emp in active_employees:
+        for ds in date_strs:
+            for pos in positions:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    penalty_terms.append(
+                        BREAKFAST_FT_COST * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                    )
+                else:
+                    penalty_terms.append(
+                        DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
+                    )
 
     model.minimize(sum(penalty_terms))
 

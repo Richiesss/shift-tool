@@ -193,19 +193,21 @@
             </div>
           </th>
           {% if current_emp.employment_type.value == 'full_time' %}
-          {# 社員：休希望トグルボタン #}
-          {% set is_off = req and req.pattern_id == 'off_request' %}
+          {# 社員：出勤予定 / 休希望 / 有休 の3状態サイクル #}
+          {% set cur_pid = req.pattern_id if req else '' %}
           <td class="{{ day_cls }} align-middle">
             <input type="hidden"
                    name="pattern_{{ current_emp.id }}_{{ d }}"
                    id="off_{{ current_emp.id }}_{{ d }}"
-                   value="{{ 'off_request' if is_off else '' }}">
+                   value="{{ cur_pid }}">
             <button type="button"
-                    class="btn {{ 'btn-danger' if is_off else 'btn-outline-secondary' }} btn-sm w-100 off-btn"
+                    class="btn {{ 'btn-danger' if cur_pid == 'off_request' else 'btn-warning text-dark' if cur_pid == 'paid_leave' else 'btn-outline-secondary' }} btn-sm w-100 off-btn"
                     data-emp="{{ current_emp.id }}" data-date="{{ d }}"
                     onclick="toggleOff(this)">
-              {% if is_off %}
+              {% if cur_pid == 'off_request' %}
               <i class="bi bi-x-circle me-1"></i>休希望
+              {% elif cur_pid == 'paid_leave' %}
+              <i class="bi bi-calendar-check me-1"></i>有休
               {% else %}
               <i class="bi bi-check2 me-1"></i>出勤予定
               {% endif %}
@@ -379,28 +381,36 @@ document.querySelectorAll('a[href*="emp_idx"]').forEach(a => {
 });
 
 // ── 社員：休希望トグル ─────────────────────────────────────
+// 社員の状態サイクル: 出勤予定 → 休希望 → 有休 → 出勤予定
+const OFF_STATES = [
+  { val: '',            cls: 'btn-outline-secondary', html: '<i class="bi bi-check2 me-1"></i>出勤予定' },
+  { val: 'off_request', cls: 'btn-danger',            html: '<i class="bi bi-x-circle me-1"></i>休希望' },
+  { val: 'paid_leave',  cls: 'btn-warning text-dark', html: '<i class="bi bi-calendar-check me-1"></i>有休' },
+];
+
 function toggleOff(btn) {
   const empId = btn.dataset.emp;
   const date  = btn.dataset.date;
   const input = document.getElementById(`off_${empId}_${date}`);
-  const isOff = input.value === 'off_request';
-  if (isOff) {
-    input.value = '';
-    btn.className = btn.className.replace('btn-danger', 'btn-outline-secondary');
-    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>出勤予定';
-  } else {
-    input.value = 'off_request';
-    btn.className = btn.className.replace('btn-outline-secondary', 'btn-danger');
-    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>休希望';
-  }
+  const cur   = OFF_STATES.findIndex(s => s.val === input.value);
+  const next  = OFF_STATES[(cur + 1) % OFF_STATES.length];
+  input.value = next.val;
+  // ボタンのクラスを入れ替え
+  OFF_STATES.forEach(s => btn.classList.remove(...s.cls.split(' ')));
+  btn.classList.add(...next.cls.split(' '));
+  btn.innerHTML = next.html;
   _changed = true;
 }
 
 function bulkOff(empId, setOff) {
   document.querySelectorAll(`.off-btn[data-emp="${empId}"]`).forEach(btn => {
-    const input = document.getElementById(`off_${empId}_${btn.dataset.date}`);
-    const isOff = input.value === 'off_request';
-    if (setOff !== isOff) toggleOff(btn);
+    const input   = document.getElementById(`off_${empId}_${btn.dataset.date}`);
+    const target  = setOff ? 'off_request' : '';
+    if (input.value !== target) {
+      // 目的の状態になるまでサイクル
+      let guard = 0;
+      while (input.value !== target && guard++ < 3) toggleOff(btn);
+    }
   });
 }
 

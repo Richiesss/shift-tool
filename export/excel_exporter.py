@@ -93,8 +93,8 @@ def _get_shift_text(
     req  = req_map.get((emp_id, date_str))
     note = (req.note or "").strip() if req else ""
 
-    # 有給チェック
-    if "有給" in note:
+    # 有給チェック（paid_leave パターン or メモに「有給」）
+    if (req and req.pattern_id == "paid_leave") or "有給" in note:
         return "有給", "leave"
 
     # アサイン確認
