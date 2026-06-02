@@ -30,7 +30,38 @@
   .count-short  { background: #ef4444; color: white; }
   .count-leader { background: #f59e0b; color: white; }
 
-  /* ── 人員不足サマリーカード ── */
+  /* ── 人員状況グリッド（4区分） ── */
+  .shortage-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  .sg-cell {
+    background: #1e293b; border-radius: 9px; overflow: hidden;
+    border-left: 4px solid transparent;
+  }
+  .sg-ok     { border-left-color: #22c55e; }
+  .sg-staff  { border-left-color: #ef4444; }
+  .sg-leader { border-left-color: #f59e0b; }
+  .sg-header {
+    display: flex; align-items: center; gap: .4rem;
+    padding: .5rem .7rem; font-size: .78rem; font-weight: 600;
+    color: #e2e8f0;
+  }
+  .sg-expandable { cursor: pointer; user-select: none; }
+  .sg-expandable:hover { background: rgba(255,255,255,.04); }
+  .sg-label { color: #94a3b8; font-size: .75rem; }
+  .sg-count {
+    font-size: .72rem; font-weight: 700; color: white;
+    background: rgba(255,255,255,.12); border-radius: 20px;
+    padding: 1px 7px;
+  }
+  .sg-chevron { color: #64748b; transition: transform .2s; }
+  .sg-chevron.open { transform: rotate(180deg); }
+  .sg-body {
+    padding: .35rem .7rem .5rem; display: flex; flex-wrap: wrap; gap: 3px;
+    border-top: 1px solid rgba(255,255,255,.06);
+  }
+
+  /* ── 人員不足サマリーカード（旧・互換） ── */
   .shortage-card {
     background: #1e293b; border-radius: 10px;
     overflow: hidden; border-left: 4px solid #f59e0b;
@@ -225,36 +256,35 @@
   </div>
   {% endif %}
 
-  {# ── 人員不足サマリー ── #}
-  {% if total_shortage > 0 %}
-  <div class="shortage-card mb-3">
-    <div class="shortage-header" onclick="toggleShortage(this)">
-      <span class="shortage-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
-      <span class="shortage-title">人員不足</span>
-      <span class="shortage-count">{{ total_shortage }}件</span>
-      <i class="bi bi-chevron-down shortage-chevron ms-auto"></i>
-    </div>
-    <div class="shortage-body" id="shortage-body" style="display:none">
-      {% for group in shortage_groups %}
-      <div class="shortage-row">
-        <span class="shortage-label">{{ group.slot }}<span class="shortage-sep">/</span>{{ group.pos }}</span>
-        <div class="shortage-chips">
-          {% for c in group.chips %}
-          <span class="shortage-chip {{ 'chip-staff' if c.is_staff else 'chip-leader' }}"
-                title="{{ c.count }}名 / 最低{{ c.min }}名{% if not c.is_staff %}（リーダー{{ c.leaders }}名 / 最低{{ c.min_leader }}名）{% endif %}">
-            {{ c.label }}
-          </span>
-          {% endfor %}
-        </div>
+  {# ── 人員状況グリッド（朝食/ディナー × ホール/キッチン 4区分） ── #}
+  <div class="shortage-grid mb-3">
+    {% for group in shortage_groups %}
+    {% set cell_id = 'sg-' ~ loop.index %}
+    {% set state = 'staff' if group.has_short_staff else 'leader' if group.has_short_leader else 'ok' %}
+    <div class="sg-cell sg-{{ state }}">
+      <!-- ヘッダー（不足がある場合はタップで展開） -->
+      <div class="sg-header {% if state != 'ok' %}sg-expandable{% endif %}"
+           {% if state != 'ok' %}onclick="toggleSg('{{ cell_id }}')"{% endif %}>
+        <span class="sg-label">{{ group.slot }}<span style="opacity:.5;margin:0 2px">/</span>{{ group.pos }}</span>
+        {% if state == 'ok' %}
+          <i class="bi bi-check-circle-fill ms-auto" style="color:#22c55e;font-size:.9rem"></i>
+        {% else %}
+          <span class="sg-count ms-auto">{{ group.short_count }}日</span>
+          <i class="bi bi-chevron-down sg-chevron" style="font-size:.7rem"></i>
+        {% endif %}
       </div>
-      {% endfor %}
-      <div class="shortage-legend">
-        <span class="shortage-chip chip-staff">人員不足</span>
-        <span class="shortage-chip chip-leader">リーダー不足</span>
+      <!-- 不足日チップ（展開時のみ表示） -->
+      {% if state != 'ok' %}
+      <div class="sg-body" id="{{ cell_id }}" style="display:none">
+        {% for c in group.chips %}
+        <span class="shortage-chip {{ 'chip-staff' if c.is_staff else 'chip-leader' }}"
+              title="{{ c.count }}名/最低{{ c.min }}名">{{ c.label }}</span>
+        {% endfor %}
       </div>
+      {% endif %}
     </div>
+    {% endfor %}
   </div>
-  {% endif %}
 
   <!-- シフトグリッド -->
   <div class="sched-grid">
@@ -488,6 +518,14 @@ const TL_ASGN = {
     }
   }
 })();
+
+function toggleSg(id) {
+  const body    = document.getElementById(id);
+  const chevron = body.previousElementSibling.querySelector('.sg-chevron');
+  const open    = body.style.display === 'none';
+  body.style.display = open ? 'flex' : 'none';
+  if (chevron) chevron.classList.toggle('open', open);
+}
 
 function toggleShortage(header) {
   const body    = document.getElementById('shortage-body');

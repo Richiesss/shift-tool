@@ -110,33 +110,44 @@ def index(period_id):
     constraints   = repo.get_shift_constraints()
     staffing      = _compute_staffing(assignments, all_employees, dates, constraints)
 
-    # 人員不足をスロット×ポジション別に集計
+    # 人員不足を 4区分（朝食/ディナー × ホール/キッチン）ごとに集計
+    # 不足がない区分も含めて常時表示するため全組み合わせを構築する
     _DAY_JP = ['月','火','水','木','金','土','日']
-    _SLOTS  = [('breakfast','朝食'), ('dinner','ディナー')]
-    _POSES  = [('hall','ホール'), ('kitchen','キッチン')]
-    _bucket = {}   # (slot_lbl, pos_lbl) -> list of chip dicts
-    for d in dates:
-        ds = d.isoformat()
-        dlabel = f"{d.month}/{d.day}({_DAY_JP[d.weekday()]})"
-        for sv, sl in _SLOTS:
-            for pv, pl in _POSES:
-                st = staffing.get((ds, sv, pv), {})
-                if st.get('short_staff') or st.get('short_leader'):
-                    _bucket.setdefault((sl, pl), []).append({
-                        'label':      dlabel,
-                        'date':       ds,
-                        'is_staff':   bool(st.get('short_staff')),
-                        'count':      st.get('count', 0),
-                        'min':        st.get('min', 0),
-                        'leaders':    st.get('leaders', 0),
-                        'min_leader': st.get('min_leader', 0),
-                    })
-    # Jinja2 はネストしたタプル展開不可のためリスト化して渡す
-    shortage_groups = [
-        {'slot': sl, 'pos': pl, 'chips': chips}
-        for (sl, pl), chips in _bucket.items()
+    _COMBOS = [
+        ('breakfast', '朝食',    'hall',    'ホール'),
+        ('breakfast', '朝食',    'kitchen', 'キッチン'),
+        ('dinner',    'ディナー', 'hall',    'ホール'),
+        ('dinner',    'ディナー', 'kitchen', 'キッチン'),
     ]
-    total_shortage = sum(len(g['chips']) for g in shortage_groups)
+    _bucket = {(sl, pl): [] for _, sl, _, pl in _COMBOS}
+    for d in dates:
+        ds     = d.isoformat()
+        dlabel = f"{d.month}/{d.day}({_DAY_JP[d.weekday()]})"
+        for sv, sl, pv, pl in _COMBOS:
+            st = staffing.get((ds, sv, pv), {})
+            if st.get('short_staff') or st.get('short_leader'):
+                _bucket[(sl, pl)].append({
+                    'label':      dlabel,
+                    'date':       ds,
+                    'is_staff':   bool(st.get('short_staff')),
+                    'count':      st.get('count', 0),
+                    'min':        st.get('min', 0),
+                    'leaders':    st.get('leaders', 0),
+                    'min_leader': st.get('min_leader', 0),
+                })
+    # 4区分すべてを渡す（不足なし区分も含む）
+    shortage_groups = [
+        {
+            'slot':             sl,
+            'pos':              pl,
+            'chips':            _bucket[(sl, pl)],
+            'short_count':      len(_bucket[(sl, pl)]),
+            'has_short_staff':  any(c['is_staff']     for c in _bucket[(sl, pl)]),
+            'has_short_leader': any(not c['is_staff'] for c in _bucket[(sl, pl)]),
+        }
+        for _, sl, _, pl in _COMBOS
+    ]
+    total_shortage = sum(g['short_count'] for g in shortage_groups)
 
     # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
     assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot}
