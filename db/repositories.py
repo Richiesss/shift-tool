@@ -405,31 +405,35 @@ def save_assignments(period_id: int, assignments: list[ShiftAssignment]):
 
 def add_assignment(period_id: int, assignment: ShiftAssignment):
     conn = get_connection()
-    conn.execute(
-        """INSERT INTO shift_assignments
-               (period_id, employee_id, date, time_slot, position, is_reinforcement, reinf_start, reinf_end)
-           VALUES (?,?,?,?,?,?,?,?)
-           ON CONFLICT(period_id, employee_id, date, time_slot) DO UPDATE SET
-               position=excluded.position,
-               is_reinforcement=excluded.is_reinforcement,
-               reinf_start=excluded.reinf_start,
-               reinf_end=excluded.reinf_end""",
-        (period_id, assignment.employee_id, assignment.date,
-         assignment.time_slot.value, assignment.position.value,
-         int(assignment.is_reinforcement), assignment.reinf_start, assignment.reinf_end)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute(
+            """INSERT INTO shift_assignments
+                   (period_id, employee_id, date, time_slot, position, is_reinforcement, reinf_start, reinf_end)
+               VALUES (?,?,?,?,?,?,?,?)
+               ON CONFLICT(period_id, employee_id, date, time_slot) DO UPDATE SET
+                   position=excluded.position,
+                   is_reinforcement=excluded.is_reinforcement,
+                   reinf_start=excluded.reinf_start,
+                   reinf_end=excluded.reinf_end""",
+            (period_id, assignment.employee_id, assignment.date,
+             assignment.time_slot.value, assignment.position.value,
+             int(assignment.is_reinforcement), assignment.reinf_start, assignment.reinf_end)
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: TimeSlot):
     conn = get_connection()
-    conn.execute(
-        "DELETE FROM shift_assignments WHERE period_id=? AND employee_id=? AND date=? AND time_slot=?",
-        (period_id, employee_id, date, time_slot.value)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute(
+            "DELETE FROM shift_assignments WHERE period_id=? AND employee_id=? AND date=? AND time_slot=?",
+            (period_id, employee_id, date, time_slot.value)
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ── 備考 ────────────────────────────────────────────────────────────────
@@ -562,9 +566,10 @@ def get_schedule_notes(period_id: int) -> dict[str, str]:
 
 
 def save_schedule_note(period_id: int, date_str: str, note: str):
-    """備考を保存。空文字の場合は削除"""
+    """備考を保存。空文字の場合は削除。200文字以内に制限"""
+    note = note.strip()[:200]  # 文字数上限
     conn = get_connection()
-    if note.strip():
+    if note:
         conn.execute(
             """INSERT INTO schedule_notes (period_id, date, note) VALUES (?,?,?)
                ON CONFLICT(period_id, date) DO UPDATE SET note=excluded.note""",

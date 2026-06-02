@@ -196,22 +196,41 @@ def index(period_id):
 
 @bp.post("/<int:period_id>/assign")
 def assign(period_id):
-    data = request.get_json()
-    emp_id = data.get("employee_id")
+    import re as _re
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"ok": False, "error": "Invalid JSON body"}), 400
+
+    emp_id   = data.get("employee_id")
     date_str = data.get("date")
     slot_val = data.get("time_slot")
-    pos_val = data.get("position")
-    action = data.get("action", "add")
+    pos_val  = data.get("position")
+    action   = data.get("action", "add")
 
     try:
+        # 期間の存在確認
+        period = repo.get_period(period_id)
+        if not period:
+            return jsonify({"ok": False, "error": "期間が見つかりません"}), 400
+
+        # 日付が期間内かチェック
+        if date_str and not (period.start_date <= date_str <= period.end_date):
+            return jsonify({"ok": False, "error": "指定日付が期間外です"}), 400
+
         slot = TimeSlot(slot_val)
         if action == "remove":
             repo.remove_assignment(period_id, emp_id, date_str, slot)
         else:
             pos = Position(pos_val)
-            is_reinf   = bool(data.get("is_reinforcement", False))
+            is_reinf    = bool(data.get("is_reinforcement", False))
             reinf_start = data.get("reinf_start") or None
             reinf_end   = data.get("reinf_end")   or None
+            # 応援時刻の形式チェック
+            _time_re = _re.compile(r'^\d{1,2}:\d{2}$')
+            if reinf_start and not _time_re.match(reinf_start):
+                return jsonify({"ok": False, "error": "開始時刻の形式が不正です"}), 400
+            if reinf_end and not _time_re.match(reinf_end):
+                return jsonify({"ok": False, "error": "終了時刻の形式が不正です"}), 400
             a = ShiftAssignment(
                 employee_id=emp_id, date=date_str, time_slot=slot, position=pos,
                 is_reinforcement=is_reinf, reinf_start=reinf_start, reinf_end=reinf_end,

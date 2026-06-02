@@ -378,18 +378,19 @@ def solve(
                         model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
 
     # 6. 正社員の両時間帯掛け持ちは最小化（ソフト制約で対応）
-    # 両時間帯掛け持ち変数
+    # 同一ポジションで朝食＋ディナー両方入る場合のみペナルティ
     double_vars: dict[tuple[int, str], cp_model.IntVar] = {}
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME:
             for ds in date_strs:
-                worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
-                worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
-                dv = model.new_bool_var(f"double_{emp.id}_{ds}")
-                # dv=1 ⟺ 両方に入る
-                model.add(worked_b + worked_d >= 2).only_enforce_if(dv)
-                model.add(worked_b + worked_d <= 1).only_enforce_if(dv.negated())
-                double_vars[(emp.id, ds)] = dv
+                for pos in positions:
+                    b_var = assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                    d_var = assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
+                    dv = model.new_bool_var(f"double_{emp.id}_{ds}_{pos.value}")
+                    # dv=1 ⟺ 同ポジションで朝食＋ディナーどちらも担当
+                    model.add(b_var + d_var >= 2).only_enforce_if(dv)
+                    model.add(b_var + d_var <= 1).only_enforce_if(dv.negated())
+                    double_vars[(emp.id, ds, pos.value)] = dv
 
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
