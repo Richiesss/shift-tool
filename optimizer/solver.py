@@ -547,7 +547,7 @@ def solve(
         logger.info("  [フェーズ2] ベストエフォート求解開始")
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
-            req_map, req_hours, config, shift_constraints
+            req_map, off_map, req_hours, config, shift_constraints
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
         _log_assignment_summary(best_assignments, date_strs)
@@ -611,7 +611,7 @@ def _extract_assignments(solver, assign, active_employees, date_strs, slots, pos
 
 def _solve_best_effort(
     active_employees, date_strs, slots, positions,
-    req_map, req_hours, config: SolverConfig | None = None,
+    req_map, off_map, req_hours, config: SolverConfig | None = None,
     shift_constraints: dict | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
