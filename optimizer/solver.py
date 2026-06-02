@@ -507,7 +507,7 @@ def solve(
                         DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
                     )
 
-    model.minimize(sum(penalty_terms))
+    model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     # ── 求解 ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
@@ -749,7 +749,7 @@ def _solve_best_effort(
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
                     penalty_terms.append(penalty * not_worked)
 
-    model.minimize(sum(penalty_terms))
+    model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 15.0

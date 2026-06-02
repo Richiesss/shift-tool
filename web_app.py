@@ -25,7 +25,11 @@ def create_app():
         SESSION_COOKIE_SAMESITE="Lax",
     )
 
-    initialize_db()
+    try:
+        initialize_db()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).error(f"initialize_db failed: {_e}")
 
     # クラッシュ/リロード後に "generating" のままスタックした状態をリセット
     try:
@@ -58,7 +62,7 @@ def create_app():
     def require_login():
         if not APP_PASSWORD:
             return  # パスワード未設定なら全開放
-        exempt = {"auth.login", "auth.login_post", "static"}
+        exempt = {"auth.login", "auth.login_post", "static", "health"}
         if request.endpoint in exempt:
             return
         if not session.get("authenticated") or session.get("sv") != SESSION_VERSION:
@@ -89,6 +93,11 @@ def create_app():
         if conn is not None:
             conn._flask_managed = False
             conn.close()
+
+    @app.get("/health")
+    def health():
+        from flask import jsonify
+        return jsonify({"status": "ok"})
 
     @app.get("/")
     def index():
