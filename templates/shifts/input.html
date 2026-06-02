@@ -136,6 +136,21 @@
 {% endif %}
 
 {# 一括入力 #}
+{% if current_emp.employment_type.value == 'full_time' %}
+{# 社員：休希望を一括でON/OFF #}
+<div class="px-3 pb-2 d-flex gap-2 align-items-center">
+  <span class="small text-muted">一括：</span>
+  <button type="button" class="btn btn-outline-danger btn-sm"
+          onclick="bulkOff('{{ current_emp.id }}', true)">
+    <i class="bi bi-x-circle me-1"></i>全日 休希望
+  </button>
+  <button type="button" class="btn btn-outline-success btn-sm"
+          onclick="bulkOff('{{ current_emp.id }}', false)">
+    <i class="bi bi-check-circle me-1"></i>全日 出勤
+  </button>
+</div>
+{% else %}
+{# アルバイト：シフトパターン一括適用 #}
 <div class="px-3 pb-2 d-flex gap-2 align-items-center">
   <span class="small text-muted">一括：</span>
   <select id="bulk-pattern" class="form-select form-select-sm" style="max-width:160px">
@@ -149,6 +164,7 @@
     全日に適用
   </button>
 </div>
+{% endif %}
 
 {# 入力フォーム #}
 <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
@@ -176,7 +192,27 @@
               （{{ DAY_JP[dow] }}）
             </div>
           </th>
-          {# パターン選択 #}
+          {% if current_emp.employment_type.value == 'full_time' %}
+          {# 社員：休希望トグルボタン #}
+          {% set is_off = req and req.pattern_id == 'off_request' %}
+          <td class="{{ day_cls }} align-middle">
+            <input type="hidden"
+                   name="pattern_{{ current_emp.id }}_{{ d }}"
+                   id="off_{{ current_emp.id }}_{{ d }}"
+                   value="{{ 'off_request' if is_off else '' }}">
+            <button type="button"
+                    class="btn {{ 'btn-danger' if is_off else 'btn-outline-secondary' }} btn-sm w-100 off-btn"
+                    data-emp="{{ current_emp.id }}" data-date="{{ d }}"
+                    onclick="toggleOff(this)">
+              {% if is_off %}
+              <i class="bi bi-x-circle me-1"></i>休希望
+              {% else %}
+              <i class="bi bi-check2 me-1"></i>出勤予定
+              {% endif %}
+            </button>
+          </td>
+          {% else %}
+          {# アルバイト：希望シフトパターン選択 #}
           <td class="{{ day_cls }}">
             <select name="pattern_{{ current_emp.id }}_{{ d }}"
                     id="sel_{{ current_emp.id }}_{{ d }}"
@@ -201,6 +237,7 @@
                      class="form-control form-control-sm">
             </div>
           </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -340,6 +377,32 @@ document.querySelectorAll('a[href*="emp_idx"]').forEach(a => {
     });
   }
 });
+
+// ── 社員：休希望トグル ─────────────────────────────────────
+function toggleOff(btn) {
+  const empId = btn.dataset.emp;
+  const date  = btn.dataset.date;
+  const input = document.getElementById(`off_${empId}_${date}`);
+  const isOff = input.value === 'off_request';
+  if (isOff) {
+    input.value = '';
+    btn.className = btn.className.replace('btn-danger', 'btn-outline-secondary');
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>出勤予定';
+  } else {
+    input.value = 'off_request';
+    btn.className = btn.className.replace('btn-outline-secondary', 'btn-danger');
+    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>休希望';
+  }
+  _changed = true;
+}
+
+function bulkOff(empId, setOff) {
+  document.querySelectorAll(`.off-btn[data-emp="${empId}"]`).forEach(btn => {
+    const input = document.getElementById(`off_${empId}_${btn.dataset.date}`);
+    const isOff = input.value === 'off_request';
+    if (setOff !== isOff) toggleOff(btn);
+  });
+}
 
 function applyBulk(empId) {
   const pattern = document.getElementById('bulk-pattern').value;

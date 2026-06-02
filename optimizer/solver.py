@@ -100,13 +100,18 @@ def solve(
     slots = list(TimeSlot)
     positions = list(Position)
 
-    # 希望シフトをキーでアクセス
+    # 希望シフトをキーでアクセス（アルバイト用：True=出勤希望）
     req_map: dict[tuple[int, str, str], bool] = {}
+    # 社員の休希望（off_request）をキーでアクセス: (emp_id, date) -> True
+    off_map: dict[tuple[int, str], bool] = {}
     for r in requests:
-        if r.breakfast:
-            req_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = True
-        if r.dinner:
-            req_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = True
+        if r.pattern_id == "off_request":
+            off_map[(r.employee_id, r.date)] = True
+        else:
+            if r.breakfast:
+                req_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = True
+            if r.dinner:
+                req_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = True
 
     active_employees = [e for e in employees if e.is_active]
 
@@ -164,7 +169,10 @@ def solve(
                     base_min += reserv_extra_d
                 avail = []
                 for e in active_employees:
-                    if slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
+                    if e.employment_type == EmploymentType.FULL_TIME:
+                        # 社員：休希望日以外は常時出勤可
+                        ok = not off_map.get((e.id, ds), False) and ds not in e.fixed_unavailable_dates
+                    elif slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
                         ok = ds not in e.fixed_unavailable_dates
                     elif slot == TimeSlot.DINNER and e.always_available_dinner:
                         ok = ds not in e.fixed_unavailable_dates
@@ -216,11 +224,14 @@ def solve(
                     model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
     # 1. 従業員は希望していない時間帯には入れない
-    # 常時出勤可スタッフは固定不可日以外すべて勤務可能とする
+    # 可用性チェック（社員：休希望以外は常時可、アルバイト：希望提出のみ可）
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    # 社員：休希望日以外は常時出勤可（固定不可日も除外）
+                    can_work = not off_map.get((emp.id, ds), False) and ds not in emp.fixed_unavailable_dates
+                elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = ds not in emp.fixed_unavailable_dates
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
                     can_work = ds not in emp.fixed_unavailable_dates
@@ -636,7 +647,9 @@ def _solve_best_effort(
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
-                if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    can_work = not off_map.get((emp.id, ds), False) and ds not in emp.fixed_unavailable_dates
+                elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = ds not in emp.fixed_unavailable_dates
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
                     can_work = ds not in emp.fixed_unavailable_dates
