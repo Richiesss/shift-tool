@@ -377,20 +377,15 @@ def solve(
                     if ldr_b_vars:
                         model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
 
-    # 6. 正社員の両時間帯掛け持ちは最小化（ソフト制約で対応）
-    # 同一ポジションで朝食＋ディナー両方入る場合のみペナルティ
-    double_vars: dict[tuple[int, str], cp_model.IntVar] = {}
+    # 6. 正社員の両時間帯掛け持ちを物理的に禁止（ハード制約）
+    # 朝食＋ディナーの合計を 1 以下に制限
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME:
             for ds in date_strs:
-                for pos in positions:
-                    b_var = assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                    d_var = assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
-                    dv = model.new_bool_var(f"double_{emp.id}_{ds}_{pos.value}")
-                    # dv=1 ⟺ 同ポジションで朝食＋ディナーどちらも担当
-                    model.add(b_var + d_var >= 2).only_enforce_if(dv)
-                    model.add(b_var + d_var <= 1).only_enforce_if(dv.negated())
-                    double_vars[(emp.id, ds, pos.value)] = dv
+                worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+                worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
+                model.add(worked_b + worked_d <= 1)
+    double_vars = {}  # P2ペナルティ参照のため空dict（使用しない）
 
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
@@ -429,10 +424,7 @@ def solve(
                     w = max(1, int(1000 * hours * 10 * config.cost_scale))
                     penalty_terms.append(w * var)
 
-    # P2: 正社員の両時間帯掛け持ちにペナルティ
-    double_w = max(1, int(500 * config.double_penalty_scale))
-    for dv in double_vars.values():
-        penalty_terms.append(double_w * dv)
+    # P2: 両時間帯掛け持ちはハード制約で禁止済み（ペナルティ不要）
 
     # P2b: 深夜（ディナー22:00〜23:00）の集中を防ぐ
     # ディナー担当は全員深夜1時間が発生するが、特定人物への集中は偏差で管理
@@ -751,6 +743,14 @@ def _solve_best_effort(
                     for slot in slots for pos in positions
                 ]
                 model.add(sum(all_vars) <= 1)
+
+    # 正社員の朝食＋ディナー両方出勤を物理的に禁止（ハード制約）
+    for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME:
+            for ds in date_strs:
+                worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+                worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
+                model.add(worked_b + worked_d <= 1)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
