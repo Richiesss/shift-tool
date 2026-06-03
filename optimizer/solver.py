@@ -78,8 +78,8 @@ def solve(
 
     優先順位（ソフト制約のペナルティ重み）:
       1. 人件費最小化（総時間削減）         weight=1000 × cost_scale
-      2. 正社員両掛け持ち回避              weight=500 × double_penalty_scale
-      2b. 深夜勤務分散                     weight=500 × late_night_scale
+      2. 正社員両掛け持ち（朝食＋ディナー）はハード制約で禁止
+      2b. 深夜勤務分散（アルバイトのみ）  weight=500 × late_night_scale
       3a. 正社員希望を必ず通す             weight=200000（固定）
       3b. アルバイト希望を通す             weight=100 × pt_pref_scale
       4. 人員バランス均等化                 weight=10 × balance_scale
@@ -118,7 +118,7 @@ def solve(
     logger.info(f"[SOLVE START] period_id={period.id}  {period.start_date} 〜 {period.end_date}")
     logger.info(f"  日数={len(date_strs)}  有効従業員={len(active_employees)}  希望レコード={len(requests)}")
     logger.info(f"  config: cost={config.cost_scale} pt_pref={config.pt_pref_scale} "
-                f"double={config.double_penalty_scale} balance={config.balance_scale} "
+                f"balance={config.balance_scale} "
                 f"late_night={config.late_night_scale}")
     ft_count = sum(1 for e in active_employees if e.employment_type == EmploymentType.FULL_TIME)
     pt_count = len(active_employees) - ft_count
