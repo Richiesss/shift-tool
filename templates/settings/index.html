@@ -82,7 +82,7 @@
       <div class="mb-3">
         <div class="small fw-semibold text-muted mb-1">{{ pos_label }}</div>
         {% for slot_label, start_key, end_key, default_start, default_end in rows %}
-        <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+        <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
           <label class="form-label mb-0 small" style="min-width:55px;width:55px">{{ slot_label }}</label>
           <div class="d-flex align-items-center gap-1">
             <input type="time" name="{{ start_key }}"
@@ -110,7 +110,7 @@
         ('reserv_threshold_dinner',    'ディナー：閾値（人）'),
         ('reserv_extra_dinner',        'ディナー：増員数（人）'),
       ] %}
-      <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+      <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
         <label class="form-label mb-0 small fw-semibold flex-grow-1">{{ label }}</label>
         <input type="number" name="{{ key }}" value="{{ settings.get(key, '') }}"
                class="form-control form-control-sm" style="max-width:90px" min="0">
@@ -132,7 +132,7 @@
       <form method="post" action="{{ url_for('settings.restore') }}"
             enctype="multipart/form-data"
             onsubmit="return confirm('現在のデータは全て置き換えられます。続けますか？')">
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 mobile-stack">
           <input type="file" name="backup_file" accept=".json" class="form-control form-control-sm" required>
           <button type="submit" class="btn btn-outline-warning btn-sm text-nowrap">
             <i class="bi bi-cloud-upload me-1"></i>リストア

@@ -29,8 +29,13 @@
                    background: #e2e8f0; color: #475569; white-space: nowrap; }
 
   select.pattern-sel { font-size: .78rem; min-width: 140px; padding: 2px 4px; }
-  .custom-time { display: none; gap: 4px; margin-top: 3px; }
+  .custom-time { display: none; gap: 4px; margin-top: 3px; align-items: center; }
   .custom-time input { width: 80px; font-size: .78rem; padding: 2px 4px; }
+  @media (max-width: 767px) {
+    select.pattern-sel { min-width: 0 !important; width: 100% !important; }
+    .custom-time { justify-content: space-between; }
+    .custom-time input { width: 45% !important; font-size: .72rem; }
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -137,31 +142,31 @@
 
 {# 一括入力 #}
 {% if current_emp.employment_type.value == 'full_time' %}
-<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center">
+<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
   <span class="small text-muted flex-shrink-0">一括：</span>
-  <button type="button" class="btn btn-outline-danger btn-sm text-nowrap"
+  <button type="button" class="btn btn-outline-danger btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
           onclick="bulkOff('{{ current_emp.id }}', 'off_request')">
     <i class="bi bi-x-circle me-1"></i>休希望
   </button>
-  <button type="button" class="btn btn-outline-warning btn-sm text-nowrap"
+  <button type="button" class="btn btn-outline-warning btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
           onclick="bulkOff('{{ current_emp.id }}', 'paid_leave')">
     <i class="bi bi-calendar-check me-1"></i>有休
   </button>
-  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
           onclick="bulkOff('{{ current_emp.id }}', '')">
     <i class="bi bi-check2 me-1"></i>出勤
   </button>
 </div>
 {% else %}
-<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center">
+<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
   <span class="small text-muted flex-shrink-0">一括：</span>
-  <select id="bulk-pattern" class="form-select form-select-sm" style="max-width:160px">
+  <select id="bulk-pattern" class="form-select form-select-sm flex-grow-1 flex-md-grow-0" style="max-width:160px">
     <option value="">（休み）</option>
     {% for p in patterns %}
     <option value="{{ p.id }}">{{ p.label }}</option>
     {% endfor %}
   </select>
-  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
           onclick="applyBulk('{{ current_emp.id }}')">
     全日に適用
   </button>

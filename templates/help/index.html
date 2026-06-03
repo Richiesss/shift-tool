@@ -175,20 +175,29 @@
   {{ section('generate', 'bi-lightning-fill', '#fef9c3', 'シフト自動生成', 'body-generate') }}
         <ul class="step-list">
           <li><span class="step-num">1</span><div><strong>希望シフトを入力済みの期間</strong>を選択する。</div></li>
-          <li><span class="step-num">2</span><div><strong>優先度を設定</strong>する（各項目の <i class="bi bi-question-circle text-muted"></i> をタップすると詳細説明が表示されます）。</div></li>
+          <li><span class="step-num">2</span><div><strong>優先度を設定</strong>する（各項目の <span class="help-btn">?</span> をタップすると詳細説明が表示されます）。</div></li>
           <li><span class="step-num">3</span><div><strong>「生成開始」</strong>ボタンを押す。最大25秒で最適なシフトを算出します。</div></li>
         </ul>
 
-        <div class="mt-2 mb-1 small fw-semibold text-muted">優先度設定の意味</div>
-        <table class="table table-sm table-bordered" style="font-size:.82rem">
+        <div class="mt-3 mb-1 small fw-semibold text-muted">優先度設定の意味</div>
+        <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
           <thead class="table-light"><tr><th>設定項目</th><th>内容</th></tr></thead>
           <tbody>
-            <tr><td>希望シフト尊重</td><td>スタッフの希望日程をどれだけ重視するか</td></tr>
-            <tr><td>公平な配分</td><td>出勤日数・朝食/ディナーの偏りを均す度合い</td></tr>
-            <tr><td>連続出勤回避</td><td>同じスタッフが連日出勤しないよう制限する強さ</td></tr>
-            <tr><td>固定パターン</td><td>各スタッフに設定した固定シフトパターンの適用度</td></tr>
+            <tr><td>人件費最小化</td><td>総勤務時間の合計を少なくすることを優先します。短時間シフトのスタッフを優先配置して人件費を抑えます。</td></tr>
+            <tr><td>アルバイト希望充当</td><td>アルバイトが希望した時間帯にできるだけアサインされるよう配慮します。</td></tr>
+            <tr><td>人員バランス均等化</td><td>各スタッフの総勤務回数が均等になるよう調整します。</td></tr>
+            <tr><td>深夜勤務分散</td><td>アルバイトスタッフのディナー時間帯（22時以降）の勤務が偏らないよう分散させます（正社員は対象外）。</td></tr>
           </tbody>
         </table>
+
+        <div class="mt-2 mb-1 small fw-semibold text-muted">自動生成の基本ルール</div>
+        <ul class="step-list mb-3" style="font-size:.82rem; list-style: disc; padding-left: 1.25rem;">
+          <li><strong>正社員の掛け持ち禁止</strong> — 1日のうちに朝食とディナーの両方にアサインされることはありません。</li>
+          <li><strong>朝食はアルバイト優先</strong> — 朝食時間帯はアルバイトだけで最低人数を満たせる場合、正社員はアサインされません。</li>
+          <li><strong>ディナーは正社員優先</strong> — ディナー時間帯は正社員だけで最低人数を満たせる場合、アルバイトはアサインされません。</li>
+          <li><strong>開店準備・片付けの考慮</strong> — 開店準備（open）や片付け（cleanup）の対応可能スタッフ（正社員含む）が要件を満たすよう自動配置されます。</li>
+        </ul>
+
         <div class="warn-box">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>
           生成中は他の画面に移動しても構いません。完了後に「シフト表」から結果を確認してください。
@@ -239,8 +248,10 @@
         <table class="table table-sm table-bordered" style="font-size:.82rem">
           <thead class="table-light"><tr><th>項目</th><th>内容</th></tr></thead>
           <tbody>
-            <tr><td>シフト制約</td><td>各スロット×ポジションの最低人数・最低リーダー数を設定</td></tr>
-            <tr><td>客数閾値</td><td>客数管理の色分け基準を朝食/ディナー別に設定</td></tr>
+            <tr><td>シフト制約</td><td>各スロット×ポジションの最低/最大人数・最低リーダー数を設定</td></tr>
+            <tr><td>客数閾値・増員</td><td>予約客数の閾値と、超過時に自動で増員する人数を朝食/ディナー別に設定</td></tr>
+            <tr><td>開店・片付け制約</td><td>開店準備（open）や片付け（cleanup）に必要な最低人数およびリーダー数を設定</td></tr>
+            <tr><td>社員時間設定</td><td>正社員が朝食・ディナーにアサインされた際の標準勤務時間を設定</td></tr>
             <tr><td>バックアップ</td><td>全データをJSONファイルでダウンロード</td></tr>
             <tr><td>リストア</td><td>バックアップJSONからデータを復元（既存データは上書き）</td></tr>
           </tbody>

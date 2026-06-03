@@ -34,6 +34,11 @@
   .shortage-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
   }
+  @media (max-width: 767px) {
+    .shortage-grid {
+      grid-template-columns: 1fr;
+    }
+  }
   .sg-cell {
     background: #1e293b; border-radius: 9px; overflow: hidden;
     border-left: 4px solid transparent;
@@ -204,8 +209,8 @@
   {% else %}
 
   <!-- 期間セレクター -->
-  <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
-    <select class="form-select form-select-sm" style="max-width:220px"
+  <div class="d-flex gap-2 mb-3 align-items-center flex-nowrap overflow-x-auto pb-2" style="-webkit-overflow-scrolling:touch">
+    <select class="form-select form-select-sm flex-shrink-0" style="max-width:220px; width:auto;"
       onchange="location.href='/schedule/'+this.value">
       {% for p in periods %}
       <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
@@ -215,13 +220,13 @@
     </select>
 
     <!-- 朝食/ディナー タブ -->
-    <div class="btn-group btn-group-sm">
+    <div class="btn-group btn-group-sm flex-shrink-0">
       <a href="?slot=breakfast&pos={{ pos }}" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
       <a href="?slot=dinner&pos={{ pos }}"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
     </div>
 
     <!-- ホール/キッチン タブ -->
-    <div class="btn-group btn-group-sm">
+    <div class="btn-group btn-group-sm flex-shrink-0">
       <a href="?slot={{ slot }}&pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
         <i class="bi bi-people me-1"></i>ホール
       </a>
@@ -231,13 +236,13 @@
     </div>
 
     {% if period.status == 'draft' %}
-    <form method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" class="ms-auto">
+    <form method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" class="flex-shrink-0">
       <button class="btn btn-success btn-sm">
         <i class="bi bi-check-lg"></i> 確定
       </button>
     </form>
     {% else %}
-    <span class="badge bg-success ms-auto">確定済</span>
+    <span class="badge bg-success flex-shrink-0">確定済</span>
     {% endif %}
   </div>
 
