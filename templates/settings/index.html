@@ -25,9 +25,9 @@
             <tr>
               <td>{{ slot.short_label() }}</td>
               <td>{{ pos.label() }}</td>
-              <td><input type="number" name="min_{{ prefix }}" value="{{ vals.min }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
-              <td><input type="number" name="max_{{ prefix }}" value="{{ vals.max }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
-              <td><input type="number" name="ml_{{ prefix }}"  value="{{ vals.min_leader }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="min_{{ prefix }}" value="{{ vals.min }}" class="form-control form-control-sm" min="0" style="width:48px"></td>
+              <td><input type="number" name="max_{{ prefix }}" value="{{ vals.max }}" class="form-control form-control-sm" min="0" style="width:48px"></td>
+              <td><input type="number" name="ml_{{ prefix }}"  value="{{ vals.min_leader }}" class="form-control form-control-sm" min="0" style="width:48px"></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -82,15 +82,17 @@
       <div class="mb-3">
         <div class="small fw-semibold text-muted mb-1">{{ pos_label }}</div>
         {% for slot_label, start_key, end_key, default_start, default_end in rows %}
-        <div class="mb-2 d-flex align-items-center gap-2">
-          <label class="form-label mb-0 small" style="min-width:65px">{{ slot_label }}</label>
-          <input type="time" name="{{ start_key }}"
-                 value="{{ settings.get(start_key, default_start) }}"
-                 class="form-control form-control-sm" style="max-width:130px">
-          <span class="text-muted small">〜</span>
-          <input type="time" name="{{ end_key }}"
-                 value="{{ settings.get(end_key, default_end) }}"
-                 class="form-control form-control-sm" style="max-width:130px">
+        <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+          <label class="form-label mb-0 small" style="min-width:55px;width:55px">{{ slot_label }}</label>
+          <div class="d-flex align-items-center gap-1">
+            <input type="time" name="{{ start_key }}"
+                   value="{{ settings.get(start_key, default_start) }}"
+                   class="form-control form-control-sm">
+            <span class="text-muted small">〜</span>
+            <input type="time" name="{{ end_key }}"
+                   value="{{ settings.get(end_key, default_end) }}"
+                   class="form-control form-control-sm">
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -108,10 +110,10 @@
         ('reserv_threshold_dinner',    'ディナー：閾値（人）'),
         ('reserv_extra_dinner',        'ディナー：増員数（人）'),
       ] %}
-      <div class="mb-2 d-flex align-items-center gap-2">
-        <label class="form-label mb-0 small fw-semibold" style="min-width:180px">{{ label }}</label>
+      <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+        <label class="form-label mb-0 small fw-semibold flex-grow-1">{{ label }}</label>
         <input type="number" name="{{ key }}" value="{{ settings.get(key, '') }}"
-               class="form-control form-control-sm" style="max-width:100px" min="0">
+               class="form-control form-control-sm" style="max-width:90px" min="0">
       </div>
       {% endfor %}
     </div>

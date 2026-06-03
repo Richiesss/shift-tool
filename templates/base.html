@@ -94,6 +94,32 @@
     /* ── コンテンツ ──────────────────────────────────── */
     .content { padding: 1rem; }
 
+    /* ── モバイル共通 UI 修正 ──────────────────────────── */
+    @media (max-width: 767px) {
+      /* テーブルが横スクロール可能に */
+      .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      /* フォームラベルの固定幅をリセット */
+      .mobile-label { min-width: 0 !important; width: 100%; margin-bottom: .3rem; }
+      /* 縦並びフォーム行 */
+      .mobile-stack { flex-direction: column !important; align-items: stretch !important; }
+      .mobile-stack > * { width: 100% !important; max-width: 100% !important; }
+      /* ボタンが縦並びのとき幅100% */
+      .mobile-btn-wrap { flex-wrap: wrap !important; }
+      .mobile-btn-wrap > .btn { flex: 1 1 auto; min-width: 0; }
+      /* 数値入力を小さく */
+      input[type="number"].form-control-sm { width: 52px !important; }
+      /* time 入力の最大幅解除 */
+      input[type="time"].form-control-sm { max-width: 100% !important; }
+      /* カード内余白を縮小 */
+      .card-body { padding: .75rem; }
+      /* ページヘッダーのボタン群を折り返し */
+      .page-header { flex-wrap: wrap; min-height: auto; gap: .4rem; }
+      .page-header .ms-auto { margin-left: auto !important; }
+      /* 入力フォームのフォントサイズ（iOS zoom 防止: 16px以上） */
+      input, select, textarea { font-size: 16px !important; }
+      input.form-control-sm, select.form-select-sm { font-size: 14px !important; }
+    }
+
     /* ── カード ──────────────────────────────────────── */
     .card {
       border: 1px solid rgba(226,232,240,.7);

@@ -137,31 +137,31 @@
 
 {# 一括入力 #}
 {% if current_emp.employment_type.value == 'full_time' %}
-<div class="px-3 pb-2 d-flex gap-2 align-items-center">
-  <span class="small text-muted">一括：</span>
-  <button type="button" class="btn btn-outline-danger btn-sm"
+<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center">
+  <span class="small text-muted flex-shrink-0">一括：</span>
+  <button type="button" class="btn btn-outline-danger btn-sm text-nowrap"
           onclick="bulkOff('{{ current_emp.id }}', 'off_request')">
-    <i class="bi bi-x-circle me-1"></i>全日 休希望
+    <i class="bi bi-x-circle me-1"></i>休希望
   </button>
-  <button type="button" class="btn btn-outline-warning btn-sm"
+  <button type="button" class="btn btn-outline-warning btn-sm text-nowrap"
           onclick="bulkOff('{{ current_emp.id }}', 'paid_leave')">
-    <i class="bi bi-calendar-check me-1"></i>全日 有休
+    <i class="bi bi-calendar-check me-1"></i>有休
   </button>
-  <button type="button" class="btn btn-outline-secondary btn-sm"
+  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
           onclick="bulkOff('{{ current_emp.id }}', '')">
-    <i class="bi bi-check2 me-1"></i>全日 出勤
+    <i class="bi bi-check2 me-1"></i>出勤
   </button>
 </div>
 {% else %}
-<div class="px-3 pb-2 d-flex gap-2 align-items-center">
-  <span class="small text-muted">一括：</span>
+<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center">
+  <span class="small text-muted flex-shrink-0">一括：</span>
   <select id="bulk-pattern" class="form-select form-select-sm" style="max-width:160px">
     <option value="">（休み）</option>
     {% for p in patterns %}
     <option value="{{ p.id }}">{{ p.label }}</option>
     {% endfor %}
   </select>
-  <button type="button" class="btn btn-outline-secondary btn-sm"
+  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
           onclick="applyBulk('{{ current_emp.id }}')">
     全日に適用
   </button>
