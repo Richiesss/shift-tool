@@ -331,6 +331,7 @@ def solve(
                         f"{ds} 開店準備 {pos.label()}: 対応可 {len(can_open_req)} 名（必要 {min_open} 名）"
                     )
             if min_open_ldr > 0:
+                # FIX⑥: FT社員もリーダーチェックに含める（can_open_req は FT 含む）
                 ldr_open_vars = [
                     assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
                     for emp in can_open_req if emp.is_leader(pos.value)
@@ -367,11 +368,15 @@ def solve(
                 if min_cln > 0 and cln_vars:
                     model.add(sum(cln_vars) >= min(min_cln, len(cln_vars)))
                 if min_cln_ldr > 0:
+                    # FIX②: FT社員のリーダーも含める（cln_vars と同じ可用性条件を適用）
                     ldr_cln_vars = [
                         assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
                         for emp in cleanup_pool if emp.is_leader(pos.value)
                         if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                         or emp.always_available_breakfast
+                        or (emp.employment_type == EmploymentType.FULL_TIME
+                            and not off_map.get((emp.id, ds), False)
+                            and ds not in emp.fixed_unavailable_dates)
                     ]
                     if ldr_cln_vars:
                         model.add(sum(ldr_cln_vars) >= min(min_cln_ldr, len(ldr_cln_vars)))
@@ -396,7 +401,6 @@ def solve(
                 worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
                 worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
                 model.add(worked_b + worked_d <= 1)
-    double_vars = {}  # P2ペナルティ参照のため空dict（使用しない）
 
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
@@ -496,10 +500,17 @@ def solve(
                 elif slot == TimeSlot.DINNER and rc.get("dinner", 0) >= reserv_thresh_d > 0:
                     base_min += reserv_extra_d
 
-                # PT の利用可能人数を数える
+                # FIX③④: 両ポジション対応の従業員を二重計上しないよう、
+                # 専任（primary_position が設定されている）のみをカウント。
+                # 両対応の従業員はソルバーが柔軟に配置するためソフト誘導に任せる。
                 pt_avail = 0
                 for emp in active_employees:
                     if emp.employment_type == EmploymentType.FULL_TIME:
+                        continue
+                    # 両ポジション対応の PT は二重計上回避のためスキップ
+                    if emp.primary_position is None or emp.can_work_both_positions:
+                        continue
+                    if emp.primary_position.value != pos.value:
                         continue
                     if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                         slot_ok = ds not in emp.fixed_unavailable_dates
@@ -507,23 +518,20 @@ def solve(
                         slot_ok = ds not in emp.fixed_unavailable_dates
                     else:
                         slot_ok = req_map.get((emp.id, ds, slot.value), False)
-                    if not slot_ok:
-                        continue
-                    if emp.primary_position is not None and not emp.can_work_both_positions:
-                        if emp.primary_position.value != pos.value:
-                            continue
-                    pt_avail += 1
+                    if slot_ok:
+                        pt_avail += 1
 
-                # FT の利用可能人数を数える
+                # FT も専任のみカウント（両対応 FT の二重計上回避）
                 ft_avail = 0
                 for emp in active_employees:
                     if emp.employment_type != EmploymentType.FULL_TIME:
                         continue
                     if off_map.get((emp.id, ds), False) or ds in emp.fixed_unavailable_dates:
                         continue
-                    if emp.primary_position is not None and not emp.can_work_both_positions:
-                        if emp.primary_position.value != pos.value:
-                            continue
+                    if emp.primary_position is None or emp.can_work_both_positions:
+                        continue  # 両対応 FT は二重計上回避のためスキップ
+                    if emp.primary_position.value != pos.value:
+                        continue
                     ft_avail += 1
 
                 slot_pos = f"{ds} {slot.value}/{pos.value}"

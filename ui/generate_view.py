@@ -91,8 +91,7 @@ class GenerateView(QWidget):
              "コストが低いスタッフを優先してアサインします。人件費削減を重視する場合は「高」に設定してください。"),
             ("アルバイト希望充当",   "pt_pref_scale",
              "アルバイトの希望シフトをできるだけ尊重します。スタッフの満足度を重視する場合は「高」に設定してください。"),
-            ("正社員両掛け持ち回避", "double_penalty_scale",
-             "正社員が朝食とディナー両方に入ること（ダブル勤務）を抑制します。負担軽減を重視する場合は「高」に設定してください。"),
+            # 正社員両掛け持ち回避はハード制約で禁止済みのためUI設定を削除
             ("人員バランス均等化",   "balance_scale",
              "特定のスタッフに勤務が偏らないよう、全員の出勤数を均等化します。公平なシフト分配を重視する場合は「高」に設定してください。"),
             ("深夜勤務分散",         "late_night_scale",
@@ -355,7 +354,6 @@ class GenerateView(QWidget):
         return SolverConfig(
             cost_scale=scales["cost_scale"],
             pt_pref_scale=scales["pt_pref_scale"],
-            double_penalty_scale=scales["double_penalty_scale"],
             balance_scale=scales["balance_scale"],
             late_night_scale=scales["late_night_scale"],
         )

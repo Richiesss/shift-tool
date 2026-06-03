@@ -341,6 +341,19 @@ def get_shift_requests(period_id: int) -> list[ShiftRequest]:
     return result
 
 
+def delete_shift_requests_for_employee(period_id: int, employee_id: int):
+    """指定期間・従業員の希望シフトを全削除（save前に古いデータをクリア）"""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "DELETE FROM shift_requests WHERE period_id=? AND employee_id=?",
+            (period_id, employee_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def save_shift_requests(period_id: int, requests: list[ShiftRequest]):
     conn = get_connection()
     for req in requests:

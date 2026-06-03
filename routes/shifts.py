@@ -119,6 +119,10 @@ def save(period_id):
     emp_id_filter = request.form.get("save_emp_id", type=int)
     target_emps = [e for e in employees if emp_id_filter is None or e.id == emp_id_filter]
 
+    # 保存対象従業員の旧データを先に削除（UPSERT のみでは空日付の旧レコードが残存する）
+    for emp in target_emps:
+        repo.delete_shift_requests_for_employee(period_id, emp.id)
+
     new_requests = []
     for emp in target_emps:
         for d in dates:
