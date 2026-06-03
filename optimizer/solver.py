@@ -30,9 +30,8 @@ class SolverConfig:
     """最適化の優先度設定（各スケールは PRIORITY_SCALE の値を使用）"""
     cost_scale: float = 1.0            # 人件費最小化
     pt_pref_scale: float = 1.0         # アルバイト希望充当
-    double_penalty_scale: float = 1.0  # 正社員両掛け持ち回避
     balance_scale: float = 1.0         # 人員バランス均等化
-    late_night_scale: float = 1.0      # 深夜勤務分散
+    late_night_scale: float = 1.0      # 深夜勤務分散（アルバイトのみ）
 
 
 class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
@@ -168,7 +167,10 @@ def solve(
                     base_min += reserv_extra_d
                 avail = []
                 for e in active_employees:
-                    if slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
+                    # FIX①: FT社員を正しくカウント（実際の可用性チェックと統一）
+                    if e.employment_type == EmploymentType.FULL_TIME:
+                        ok = not off_map.get((e.id, ds), False) and ds not in e.fixed_unavailable_dates
+                    elif slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
                         ok = ds not in e.fixed_unavailable_dates
                     elif slot == TimeSlot.DINNER and e.always_available_dinner:
                         ok = ds not in e.fixed_unavailable_dates
@@ -310,9 +312,15 @@ def solve(
         if min_open <= 0 and min_open_ldr <= 0:
             continue
         for ds in date_strs:
+            # FIX③: FT社員も can_open 要件に含める
             can_open_req = [
                 emp for emp in active_employees
-                if emp.can_open and req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                if emp.can_open and (
+                    req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                    or (emp.employment_type == EmploymentType.FULL_TIME
+                        and not off_map.get((emp.id, ds), False)
+                        and ds not in emp.fixed_unavailable_dates)
+                )
             ]
             open_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in can_open_req]
             if min_open > 0:
@@ -346,12 +354,15 @@ def solve(
         cleanup_pool = cleanup_emps_by_pos[pos]
         for ds in date_strs:
             if cleanup_pool:
-                # can_cleanup スタッフで制約
+                # FIX④: FT社員も can_cleanup 要件に含める
                 cln_vars = [
                     assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
                     for emp in cleanup_pool
                     if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                     or emp.always_available_breakfast
+                    or (emp.employment_type == EmploymentType.FULL_TIME
+                        and not off_map.get((emp.id, ds), False)
+                        and ds not in emp.fixed_unavailable_dates)
                 ]
                 if min_cln > 0 and cln_vars:
                     model.add(sum(cln_vars) >= min(min_cln, len(cln_vars)))
@@ -426,26 +437,24 @@ def solve(
 
     # P2: 両時間帯掛け持ちはハード制約で禁止済み（ペナルティ不要）
 
-    # P2b: 深夜（ディナー22:00〜23:00）の集中を防ぐ
-    # ディナー担当は全員深夜1時間が発生するが、特定人物への集中は偏差で管理
-    # 深夜掛け持ちペナルティ: 個人のディナー合計の2乗を最小化（凸的分散）
-    # ※ CP-SATは2次項不可のため、線形近似（合計に重み）
+    # P2b: 深夜勤務分散（アルバイトのみ対象）
+    # FIX⑤: FT社員はディナーが基本業務のためペナルティ不要
+    # PT社員のディナー担当を均等分散させる
     late_night_w = max(1, int(500 * config.late_night_scale))
     for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME:
+            continue  # 社員はディナー出勤がデフォルト、ペナルティ対象外
         for ds in date_strs:
             for pos in positions:
                 v = assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
-                penalty_terms.append(late_night_w * v)  # ディナー1回ごとにペナルティ
+                penalty_terms.append(late_night_w * v)
 
-    # P3: 希望を通す = 希望があるのに入れない場合ペナルティ
-    # 正社員優先充当ルール: 正社員の未充当は最高優先でペナルティを課す
-    # → 正社員が希望した枠には必ず入れ、余りをアルバイトで補完する
-    FT_NOT_WORKED_PENALTY = 200_000  # 正社員: P1コスト（最大〜100000）を上回る重み（固定）
+    # P3: アルバイトの希望充当（FIX②: FT社員は req_map を持たないため除外）
+    # 社員は off_map で管理済みのため、ここではアルバイトのみ対象
     PT_NOT_WORKED_PENALTY = max(1, int(100 * config.pt_pref_scale))
     for emp in active_employees:
-        penalty = (FT_NOT_WORKED_PENALTY
-                   if emp.employment_type == EmploymentType.FULL_TIME
-                   else PT_NOT_WORKED_PENALTY)
+        if emp.employment_type == EmploymentType.FULL_TIME:
+            continue  # 社員は希望提出しない（off_map で管理）
         for ds in date_strs:
             for slot in slots:
                 if req_map.get((emp.id, ds, slot.value)):
@@ -453,20 +462,9 @@ def solve(
                     not_worked = model.new_bool_var(f"nw_{emp.id}_{ds}_{slot.value}")
                     model.add(worked == 0).only_enforce_if(not_worked)
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
-                    penalty_terms.append(penalty * not_worked)
+                    penalty_terms.append(PT_NOT_WORKED_PENALTY * not_worked)
 
-    # P3b: primary_timeslot 専任制約（ソフト）
-    # 専任設定のある従業員が専任外の時間帯に配置された場合に軽微なペナルティ
-    TIMESLOT_PENALTY = 80  # PT_NOT_WORKED_PENALTY より低く設定して他の制約を妨げない
-    for emp in active_employees:
-        if emp.primary_timeslot is None:
-            continue
-        for s in slots:
-            if s == emp.primary_timeslot:
-                continue
-            for ds in date_strs:
-                for pos in positions:
-                    penalty_terms.append(TIMESLOT_PENALTY * assign[emp.id][ds][s.value][pos.value])
+    # P3b: primary_timeslot 専任制約は P5 のハード制約でカバー済みのため削除（FIX⑦）
 
     # P4: 人員バランス = ポジション毎の総シフト数の偏差を最小化
     # 各日の各（スロット×ポジション）の担当人数を均等にするため、
@@ -796,10 +794,11 @@ def _solve_best_effort(
                     w = max(1, int(1000 * hours * 10 * config.cost_scale))
                     penalty_terms.append(w * var)
 
-    FT_PENALTY = 200_000
+    # アルバイト希望充当（FIX②同様: FT除外）
     PT_PENALTY = max(1, int(100 * config.pt_pref_scale))
     for emp in active_employees:
-        penalty = FT_PENALTY if emp.employment_type.value == "full_time" else PT_PENALTY
+        if emp.employment_type == EmploymentType.FULL_TIME:
+            continue
         for ds in date_strs:
             for slot in slots:
                 if req_map.get((emp.id, ds, slot.value)):
@@ -807,7 +806,22 @@ def _solve_best_effort(
                     not_worked = model.new_bool_var(f"nw_be_{emp.id}_{ds}_{slot.value}")
                     model.add(worked == 0).only_enforce_if(not_worked)
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
-                    penalty_terms.append(penalty * not_worked)
+                    penalty_terms.append(PT_PENALTY * not_worked)
+
+    # FIX⑥: ベストエフォートにも P5 スロット分業のソフト誘導を追加
+    BE_BREAKFAST_FT_COST = 500_000
+    BE_DINNER_PT_COST    = 300_000
+    for emp in active_employees:
+        for ds in date_strs:
+            for pos in positions:
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    penalty_terms.append(
+                        BE_BREAKFAST_FT_COST * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                    )
+                else:
+                    penalty_terms.append(
+                        BE_DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
+                    )
 
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 

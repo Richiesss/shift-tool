@@ -85,7 +85,6 @@ def run():
     config = SolverConfig(
         cost_scale=_scale("cost_scale"),
         pt_pref_scale=_scale("pt_pref_scale"),
-        double_penalty_scale=_scale("double_penalty_scale"),
         balance_scale=_scale("balance_scale"),
         late_night_scale=_scale("late_night_scale"),
     )
