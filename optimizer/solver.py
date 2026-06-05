@@ -621,7 +621,10 @@ def solve(
         logger.info("  [フェーズ2] ベストエフォート求解開始")
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
-            req_map, off_map, req_hours, config, shift_constraints
+            req_map, off_map, req_hours, config, shift_constraints,
+            reservation_counts=reservation_counts,
+            reserv_thresh_b=reserv_thresh_b, reserv_extra_b=reserv_extra_b,
+            reserv_thresh_d=reserv_thresh_d, reserv_extra_d=reserv_extra_d,
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
         _log_assignment_summary(best_assignments, date_strs)
@@ -687,6 +690,9 @@ def _solve_best_effort(
     active_employees, date_strs, slots, positions,
     req_map, off_map, req_hours, config: SolverConfig | None = None,
     shift_constraints: dict | None = None,
+    reservation_counts: dict | None = None,
+    reserv_thresh_b: int = 0, reserv_extra_b: int = 0,
+    reserv_thresh_d: int = 0, reserv_extra_d: int = 0,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     import time
@@ -762,7 +768,11 @@ def _solve_best_effort(
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
     LEADER_PENALTY = 800_000    # リーダー不足ペナルティ
 
+    rc_map = reservation_counts or {}
     for ds in date_strs:
+        rc = rc_map.get(ds, {})
+        b_count = rc.get("breakfast", 0)
+        d_count = rc.get("dinner", 0)
         for slot in slots:
             for pos in positions:
                 constraint = shift_constraints.get((slot, pos))
@@ -770,6 +780,12 @@ def _solve_best_effort(
                     continue
                 min_req = constraint["min"]
                 max_req = constraint["max"]
+                if slot == TimeSlot.BREAKFAST and b_count >= reserv_thresh_b > 0:
+                    min_req += reserv_extra_b
+                    max_req = max(max_req, min_req)
+                elif slot == TimeSlot.DINNER and d_count >= reserv_thresh_d > 0:
+                    min_req += reserv_extra_d
+                    max_req = max(max_req, min_req)
                 staff_vars = [assign[emp.id][ds][slot.value][pos.value] for emp in active_employees]
 
                 # 最大は引き続き絶対制約
