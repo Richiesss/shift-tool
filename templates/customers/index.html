@@ -66,7 +66,7 @@
               <td>
                 <div class="d-flex align-items-center gap-1">
                   <input type="number" name="b_{{ ds }}" value="{{ b_val }}"
-                         class="form-control form-control-sm text-center" min="0" style="width:62px"
+                         class="form-control form-control-sm text-center" min="0" style="width:80px"
                          oninput="colorCell(this, {{ thresh_b }})">
                   {% if thresh_b > 0 %}
                   <span class="badge {{ 'bg-danger' if b_val >= thresh_b else 'bg-success' }} badge-sm">
@@ -78,7 +78,7 @@
               <td>
                 <div class="d-flex align-items-center gap-1">
                   <input type="number" name="d_{{ ds }}" value="{{ d_val }}"
-                         class="form-control form-control-sm text-center" min="0" style="width:62px"
+                         class="form-control form-control-sm text-center" min="0" style="width:80px"
                          oninput="colorCell(this, {{ thresh_d }})">
                   {% if thresh_d > 0 %}
                   <span class="badge {{ 'bg-danger' if d_val >= thresh_d else 'bg-success' }} badge-sm">
