@@ -65,6 +65,42 @@ class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
             pass
 
 
+class Phase2ProgressCallback(cp_model.CpSolverSolutionCallback):
+    """フェーズ2用: 解発見のたびにログとDBステータスを更新する"""
+
+    def __init__(self, period_id: int | None, max_time: float = 45.0):
+        super().__init__()
+        self._period_id = period_id
+        self._max_time  = max_time
+        self._n = 0
+        self._last_update = 0.0
+
+    def on_solution_callback(self):
+        self._n += 1
+        elapsed = self.WallTime()
+        if elapsed - self._last_update < 2.0:
+            return
+        self._last_update = elapsed
+        pct = min(90, int(elapsed / self._max_time * 100))
+        try:
+            obj = int(self.ObjectiveValue())
+        except Exception:
+            obj = -1
+        logger.info(
+            f"  [フェーズ2] 解{self._n}件 elapsed={elapsed:.1f}s "
+            f"progress={pct}% obj={obj}"
+        )
+        if self._period_id is not None:
+            try:
+                from db import repositories as repo
+                repo.update_period_gen_status(
+                    self._period_id, "generating",
+                    f"phase:2,progress:{pct},solutions:{self._n},elapsed:{elapsed:.1f},obj:{obj}"
+                )
+            except Exception:
+                pass
+
+
 def solve(
     period: SchedulePeriod,
     employees: list[Employee],
@@ -638,6 +674,7 @@ def solve(
             reservation_counts=reservation_counts,
             reserv_thresh_b=reserv_thresh_b, reserv_extra_b=reserv_extra_b,
             reserv_thresh_d=reserv_thresh_d, reserv_extra_d=reserv_extra_d,
+            period_id=period_id or (progress_callback._period_id if progress_callback else None),
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
         _log_assignment_summary(best_assignments, date_strs)
@@ -706,6 +743,7 @@ def _solve_best_effort(
     reservation_counts: dict | None = None,
     reserv_thresh_b: int = 0, reserv_extra_b: int = 0,
     reserv_thresh_d: int = 0, reserv_extra_d: int = 0,
+    period_id: int | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     import time
@@ -871,12 +909,14 @@ def _solve_best_effort(
 
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
+    MAX_TIME_P2 = 45.0
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 15.0
+    solver.parameters.max_time_in_seconds = MAX_TIME_P2
     solver.parameters.num_search_workers = 1
     solver.parameters.log_search_progress = False
-    logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s")
-    status = solver.solve(model)
+    cb = Phase2ProgressCallback(period_id, max_time=MAX_TIME_P2)
+    logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={MAX_TIME_P2}s")
+    status = solver.solve(model, cb)
     status_name = solver.status_name(status)
     try:
         nb = solver.num_branches() if callable(solver.num_branches) else solver.num_branches
