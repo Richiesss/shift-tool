@@ -5,6 +5,7 @@ from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
 from utils.constants import EmploymentType
+from utils.holidays import holiday_set
 
 PAT_CATS = {
     'b_short': 'b', 'b_std': 'b', 'b_long': 'b', 'b_half': 'b',
@@ -130,6 +131,7 @@ def input(period_id):
         dow_suggestions=dow_suggestions,
         PATTERN_MAP=PATTERN_MAP,
         PAT_CATS=PAT_CATS,
+        holidays=holiday_set(dates),
     )
 
 

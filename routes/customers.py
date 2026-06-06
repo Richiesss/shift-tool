@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from db import repositories as repo
+from utils.holidays import holiday_set
 
 bp = Blueprint("customers", __name__, url_prefix="/customers")
 
@@ -31,6 +32,7 @@ def index(period_id):
         period=period, periods=periods, dates=dates, counts=counts,
         thresh_b=thresh_b, thresh_d=thresh_d,
         needs_regen=needs_regen,
+        holidays=holiday_set(dates),
     )
 
 

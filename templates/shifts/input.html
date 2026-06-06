@@ -210,7 +210,8 @@
   {% for d in dates %}
   {% set req = req_map.get((current_emp.id, d|string)) %}
   {% set dow = d.weekday() %}
-  {% set day_cls = 'sat' if dow == 5 else 'sun' if dow == 6 else '' %}
+  {% set is_holiday = (d|string) in holidays %}
+  {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
   {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
 
   {% if current_emp.employment_type.value == 'full_time' %}
@@ -229,7 +230,7 @@
   <div class="day-row {{ day_cls }}">
     <div class="day-label">
       <div class="dt">{{ d.strftime('%m/%d') }}</div>
-      <div class="dw">{{ DAY_JP[dow] }}</div>
+      <div class="dw">{{ DAY_JP[dow] }}{{ '(祝)' if is_holiday else '' }}</div>
     </div>
 
     <input type="hidden"

@@ -56,12 +56,13 @@
             {% set ds = d|string %}
             {% set cnt = counts.get(ds, {}) %}
             {% set dow = d.weekday() %}
+            {% set is_holiday = ds in holidays %}
             {% set b_val = cnt.get('breakfast', 0) %}
             {% set d_val = cnt.get('dinner', 0) %}
-            <tr class="{{ 'table-primary' if dow == 5 else 'table-danger' if dow == 6 else '' }}">
+            <tr class="{{ 'table-danger' if (dow == 6 or is_holiday) else 'table-primary' if dow == 5 else '' }}">
               <td>
                 {{ d.strftime('%m/%d') }}
-                <small class="text-muted">{{ ['月','火','水','木','金','土','日'][dow] }}</small>
+                <small class="text-muted">{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
               </td>
               <td>
                 <div class="d-flex align-items-center gap-1">
