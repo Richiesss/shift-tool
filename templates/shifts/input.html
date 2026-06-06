@@ -36,13 +36,30 @@
     .custom-time { justify-content: space-between; }
     .custom-time input { width: 45% !important; font-size: .72rem; }
   }
-  /* パターンカテゴリ別の行色分け */
-  tr.pcat-b > th:first-child { border-left: 4px solid #3b82f6 !important; }
-  tr.pcat-d > th:first-child { border-left: 4px solid #f97316 !important; }
-  tr.pcat-m > th:first-child { border-left: 4px solid #a855f7 !important; }
+  /* パターンカテゴリ別の行左ボーダー */
+  tr.pcat-b > th:first-child  { border-left: 4px solid #3b82f6 !important; }
+  tr.pcat-d > th:first-child  { border-left: 4px solid #f97316 !important; }
+  tr.pcat-m > th:first-child  { border-left: 4px solid #a855f7 !important; }
   tr.pcat-db > th:first-child { border-left: 4px solid #10b981 !important; }
   .suggest-banner { background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; }
   .suggest-banner .label { color:#1d4ed8; font-size:.78rem; font-weight:600; }
+
+  /* タップ＋ドラッグ入力ボタン */
+  .pat-cycle-btn {
+    width: 100%; padding: .45rem .55rem; border-radius: 8px;
+    border: 1.5px solid rgba(0,0,0,.1); font-size: .8rem;
+    text-align: left; cursor: pointer; display: block;
+    touch-action: none; user-select: none;
+    transition: filter .1s; min-height: 40px; line-height: 1.3;
+  }
+  .pat-cycle-btn:active { filter: brightness(.88); }
+  .pcb-off  { background: #f8fafc; color: #64748b; }
+  .pcb-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .pcb-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
+  .pcb-m    { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
+  .pcb-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+  .pcb-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  .pcb-painting { outline: 2px solid #6366f1 !important; outline-offset: 1px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -222,7 +239,9 @@
         {% set req = req_map.get((current_emp.id, d|string)) %}
         {% set dow = d.weekday() %}
         {% set day_cls = 'sat' if dow == 5 else 'sun' if dow == 6 else '' %}
-        <tr class="{{ day_cls }}">
+        {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
+        {% set pcat = PAT_CATS.get(cur_pid, 'off') if current_emp.employment_type.value != 'full_time' else '' %}
+        <tr class="{{ day_cls }}{% if pcat and pcat != 'off' %} pcat-{{ pcat }}{% endif %}">
           {# 日付ラベル #}
           <th class="align-middle text-center {{ day_cls }}"
               style="width:80px;white-space:nowrap">
@@ -235,7 +254,6 @@
           </th>
           {% if current_emp.employment_type.value == 'full_time' %}
           {# 社員：出勤予定 / 休希望 / 有休 の3状態サイクル #}
-          {% set cur_pid = req.pattern_id if req else '' %}
           <td class="{{ day_cls }} align-middle">
             <input type="hidden"
                    name="pattern_{{ current_emp.id }}_{{ d }}"
@@ -258,22 +276,22 @@
             </button>
           </td>
           {% else %}
-          {# アルバイト：希望シフトパターン選択 #}
-          <td class="{{ day_cls }}">
-            <select name="pattern_{{ current_emp.id }}_{{ d }}"
-                    id="sel_{{ current_emp.id }}_{{ d }}"
-                    class="form-select form-select-sm pattern-sel w-100"
-                    onchange="toggleCustom(this, '{{ current_emp.id }}_{{ d }}')">
-              <option value="">（休み）</option>
-              {% for p in patterns %}
-              <option value="{{ p.id }}"
-                {{ 'selected' if req and req.pattern_id == p.id else '' }}>
-                {{ p.label }}
-              </option>
-              {% endfor %}
-            </select>
+          {# アルバイト：タップ＋ドラッグ入力ボタン #}
+          {% set cur_label = PATTERN_MAP[cur_pid].label if cur_pid in PATTERN_MAP else '（休み）' %}
+          <td class="{{ day_cls }}" style="padding:.25rem .4rem">
+            <input type="hidden"
+                   name="pattern_{{ current_emp.id }}_{{ d }}"
+                   id="hid_{{ current_emp.id }}_{{ d }}"
+                   value="{{ cur_pid }}">
+            <button type="button"
+                    class="pat-cycle-btn pcb-{{ pcat }}"
+                    data-emp="{{ current_emp.id }}"
+                    data-date="{{ d }}"
+                    onpointerdown="onPatBtnDown(event,'{{ current_emp.id }}','{{ d }}')">
+              {{ cur_label }}
+            </button>
             <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
-                 style="{{ 'display:flex' if req and req.pattern_id == 'custom' else '' }}">
+                 style="{{ 'display:flex' if cur_pid == 'custom' else '' }}">
               <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
                      value="{{ req.custom_start if req and req.custom_start else '' }}"
                      class="form-control form-control-sm">
@@ -453,68 +471,109 @@ document.querySelectorAll('a[href*="emp_idx"]').forEach(a => {
   }
 });
 
-function applyBulk(empId) {
-  const pattern = document.getElementById('bulk-pattern').value;
-  document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
-    sel.value = pattern;
-    toggleCustom(sel, sel.name.replace(`pattern_${empId}_`, empId + '_'));
-    updateRowColor(sel);
-  });
-  _changed = true;
-}
+// ── カレンダー入力（タップサイクル＋ドラッグ塗り絵） ──────────────────────────
 
-// ── パターン提案 ──────────────────────────────────────────────────
 const DOW_SUGGESTIONS = {{ dow_suggestions | tojson if dow_suggestions is defined else '{}' }};
 
-const PATTERN_CATS = {
-  b_short:'b', b_std:'b', b_long:'b', b_half:'b',
-  mid:'m',
-  d_full1:'d', d_full2:'d',
-  d_std1:'d', d_std2:'d', d_std3:'d',
-  d_s1:'d', d_s2:'d', d_s3:'d',
-  double:'db',
-};
+// パターンラベルマップ
+const PAT_LABELS = { '': '（休み）', {% for p in patterns %}{{ p.id | tojson }}: {{ p.label | tojson }}, {% endfor %} };
 
-function updateRowColor(sel) {
-  const row = sel.closest('tr');
+// パターンカテゴリマップ
+const PAT_CATS_JS = { {% for pid, cat in PAT_CATS.items() %}{{ pid | tojson }}: {{ cat | tojson }}, {% endfor %} };
+
+// タップサイクル順：[休み, 上位3パターン] → 不足時はデフォルト3つで補完
+const PAT_CYCLE = (() => {
+  const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid | tojson }},{% endfor %}];
+  const defaults = ['d_std1', 'b_std', 'mid'];
+  const seen = new Set(['']);
+  const cycle = [''];
+  for (const pid of [...tops, ...defaults]) {
+    if (!seen.has(pid) && cycle.length < 4) { seen.add(pid); cycle.push(pid); }
+  }
+  return cycle;
+})();
+
+// 行の pcat- クラスを更新
+function updateRowCat(row, cat) {
   if (!row) return;
-  row.classList.remove('pcat-b', 'pcat-d', 'pcat-m', 'pcat-db');
-  const cat = PATTERN_CATS[sel.value];
-  if (cat) row.classList.add('pcat-' + cat);
+  row.classList.remove('pcat-b','pcat-d','pcat-m','pcat-db');
+  const cls = {b:'pcat-b', d:'pcat-d', m:'pcat-m', db:'pcat-db'}[cat];
+  if (cls) row.classList.add(cls);
 }
 
-function applyAllPattern(empId, patternId) {
-  document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
-    sel.value = patternId;
-    const dateStr = sel.name.replace(`pattern_${empId}_`, '');
-    toggleCustom(sel, `${empId}_${dateStr}`);
-    updateRowColor(sel);
-  });
+// ボタンの見た目を更新
+function updateBtnAppearance(btn, patId) {
+  btn.textContent = PAT_LABELS[patId] ?? patId;
+  btn.className = btn.className.replace(/\bpcb-\S+/g, '').trim();
+  btn.classList.add('pcb-' + (PAT_CATS_JS[patId] || 'off'));
+  updateRowCat(btn.closest('tr'), PAT_CATS_JS[patId]);
+}
+
+// 1日分のパターンを適用（全変更の共通パス）
+function applyPatToDate(empId, dateStr, patId) {
+  const hid = document.getElementById(`hid_${empId}_${dateStr}`);
+  if (!hid) return;
+  hid.value = patId;
+  const btn = document.querySelector(`.pat-cycle-btn[data-emp="${empId}"][data-date="${dateStr}"]`);
+  if (btn) updateBtnAppearance(btn, patId);
+  const customDiv = document.getElementById(`custom_${empId}_${dateStr}`);
+  if (customDiv) customDiv.style.display = patId === 'custom' ? 'flex' : 'none';
   _changed = true;
 }
 
+// 全日に同じパターンを適用
+function applyAllPattern(empId, patId) {
+  document.querySelectorAll(`.pat-cycle-btn[data-emp="${empId}"]`).forEach(btn => {
+    applyPatToDate(empId, btn.dataset.date, patId);
+  });
+}
+
+// 曜日別おすすめで一括入力
 function applyDowSuggestions(empId) {
-  document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
-    const dateStr = sel.name.replace(`pattern_${empId}_`, '');
-    const d = new Date(dateStr + 'T00:00:00');
-    // JS getDay(): 0=日..6=土 → Python weekday: 0=月..6=日
-    const jsDow = d.getDay();
+  document.querySelectorAll(`.pat-cycle-btn[data-emp="${empId}"]`).forEach(btn => {
+    const jsDow = new Date(btn.dataset.date + 'T00:00:00').getDay();
     const pyDow = jsDow === 0 ? 6 : jsDow - 1;
     const suggested = DOW_SUGGESTIONS[String(pyDow)];
-    if (suggested !== undefined) {
-      sel.value = suggested;
-      toggleCustom(sel, `${empId}_${dateStr}`);
-      updateRowColor(sel);
-    }
+    if (suggested !== undefined) applyPatToDate(empId, btn.dataset.date, suggested);
   });
-  _changed = true;
 }
 
-// 行の色分けを初期化 & changeイベントで更新
-document.querySelectorAll('select.pattern-sel').forEach(sel => {
-  updateRowColor(sel);
-  sel.addEventListener('change', () => { updateRowColor(sel); });
-});
+// 一括入力セレクト
+function applyBulk(empId) {
+  applyAllPattern(empId, document.getElementById('bulk-pattern').value);
+}
+
+// タップでサイクル → ペイントパターンを返す
+function cyclePat(empId, dateStr) {
+  const cur = document.getElementById(`hid_${empId}_${dateStr}`)?.value ?? '';
+  const idx = PAT_CYCLE.indexOf(cur);
+  const next = PAT_CYCLE[(idx + 1) % PAT_CYCLE.length];
+  applyPatToDate(empId, dateStr, next);
+  return next;
+}
+
+// ── ドラッグ塗り絵 ──────────────────────────────────────────────────────────
+let _paintActive = false, _paintPat = null, _paintEmp = null;
+
+function onPatBtnDown(e, empId, dateStr) {
+  e.preventDefault();
+  _paintActive = true;
+  _paintEmp = empId;
+  _paintPat = cyclePat(empId, dateStr);
+}
+
+document.addEventListener('pointermove', e => {
+  if (!_paintActive) return;
+  e.preventDefault();
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const btn = el?.closest('.pat-cycle-btn');
+  if (btn && btn.dataset.emp === _paintEmp) {
+    applyPatToDate(_paintEmp, btn.dataset.date, _paintPat);
+  }
+}, { passive: false });
+
+document.addEventListener('pointerup',     () => { _paintActive = false; });
+document.addEventListener('pointercancel', () => { _paintActive = false; });
 
 // ── 名前検索 ──────────────────────────────────────────
 const EMP_LIST = [

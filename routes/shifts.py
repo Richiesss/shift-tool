@@ -6,6 +6,16 @@ from models.schedule import SchedulePeriod, ShiftRequest
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
 from utils.constants import EmploymentType
 
+PAT_CATS = {
+    'b_short': 'b', 'b_std': 'b', 'b_long': 'b', 'b_half': 'b',
+    'mid': 'm',
+    'd_full1': 'd', 'd_full2': 'd',
+    'd_std1': 'd', 'd_std2': 'd', 'd_std3': 'd',
+    'd_s1': 'd', 'd_s2': 'd', 'd_s3': 'd',
+    'double': 'db',
+    'custom': 'cust',
+}
+
 bp = Blueprint("shifts", __name__, url_prefix="/shifts")
 
 
@@ -119,6 +129,7 @@ def input(period_id):
         top_patterns=top_patterns,
         dow_suggestions=dow_suggestions,
         PATTERN_MAP=PATTERN_MAP,
+        PAT_CATS=PAT_CATS,
     )
 
 
