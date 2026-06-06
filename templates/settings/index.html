@@ -125,28 +125,30 @@
 <form method="post" action="{{ url_for('settings.save_wages') }}">
 <div class="card mb-3">
   <div class="card-body">
-    <h6 class="card-title text-muted mb-3">アルバイト時給管理</h6>
-    {% if pt_employees %}
-    <div class="text-muted small mb-3">
-      勤務統計の人件費集計に使用します。社員は対象外です。
-    </div>
-    {% for emp in pt_employees %}
-    <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
-      <label class="form-label mb-0 small fw-semibold flex-grow-1">{{ emp.name }}</label>
-      <div class="input-group input-group-sm" style="max-width:160px">
-        <input type="number" name="wage_{{ emp.id }}"
-               value="{{ emp.hourly_wage }}"
-               min="0" max="9999" step="1"
-               class="form-control form-control-sm text-end"
-               placeholder="0">
-        <span class="input-group-text">円/時</span>
-      </div>
-    </div>
-    {% endfor %}
-    <div class="mt-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h6 class="card-title text-muted mb-0">アルバイト時給管理</h6>
+      {% if pt_employees %}
       <button type="submit" class="btn btn-primary btn-sm">
-        <i class="bi bi-floppy me-1"></i>時給を保存
+        <i class="bi bi-floppy me-1"></i>保存
       </button>
+      {% endif %}
+    </div>
+    {% if pt_employees %}
+    <div class="text-muted small mb-2">勤務統計の人件費集計に使用します。社員は対象外です。</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem .75rem">
+      {% for emp in pt_employees %}
+      <div class="d-flex align-items-center gap-2">
+        <span class="small fw-semibold text-truncate" style="min-width:0;flex:1">{{ emp.name }}</span>
+        <div class="input-group input-group-sm flex-shrink-0" style="width:110px">
+          <input type="number" name="wage_{{ emp.id }}"
+                 value="{{ emp.hourly_wage }}"
+                 min="0" max="9999" step="1"
+                 class="form-control form-control-sm text-end"
+                 placeholder="0">
+          <span class="input-group-text px-1" style="font-size:.75rem">円</span>
+        </div>
+      </div>
+      {% endfor %}
     </div>
     {% else %}
     <div class="text-muted small">アルバイトスタッフが登録されていません。</div>
