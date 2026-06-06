@@ -36,6 +36,13 @@
     .custom-time { justify-content: space-between; }
     .custom-time input { width: 45% !important; font-size: .72rem; }
   }
+  /* パターンカテゴリ別の行色分け */
+  tr.pcat-b > th:first-child { border-left: 4px solid #3b82f6 !important; }
+  tr.pcat-d > th:first-child { border-left: 4px solid #f97316 !important; }
+  tr.pcat-m > th:first-child { border-left: 4px solid #a855f7 !important; }
+  tr.pcat-db > th:first-child { border-left: 4px solid #10b981 !important; }
+  .suggest-banner { background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; }
+  .suggest-banner .label { color:#1d4ed8; font-size:.78rem; font-weight:600; }
 </style>
 {% endblock %}
 {% block content %}
@@ -158,18 +165,45 @@
   </button>
 </div>
 {% else %}
-<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
-  <span class="small text-muted flex-shrink-0">一括：</span>
-  <select id="bulk-pattern" class="form-select form-select-sm flex-grow-1 flex-md-grow-0" style="max-width:160px">
-    <option value="">（休み）</option>
-    {% for p in patterns %}
-    <option value="{{ p.id }}">{{ p.label }}</option>
-    {% endfor %}
-  </select>
-  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
-          onclick="applyBulk('{{ current_emp.id }}')">
-    全日に適用
-  </button>
+<div class="px-3 pb-2">
+  {# 過去パターン提案バナー #}
+  {% if top_patterns %}
+  <div class="suggest-banner p-2 mb-2">
+    <div class="label mb-1"><i class="bi bi-clock-history me-1"></i>よく使うパターン（タップで全日に適用）</div>
+    <div class="d-flex flex-wrap gap-1 mb-2">
+      {% for pid, cnt in top_patterns[:2] %}
+      {% set p = PATTERN_MAP.get(pid) %}
+      {% if p %}
+      <button type="button" class="btn btn-outline-primary btn-sm"
+              onclick="applyAllPattern('{{ current_emp.id }}', '{{ pid }}')">
+        {{ p.label }}
+        <span class="badge bg-primary bg-opacity-75 ms-1">{{ cnt }}回</span>
+      </button>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% if dow_suggestions %}
+    <button type="button" class="btn btn-primary btn-sm w-100"
+            onclick="applyDowSuggestions('{{ current_emp.id }}')">
+      <i class="bi bi-calendar3 me-1"></i>曜日別おすすめで一括入力
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+  {# 手動一括入力 #}
+  <div class="d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
+    <span class="small text-muted flex-shrink-0">一括：</span>
+    <select id="bulk-pattern" class="form-select form-select-sm flex-grow-1 flex-md-grow-0" style="max-width:160px">
+      <option value="">（休み）</option>
+      {% for p in patterns %}
+      <option value="{{ p.id }}">{{ p.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
+            onclick="applyBulk('{{ current_emp.id }}')">
+      全日に適用
+    </button>
+  </div>
 </div>
 {% endif %}
 
@@ -424,8 +458,63 @@ function applyBulk(empId) {
   document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
     sel.value = pattern;
     toggleCustom(sel, sel.name.replace(`pattern_${empId}_`, empId + '_'));
+    updateRowColor(sel);
   });
+  _changed = true;
 }
+
+// ── パターン提案 ──────────────────────────────────────────────────
+const DOW_SUGGESTIONS = {{ dow_suggestions | tojson if dow_suggestions is defined else '{}' }};
+
+const PATTERN_CATS = {
+  b_short:'b', b_std:'b', b_long:'b', b_half:'b',
+  mid:'m',
+  d_full1:'d', d_full2:'d',
+  d_std1:'d', d_std2:'d', d_std3:'d',
+  d_s1:'d', d_s2:'d', d_s3:'d',
+  double:'db',
+};
+
+function updateRowColor(sel) {
+  const row = sel.closest('tr');
+  if (!row) return;
+  row.classList.remove('pcat-b', 'pcat-d', 'pcat-m', 'pcat-db');
+  const cat = PATTERN_CATS[sel.value];
+  if (cat) row.classList.add('pcat-' + cat);
+}
+
+function applyAllPattern(empId, patternId) {
+  document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
+    sel.value = patternId;
+    const dateStr = sel.name.replace(`pattern_${empId}_`, '');
+    toggleCustom(sel, `${empId}_${dateStr}`);
+    updateRowColor(sel);
+  });
+  _changed = true;
+}
+
+function applyDowSuggestions(empId) {
+  document.querySelectorAll(`select[name^="pattern_${empId}_"]`).forEach(sel => {
+    const dateStr = sel.name.replace(`pattern_${empId}_`, '');
+    const d = new Date(dateStr + 'T00:00:00');
+    // JS getDay(): 0=日..6=土 → Python weekday: 0=月..6=日
+    const jsDow = d.getDay();
+    const pyDow = jsDow === 0 ? 6 : jsDow - 1;
+    const suggested = DOW_SUGGESTIONS[String(pyDow)];
+    if (suggested !== undefined) {
+      sel.value = suggested;
+      toggleCustom(sel, `${empId}_${dateStr}`);
+      updateRowColor(sel);
+    }
+  });
+  _changed = true;
+}
+
+// 行の色分けを初期化 & changeイベントで更新
+document.querySelectorAll('select.pattern-sel').forEach(sel => {
+  updateRowColor(sel);
+  sel.addEventListener('change', () => { updateRowColor(sel); });
+});
 
 // ── 名前検索 ──────────────────────────────────────────
 const EMP_LIST = [

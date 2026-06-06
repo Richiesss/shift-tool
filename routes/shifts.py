@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
+from utils.constants import EmploymentType
 
 bp = Blueprint("shifts", __name__, url_prefix="/shifts")
 
@@ -82,12 +83,21 @@ def input(period_id):
         next_idx = emp_idx + 1 if emp_idx < len(employees) - 1 else None
 
     # 入力済み従業員数（社員は出勤前提なので常にカウント）
-    from utils.constants import EmploymentType as _ET
     filled_emp_ids = {r.employee_id for r in requests_list}
     filled_count = sum(
         1 for e in employees
-        if e.id in filled_emp_ids or e.employment_type == _ET.FULL_TIME
+        if e.id in filled_emp_ids or e.employment_type == EmploymentType.FULL_TIME
     )
+
+    # アルバイトの場合のみ過去パターン提案を計算
+    top_patterns = []
+    dow_suggestions = {}
+    if current_emp and current_emp.employment_type != EmploymentType.FULL_TIME:
+        top_patterns = [
+            (pid, cnt) for pid, cnt in repo.get_employee_pattern_history(current_emp.id)
+            if pid in PATTERN_MAP
+        ]
+        dow_suggestions = repo.get_employee_dow_patterns(current_emp.id)
 
     return render_template(
         "shifts/input.html",
@@ -103,6 +113,9 @@ def input(period_id):
         filled_count=filled_count,
         filled_emp_ids=filled_emp_ids,
         DAY_JP=["月", "火", "水", "木", "金", "土", "日"],
+        top_patterns=top_patterns,
+        dow_suggestions=dow_suggestions,
+        PATTERN_MAP=PATTERN_MAP,
     )
 
 

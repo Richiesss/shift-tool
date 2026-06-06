@@ -567,6 +567,33 @@ def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int]]:
     return [(r["pattern_id"], r["cnt"]) for r in rows]
 
 
+def get_employee_dow_patterns(emp_id: int) -> dict[int, str]:
+    """従業員の曜日別最頻パターンを {python_weekday(0=月..6=日): pattern_id} で返す。
+    2回以上出現したパターンのみ提案対象とする。"""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT strftime('%w', date) as dow, pattern_id, COUNT(*) as cnt
+           FROM shift_requests
+           WHERE employee_id=? AND pattern_id IS NOT NULL AND pattern_id != ''
+             AND pattern_id != 'custom'
+           GROUP BY dow, pattern_id""",
+        (emp_id,)
+    ).fetchall()
+    conn.close()
+    # SQLite strftime('%w'): 0=日,1=月..6=土 → Python weekday: 0=月..6=日
+    sqlite_to_py = {0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
+    dow_counts: dict[int, dict[str, int]] = {}
+    for r in rows:
+        py_dow = sqlite_to_py[int(r["dow"])]
+        dow_counts.setdefault(py_dow, {})
+        dow_counts[py_dow][r["pattern_id"]] = dow_counts[py_dow].get(r["pattern_id"], 0) + r["cnt"]
+    return {
+        dow: max(patterns, key=patterns.get)
+        for dow, patterns in dow_counts.items()
+        if max(patterns.values()) >= 2
+    }
+
+
 def get_schedule_notes(period_id: int) -> dict[str, str]:
     """期間の備考を {date_str: note} で返す"""
     conn = get_connection()
