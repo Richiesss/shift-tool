@@ -9,7 +9,8 @@ bp = Blueprint("employees", __name__, url_prefix="/employees")
 @bp.get("/")
 def index():
     show_archive = request.args.get("archive") == "1"
-    employees = repo.get_all_employees(active_only=not show_archive)
+    employees = repo.get_all_employees(active_only=False)
+    employees = [e for e in employees if e.is_active != show_archive]
     q = request.args.get("q", "").strip()
     if q:
         employees = [e for e in employees if q in e.name]
