@@ -460,7 +460,7 @@
       <div class="modal-header border-secondary py-2 px-3">
         <div>
           <div class="fw-semibold" id="asgn-name" style="font-size:.95rem"></div>
-          <div class="small text-muted" id="asgn-sub"></div>
+          <div class="small" id="asgn-sub" style="color:#94a3b8"></div>
         </div>
         <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
       </div>
@@ -724,7 +724,7 @@ function openAssignModal(cell) {
     date.slice(5).replace('-', '/') + '（' + slotJp + '）';
 
   // ポジション選択
-  selectPos(pos || 'hall');
+  selectPos(pos || '{{ pos }}');
 
   // 「希望シフト通り」の有効/無効切替
   const hasReq = hasRequest === 'true';
