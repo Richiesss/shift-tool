@@ -52,6 +52,22 @@
         </select>
       </div>
 
+      {% if emp and emp.employment_type.value == 'part_time' or not emp %}
+      <div class="mb-3" id="wage-raise-row">
+        <label class="form-label fw-semibold">個人昇給額
+          <span class="text-muted fw-normal small">（基本給への上乗せ額）</span>
+        </label>
+        <div class="input-group" style="max-width:180px">
+          <span class="input-group-text">+</span>
+          <input type="number" name="hourly_wage" class="form-control"
+                 min="0" max="9999" step="1"
+                 value="{{ emp.hourly_wage if emp else 0 }}"
+                 placeholder="0">
+          <span class="input-group-text">円/時</span>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- 所属ポジション -->
       <div class="mb-3">
         <label class="form-label fw-semibold">所属ポジション</label>

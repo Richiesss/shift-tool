@@ -67,20 +67,9 @@ def save():
 
 @bp.post("/save-wages")
 def save_wages():
-    """基本給・早朝手当・昇給額を一括保存"""
-    # グローバル賃金設定
+    """基本給・早朝手当を保存"""
     global_keys = ["base_hourly_wage", "early_morning_allowance"]
-    global_vals = {k: request.form.get(k, "0") for k in global_keys}
-    repo.save_all_app_settings(global_vals)
-    # 個人別昇給額
-    wages = {}
-    for key, val in request.form.items():
-        if key.startswith("wage_"):
-            try:
-                wages[int(key[5:])] = int(val or 0)
-            except ValueError:
-                pass
-    repo.save_employee_wages(wages)
+    repo.save_all_app_settings({k: request.form.get(k, "0") for k in global_keys})
     flash("賃金設定を保存しました", "success")
     return redirect(url_for("settings.index"))
 

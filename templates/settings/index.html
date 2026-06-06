@@ -158,33 +158,9 @@
       </div>
     </div>
 
-    <!-- 個人別昇給額 -->
-    {% if pt_employees %}
-    <div class="border-top pt-3" style="border-color:#334155 !important">
-      <div class="small fw-semibold text-muted mb-2">個人昇給額
-        <span class="fw-normal text-muted">（基本給に上乗せ）</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem .75rem">
-        {% for emp in pt_employees %}
-        <div class="d-flex align-items-center gap-2">
-          <span class="small fw-semibold text-truncate" style="min-width:0;flex:1">{{ emp.name }}</span>
-          <div class="input-group input-group-sm flex-shrink-0" style="width:110px">
-            <span class="input-group-text px-1" style="font-size:.75rem">+</span>
-            <input type="number" name="wage_{{ emp.id }}"
-                   value="{{ emp.hourly_wage }}"
-                   min="0" max="9999" step="1"
-                   class="form-control form-control-sm text-end"
-                   placeholder="0">
-            <span class="input-group-text px-1" style="font-size:.75rem">円</span>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
     <div class="text-muted small mt-3">
-      実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 朝食）。社員は対象外。
+      実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 朝食）。社員は対象外。<br>
+      個人昇給額はスタッフ管理画面で個別に設定します。
     </div>
   </div>
 </div>
