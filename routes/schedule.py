@@ -238,6 +238,7 @@ def index(period_id):
         total_shortage=total_shortage,
         needs_regen=needs_regen,
         unsubmitted_count=unsubmitted_count,
+        reservation_counts=reservation_counts,
         today=today,
         ft_times=ft_times,
         holidays=holidays,

@@ -357,6 +357,25 @@
         </tr>
       </thead>
       <tbody>
+        <!-- 予約客数行 -->
+        <tr class="table-light">
+          <td class="emp-col small text-muted">予約</td>
+          {% for d in dates %}
+          {% set ds = d|string %}
+          {% set dow = d.weekday() %}
+          {% set is_holiday = ds in holidays %}
+          {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
+          {% set res_count = reservation_counts.get(ds, {}).get(slot, 0) %}
+          <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.75rem">
+            {% if res_count %}
+            <span style="color:#94a3b8">{{ res_count }}名</span>
+            {% else %}
+            <span style="color:#475569">—</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+
         <!-- メモ行 -->
         <tr class="table-light">
           <td class="emp-col small text-muted">メモ</td>
