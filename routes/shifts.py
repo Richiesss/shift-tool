@@ -1,4 +1,5 @@
 import calendar
+import re
 from datetime import date, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from db import repositories as repo
@@ -15,6 +16,12 @@ PAT_CATS = {
     'double': 'db',
     'custom': 'cust',
 }
+
+# パターン短縮ラベル（時刻部分を除去）
+SHORT_LABELS: dict[str, str] = {'': '休み'}
+for _p in ALL_PATTERNS:
+    SHORT_LABELS[_p.id] = re.sub(r'[\s（(].*', '', _p.label).strip()
+SHORT_LABELS['custom'] = 'カスタム'
 
 bp = Blueprint("shifts", __name__, url_prefix="/shifts")
 
@@ -101,16 +108,30 @@ def input(period_id):
 
     # アルバイトの場合のみ過去パターン提案を計算
     top_patterns = []
-    dow_suggestions = {}
     if current_emp and current_emp.employment_type != EmploymentType.FULL_TIME:
         try:
             top_patterns = [
                 (pid, cnt) for pid, cnt in repo.get_employee_pattern_history(current_emp.id)
                 if pid in PATTERN_MAP
             ]
-            dow_suggestions = repo.get_employee_dow_patterns(current_emp.id)
         except Exception:
             pass
+
+    # チップ列用パターン順（履歴上位3 + デフォルト補完 + カスタム固定末尾）
+    pat_cycle: list[str] = ['']  # 休み（常に先頭）
+    if current_emp and current_emp.employment_type != EmploymentType.FULL_TIME:
+        seen = {'', 'custom'}
+        for pid, _ in top_patterns[:3]:
+            if pid not in seen and pid in PATTERN_MAP:
+                seen.add(pid)
+                pat_cycle.append(pid)
+        for default_pid in ['d_std1', 'b_std', 'mid']:
+            if len(pat_cycle) >= 4:
+                break
+            if default_pid not in seen and default_pid in PATTERN_MAP:
+                seen.add(default_pid)
+                pat_cycle.append(default_pid)
+        pat_cycle.append('custom')  # 手動入力チップ（常に末尾）
 
     return render_template(
         "shifts/input.html",
@@ -127,9 +148,10 @@ def input(period_id):
         filled_emp_ids=filled_emp_ids,
         DAY_JP=["月", "火", "水", "木", "金", "土", "日"],
         top_patterns=top_patterns,
-        dow_suggestions=dow_suggestions,
+        pat_cycle=pat_cycle,
         PATTERN_MAP=PATTERN_MAP,
         PAT_CATS=PAT_CATS,
+        SHORT_LABELS=SHORT_LABELS,
     )
 
 

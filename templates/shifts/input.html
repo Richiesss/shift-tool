@@ -12,55 +12,39 @@
     scrollbar-width: none;
   }
   .emp-strip::-webkit-scrollbar { display: none; }
-
   .emp-chip {
     flex-shrink: 0;
     padding: 5px 12px;
     border-radius: 20px;
     border: 1.5px solid #e2e8f0;
     font-size: .8rem;
-    cursor: pointer;
     text-decoration: none;
     color: #475569;
     background: #f8fafc;
     white-space: nowrap;
-    transition: background .12s;
   }
-  .emp-chip.active {
-    background: #1e293b;
-    color: white;
-    border-color: #1e293b;
-    font-weight: 600;
-  }
-  .emp-chip.done {
-    border-color: #86efac;
-    color: #166534;
-    background: #f0fdf4;
-  }
-  .emp-chip.done.active {
-    background: #166534;
-    border-color: #166534;
-    color: white;
-  }
+  .emp-chip.active { background: #1e293b; color: white; border-color: #1e293b; font-weight: 600; }
+  .emp-chip.done   { border-color: #86efac; color: #166534; background: #f0fdf4; }
+  .emp-chip.done.active { background: #166534; border-color: #166534; color: white; }
 
-  /* ── 一括ボタン行 ──────────────────────────────────── */
+  /* ── 一括バー ──────────────────────────────────────── */
   .bulk-bar {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     padding: 8px 12px;
+    background: #fafafa;
     border-top: 1px solid #f1f5f9;
     border-bottom: 1px solid #f1f5f9;
-    background: #fafafa;
   }
-  .bulk-bar .label { font-size: .75rem; color: #94a3b8; align-self: center; flex-shrink: 0; }
+  .bulk-bar .lbl { font-size: .75rem; color: #94a3b8; align-self: center; }
 
   /* ── 日付行 ─────────────────────────────────────────── */
   .day-row {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 12px;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 12px;
     border-bottom: 1px solid #f1f5f9;
   }
   .day-row:last-of-type { border-bottom: none; }
@@ -68,66 +52,67 @@
   .day-row.sun { background: #fff9f9; }
 
   .day-label {
-    width: 58px;
+    width: 52px;
     flex-shrink: 0;
+    padding-top: 4px;
     text-align: center;
     line-height: 1.25;
   }
   .day-label .dt { font-size: .82rem; font-weight: 600; color: #334155; }
-  .day-label .dw { font-size: .7rem; color: #94a3b8; }
+  .day-label .dw { font-size: .7rem;  color: #94a3b8; }
   .day-row.sat .day-label .dt,
   .day-row.sat .day-label .dw { color: #1e40af; }
   .day-row.sun .day-label .dt,
   .day-row.sun .day-label .dw { color: #dc2626; }
 
-  /* ── パターンボタン ───────────────────────────────── */
-  .pat-btn {
+  /* ── パターンチップ ──────────────────────────────────── */
+  .pat-chips {
     flex: 1;
-    padding: 9px 10px;
-    border-radius: 10px;
-    border: 1.5px solid rgba(0,0,0,.08);
-    font-size: .82rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .pat-chip {
+    padding: 5px 10px;
+    border-radius: 14px;
+    border: 1.5px solid #e2e8f0;
+    font-size: .75rem;
     cursor: pointer;
-    text-align: left;
+    white-space: nowrap;
+    background: #f8fafc;
+    color: #94a3b8;
+    transition: all .1s;
     user-select: none;
     -webkit-user-select: none;
-    transition: filter .1s;
-    line-height: 1.3;
-    min-height: 42px;
-    background: #f8fafc;
-    color: #64748b;
   }
-  .pat-btn:active { filter: brightness(.88); }
+  .pat-chip:active { filter: brightness(.9); }
 
-  /* パターンカテゴリ別カラー */
-  .pat-work { background: #dcfce7; color: #166534; border-color: #86efac; }
-  .pat-ofr  { background: #fecaca; color: #991b1b; border-color: #f87171; }
-  .pat-leave{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
-  .pat-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .pat-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
-  .pat-m    { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
-  .pat-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-  .pat-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  /* カテゴリ別：未選択時は薄いボーダー＋テキスト色 */
+  .pat-chip[data-cat="b"]    { border-color: #bfdbfe; color: #3b82f6; }
+  .pat-chip[data-cat="d"]    { border-color: #fdba74; color: #f97316; }
+  .pat-chip[data-cat="m"]    { border-color: #bae6fd; color: #0ea5e9; }
+  .pat-chip[data-cat="db"]   { border-color: #6ee7b7; color: #059669; }
+  .pat-chip[data-cat="cust"] { border-color: #fde047; color: #ca8a04; }
+  .pat-chip[data-cat="work"] { border-color: #86efac; color: #16a34a; }
+  .pat-chip[data-cat="ofr"]  { border-color: #fca5a5; color: #dc2626; }
+  .pat-chip[data-cat="leave"]{ border-color: #fde047; color: #ca8a04; }
+  .pat-chip[data-cat="more"] { border-color: #e2e8f0; color: #94a3b8; font-weight: 600; }
 
-  /* 展開ボタン */
-  .pat-expand {
-    flex-shrink: 0;
-    padding: 6px 8px;
-    border: none;
-    background: none;
-    color: #cbd5e1;
-    cursor: pointer;
-    font-size: .7rem;
-  }
-  .pat-expand:hover { color: #64748b; }
+  /* 選択済み：カテゴリ色で塗りつぶし */
+  .pat-chip.sel[data-cat="off"]  { background: #e2e8f0; color: #334155; border-color: #94a3b8; }
+  .pat-chip.sel[data-cat="b"]    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .pat-chip.sel[data-cat="d"]    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
+  .pat-chip.sel[data-cat="m"]    { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+  .pat-chip.sel[data-cat="db"]   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+  .pat-chip.sel[data-cat="cust"] { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  .pat-chip.sel[data-cat="work"] { background: #dcfce7; color: #166534; border-color: #86efac; }
+  .pat-chip.sel[data-cat="ofr"]  { background: #fecaca; color: #991b1b; border-color: #f87171; }
+  .pat-chip.sel[data-cat="leave"]{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
 
-  /* ピッカー */
-  .pat-picker {
-    margin: 0 12px 6px;
-    font-size: .82rem;
-  }
-
-  /* カスタム時刻 */
+  /* ── ピッカー ────────────────────────────────────────── */
+  .pat-picker { margin: 0 12px 6px; font-size: .82rem; }
   .custom-time {
     display: none;
     gap: 6px;
@@ -136,7 +121,7 @@
   }
   .custom-time input { font-size: .82rem; }
 
-  /* ── スティッキー保存バー ─────────────────────────── */
+  /* ── スティッキー保存バー ─────────────────────────────── */
   .save-bar {
     position: sticky;
     bottom: 0;
@@ -177,29 +162,29 @@
   <input type="hidden" name="next_emp_idx" value="{{ next_idx }}">
   {% endif %}
 
-  {# ── 一括ボタン ── #}
+  {# ── 一括バー ── #}
   <div class="bulk-bar">
     {% if current_emp.employment_type.value == 'full_time' %}
-    <span class="label">一括：</span>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkFull('')">
+    <span class="lbl">一括：</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkApply('')">
       <i class="bi bi-check2 me-1"></i>出勤
     </button>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkFull('off_request')">
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkApply('off_request')">
       <i class="bi bi-x-circle me-1"></i>休希望
     </button>
-    <button type="button" class="btn btn-sm btn-outline-warning" onclick="bulkFull('paid_leave')">
+    <button type="button" class="btn btn-sm btn-outline-warning" onclick="bulkApply('paid_leave')">
       <i class="bi bi-calendar-check me-1"></i>有休
     </button>
     {% else %}
-    <span class="label">全日：</span>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkPart('')">
-      （休み）
+    <span class="lbl">全日：</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkApply('')">
+      休み
     </button>
     {% for pid, cnt in top_patterns[:3] %}
     {% set p = PATTERN_MAP.get(pid) %}
     {% if p %}
-    <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkPart('{{ pid }}')">
-      {{ p.label }}
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkApply('{{ pid }}')">
+      {{ SHORT_LABELS.get(pid, p.label) }}
     </button>
     {% endif %}
     {% endfor %}
@@ -213,19 +198,6 @@
   {% set day_cls = 'sat' if dow == 5 else 'sun' if dow == 6 else '' %}
   {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
 
-  {% if current_emp.employment_type.value == 'full_time' %}
-    {% set btn_cls = 'pat-work' if cur_pid == '' else 'pat-ofr' if cur_pid == 'off_request' else 'pat-leave' %}
-    {% set btn_html %}
-      {% if cur_pid == 'off_request' %}<i class="bi bi-x-circle me-1"></i>休希望
-      {% elif cur_pid == 'paid_leave' %}<i class="bi bi-calendar-check me-1"></i>有休
-      {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
-    {% endset %}
-  {% else %}
-    {% set pcat = PAT_CATS.get(cur_pid, 'off') %}
-    {% set btn_cls = 'pat-' + pcat %}
-    {% set btn_html = PATTERN_MAP[cur_pid].label if cur_pid in PATTERN_MAP else '（休み）' %}
-  {% endif %}
-
   <div class="day-row {{ day_cls }}">
     <div class="day-label">
       <div class="dt">{{ d.strftime('%m/%d') }}</div>
@@ -237,32 +209,51 @@
            id="hid_{{ current_emp.id }}_{{ d }}"
            value="{{ cur_pid }}">
 
-    {% if current_emp.employment_type.value == 'full_time' %}
-    <button type="button"
-            class="pat-btn {{ btn_cls }}"
-            data-emp="{{ current_emp.id }}"
-            data-date="{{ d }}"
-            data-mode="full"
-            onclick="cycleOff(this)">
-      {{ btn_html }}
-    </button>
-    {% else %}
-    <button type="button"
-            class="pat-btn {{ btn_cls }}"
-            data-emp="{{ current_emp.id }}"
-            data-date="{{ d }}"
-            data-mode="part"
-            onclick="cyclePart('{{ current_emp.id }}', '{{ d }}')">
-      {{ btn_html }}
-    </button>
-    <button type="button" class="pat-expand"
-            onclick="togglePicker('{{ current_emp.id }}', '{{ d }}')"
-            title="パターンを選択">
-      <i class="bi bi-chevron-expand"></i>
-    </button>
-    {% endif %}
+    <div class="pat-chips">
+      {% if current_emp.employment_type.value == 'full_time' %}
+      {# 正社員: 出勤 / 休希望 / 有休 の3チップ #}
+      {% for val, cat, label in [
+          ('',           'work',  '<i class="bi bi-check2 me-1"></i>出勤'),
+          ('off_request','ofr',   '<i class="bi bi-x-circle me-1"></i>休希望'),
+          ('paid_leave', 'leave', '<i class="bi bi-calendar-check me-1"></i>有休'),
+      ] %}
+      <button type="button"
+              class="pat-chip{{ ' sel' if cur_pid == val else '' }}"
+              data-cat="{{ cat }}"
+              data-emp="{{ current_emp.id }}"
+              data-date="{{ d }}"
+              data-pat="{{ val }}"
+              onclick="applyPat('{{ current_emp.id }}','{{ d }}','{{ val }}')">
+        {{ label | safe }}
+      </button>
+      {% endfor %}
+
+      {% else %}
+      {# アルバイト: 履歴チップ + カスタム + ··· #}
+      {% for pid in pat_cycle %}
+      {% set cat = 'off' if pid == '' else PAT_CATS.get(pid, 'off') %}
+      <button type="button"
+              class="pat-chip{{ ' sel' if cur_pid == pid else '' }}"
+              data-cat="{{ cat }}"
+              data-emp="{{ current_emp.id }}"
+              data-date="{{ d }}"
+              data-pat="{{ pid }}"
+              onclick="applyPat('{{ current_emp.id }}','{{ d }}','{{ pid }}')">
+        {{ SHORT_LABELS.get(pid, pid) if pid else '休み' }}
+      </button>
+      {% endfor %}
+      {# 全パターン一覧ピッカー #}
+      <button type="button"
+              class="pat-chip"
+              data-cat="more"
+              onclick="togglePicker('{{ current_emp.id }}','{{ d }}')">
+        ···
+      </button>
+      {% endif %}
+    </div>
   </div>
 
+  {# アルバイト: ピッカー + カスタム時刻入力 #}
   {% if current_emp.employment_type.value != 'full_time' %}
   <div id="picker_{{ current_emp.id }}_{{ d }}" style="display:none">
     <select class="form-select form-select-sm pat-picker"
@@ -325,8 +316,8 @@ let _changed = false;
 let _pendingNav = null;
 
 // ── チップ自動スクロール ───────────────────────────────────────────
-const _activeChip = document.querySelector('.emp-chip.active');
-_activeChip?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+document.querySelector('.emp-chip.active')
+  ?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
 
 // ── ナビゲーション保護 ────────────────────────────────────────────
 document.querySelectorAll('[data-nav-link]').forEach(a => {
@@ -340,85 +331,40 @@ document.querySelectorAll('[data-nav-link]').forEach(a => {
 function proceedNav() { if (_pendingNav) location.href = _pendingNav; }
 document.getElementById('shift-form')?.addEventListener('submit', () => { _changed = false; });
 
-// ── パターンデータ ────────────────────────────────────────────────
-const PAT_LABELS = { '': '（休み）', {% for p in patterns %}{{ p.id|tojson }}: {{ p.label|tojson }},{% endfor %} };
-const PAT_CATS_JS = { {% for pid, cat in PAT_CATS.items() %}{{ pid|tojson }}: {{ cat|tojson }},{% endfor %} };
-
-// タップサイクル順：[休み, 過去上位3件, デフォルト補完]
-const PAT_CYCLE = (() => {
-  const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
-  const defs = ['d_std1', 'b_std', 'mid'];
-  const seen = new Set(['']);
-  const cycle = [''];
-  for (const p of [...tops, ...defs]) {
-    if (!seen.has(p) && PAT_LABELS[p]) { seen.add(p); cycle.push(p); if (cycle.length >= 4) break; }
-  }
-  return cycle;
-})();
-
-// ── アルバイト：パターン適用（共通パス） ─────────────────────────
+// ── パターン適用（共通） ──────────────────────────────────────────
 function applyPat(empId, dateStr, patId) {
   const hid = document.getElementById(`hid_${empId}_${dateStr}`);
   if (!hid) return;
   hid.value = patId;
-  const btn = document.querySelector(`.pat-btn[data-emp="${empId}"][data-date="${dateStr}"]`);
-  if (btn) {
-    const cat = PAT_CATS_JS[patId] || 'off';
-    btn.className = `pat-btn pat-${cat}`;
-    btn.textContent = PAT_LABELS[patId] ?? patId;
-  }
+
+  // チップのハイライト更新
+  document.querySelectorAll(`.pat-chip[data-emp="${empId}"][data-date="${dateStr}"]`).forEach(c => {
+    c.classList.toggle('sel', c.dataset.pat === patId);
+  });
+
+  // カスタム時刻入力の表示切替
   const cust = document.getElementById(`custom_${empId}_${dateStr}`);
   if (cust) {
     cust.style.display = patId === 'custom' ? 'flex' : 'none';
-    if (patId === 'custom') cust.querySelector('input')?.focus();
+    if (patId === 'custom') cust.querySelector('input[type=time]')?.focus();
   }
+
   _changed = true;
 }
 
-// タップサイクル
-function cyclePart(empId, dateStr) {
-  const cur = document.getElementById(`hid_${empId}_${dateStr}`)?.value ?? '';
-  const idx = PAT_CYCLE.indexOf(cur);
-  applyPat(empId, dateStr, PAT_CYCLE[(idx + 1) % PAT_CYCLE.length]);
-}
-
-// 全日一括
-function bulkPart(patId) {
-  document.querySelectorAll('.pat-btn[data-mode="part"]').forEach(btn => {
-    applyPat(btn.dataset.emp, btn.dataset.date, patId);
+// ── 全日一括 ─────────────────────────────────────────────────────
+function bulkApply(patId) {
+  // 現在表示中の全 hidden input を探して適用
+  document.querySelectorAll('input[type=hidden][id^="hid_"]').forEach(hid => {
+    const parts = hid.id.slice(4).split('_');  // "hid_" を除いた "empId_date"
+    // empId は数値、dateは YYYY-MM-DD
+    const dateStr = parts.slice(-3).join('-');   // 末尾3つが YYYY-MM-DD
+    const empId   = parts.slice(0, -3).join('_');
+    applyPat(empId, dateStr, patId);
   });
 }
 
-// ── 社員：3状態サイクル ────────────────────────────────────────────
-const FULL_STATES = [
-  { val: '',            cls: 'pat-work', html: '<i class="bi bi-check2 me-1"></i>出勤予定' },
-  { val: 'off_request', cls: 'pat-ofr',  html: '<i class="bi bi-x-circle me-1"></i>休希望' },
-  { val: 'paid_leave',  cls: 'pat-leave',html: '<i class="bi bi-calendar-check me-1"></i>有休' },
-];
-
-function cycleOff(btn) {
-  const hid = document.getElementById(`hid_${btn.dataset.emp}_${btn.dataset.date}`);
-  const cur = FULL_STATES.findIndex(s => s.val === hid.value);
-  const next = FULL_STATES[(cur + 1) % FULL_STATES.length];
-  hid.value = next.val;
-  btn.className = `pat-btn ${next.cls}`;
-  btn.innerHTML = next.html;
-  _changed = true;
-}
-
-function bulkFull(targetVal) {
-  const s = FULL_STATES.find(s => s.val === targetVal);
-  if (!s) return;
-  document.querySelectorAll('.pat-btn[data-mode="full"]').forEach(btn => {
-    const hid = document.getElementById(`hid_${btn.dataset.emp}_${btn.dataset.date}`);
-    if (hid) hid.value = targetVal;
-    btn.className = `pat-btn ${s.cls}`;
-    btn.innerHTML = s.html;
-  });
-  _changed = true;
-}
-
-// ── 手動ピッカー ──────────────────────────────────────────────────
+// ── 全パターンピッカー ────────────────────────────────────────────
 function togglePicker(empId, dateStr) {
   const row = document.getElementById(`picker_${empId}_${dateStr}`);
   if (!row) return;
