@@ -813,9 +813,14 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
             else:
                 hour_map[(pid_r, eid_r, date_r, "dinner")] = hrs
 
+    # グローバル賃金設定
+    base_wage   = int(settings.get("base_hourly_wage",        "0") or 0)
+    early_allow = int(settings.get("early_morning_allowance", "0") or 0)
+
     # 従業員マップ（PT のみ。社員は時給計算対象外）
     all_emps = get_all_employees(active_only=False)
     pt_ids   = {e.id for e in all_emps if e.employment_type != EmploymentType.FULL_TIME}
+    # hourly_wage 列は昇給額（base_wage に上乗せする個人差分）
     wage_map = {e.id: e.hourly_wage for e in all_emps if e.id in pt_ids}
 
     result: dict = {}
@@ -832,8 +837,15 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
             hrs = _ft_hours(slot, pos)
 
         # 社員は時給計算対象外（コストは 0 のまま）
-        wage = wage_map.get(eid, 0) if eid in pt_ids else 0
-        cost = hrs * wage
+        if eid not in pt_ids:
+            cost = 0.0
+        else:
+            raise_amt  = wage_map.get(eid, 0)
+            hourly     = base_wage + raise_amt
+            # 朝食シフトは早朝手当を加算
+            if slot == "breakfast":
+                hourly += early_allow
+            cost = hrs * hourly
 
         if eid not in result:
             result[eid] = {"shifts": 0, "hours": 0.0, "cost": 0.0, "by_period": {}}

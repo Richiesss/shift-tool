@@ -335,6 +335,8 @@ def initialize_db():
         ("reserv_extra_breakfast",     "1"),
         ("reserv_threshold_dinner",    "25"),
         ("reserv_extra_dinner",        "1"),
+        ("base_hourly_wage",           "1000"),
+        ("early_morning_allowance",    "0"),
     ]:
         conn.execute(
             "INSERT INTO app_settings (key, value) VALUES (?,?) ON CONFLICT DO NOTHING",

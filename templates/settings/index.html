@@ -121,38 +121,71 @@
 
 </form>
 
-<!-- アルバイト時給管理 -->
+<!-- 人件費設定 -->
 <form method="post" action="{{ url_for('settings.save_wages') }}">
 <div class="card mb-3">
   <div class="card-body">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-      <h6 class="card-title text-muted mb-0">アルバイト時給管理</h6>
-      {% if pt_employees %}
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h6 class="card-title text-muted mb-0">人件費設定</h6>
       <button type="submit" class="btn btn-primary btn-sm">
         <i class="bi bi-floppy me-1"></i>保存
       </button>
-      {% endif %}
     </div>
-    {% if pt_employees %}
-    <div class="text-muted small mb-2">勤務統計の人件費集計に使用します。社員は対象外です。</div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem .75rem">
-      {% for emp in pt_employees %}
-      <div class="d-flex align-items-center gap-2">
-        <span class="small fw-semibold text-truncate" style="min-width:0;flex:1">{{ emp.name }}</span>
-        <div class="input-group input-group-sm flex-shrink-0" style="width:110px">
-          <input type="number" name="wage_{{ emp.id }}"
-                 value="{{ emp.hourly_wage }}"
-                 min="0" max="9999" step="1"
-                 class="form-control form-control-sm text-end"
-                 placeholder="0">
-          <span class="input-group-text px-1" style="font-size:.75rem">円</span>
+
+    <!-- 基本給・早朝手当 -->
+    <div class="d-flex gap-3 mb-3 flex-wrap">
+      <div>
+        <label class="form-label small fw-semibold mb-1">基本給</label>
+        <div class="input-group input-group-sm" style="width:130px">
+          <input type="number" name="base_hourly_wage"
+                 value="{{ settings.get('base_hourly_wage', '1000') }}"
+                 min="0" max="99999" step="1"
+                 class="form-control form-control-sm text-end">
+          <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
         </div>
       </div>
-      {% endfor %}
+      <div>
+        <label class="form-label small fw-semibold mb-1">早朝手当
+          <span class="text-muted fw-normal">（朝食シフト加算）</span>
+        </label>
+        <div class="input-group input-group-sm" style="width:130px">
+          <input type="number" name="early_morning_allowance"
+                 value="{{ settings.get('early_morning_allowance', '0') }}"
+                 min="0" max="9999" step="1"
+                 class="form-control form-control-sm text-end">
+          <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
+        </div>
+      </div>
     </div>
-    {% else %}
-    <div class="text-muted small">アルバイトスタッフが登録されていません。</div>
+
+    <!-- 個人別昇給額 -->
+    {% if pt_employees %}
+    <div class="border-top pt-3" style="border-color:#334155 !important">
+      <div class="small fw-semibold text-muted mb-2">個人昇給額
+        <span class="fw-normal text-muted">（基本給に上乗せ）</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem .75rem">
+        {% for emp in pt_employees %}
+        <div class="d-flex align-items-center gap-2">
+          <span class="small fw-semibold text-truncate" style="min-width:0;flex:1">{{ emp.name }}</span>
+          <div class="input-group input-group-sm flex-shrink-0" style="width:110px">
+            <span class="input-group-text px-1" style="font-size:.75rem">+</span>
+            <input type="number" name="wage_{{ emp.id }}"
+                   value="{{ emp.hourly_wage }}"
+                   min="0" max="9999" step="1"
+                   class="form-control form-control-sm text-end"
+                   placeholder="0">
+            <span class="input-group-text px-1" style="font-size:.75rem">円</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
     {% endif %}
+
+    <div class="text-muted small mt-3">
+      実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 朝食）。社員は対象外。
+    </div>
   </div>
 </div>
 </form>
