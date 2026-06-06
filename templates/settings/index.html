@@ -25,9 +25,9 @@
             <tr>
               <td>{{ slot.short_label() }}</td>
               <td>{{ pos.label() }}</td>
-              <td><input type="number" name="min_{{ prefix }}" value="{{ vals.min }}" class="form-control form-control-sm" min="0" style="width:48px"></td>
-              <td><input type="number" name="max_{{ prefix }}" value="{{ vals.max }}" class="form-control form-control-sm" min="0" style="width:48px"></td>
-              <td><input type="number" name="ml_{{ prefix }}"  value="{{ vals.min_leader }}" class="form-control form-control-sm" min="0" style="width:48px"></td>
+              <td><input type="number" name="min_{{ prefix }}" value="{{ vals.min }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="max_{{ prefix }}" value="{{ vals.max }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
+              <td><input type="number" name="ml_{{ prefix }}"  value="{{ vals.min_leader }}" class="form-control form-control-sm" min="0" style="width:60px"></td>
             </tr>
             {% endfor %}
           </tbody>
