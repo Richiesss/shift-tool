@@ -155,19 +155,14 @@ def index():
                 'url':  url_for('schedule.index', period_id=latest.id),
             })
 
-        # 今日が期間内 → 今日分の客数が未入力なら毎日TODO表示
+        # 期間中は毎日表示：予約は日々変わるため常に最新化を促す
         if period_info['in_range']:
-            today_r = res_counts.get(today_str, {})
-            today_res_empty = not today_r or (
-                today_r.get('breakfast', 0) == 0 and today_r.get('dinner', 0) == 0
-            )
-            if today_res_empty:
-                todos.append({
-                    'level': 'info', 'icon': 'bi-cup-hot',
-                    'text': '今日の客数を入力する',
-                    'sub':  '本日分の予約客数が未入力です',
-                    'url':  url_for('customers.list_periods'),
-                })
+            todos.append({
+                'level': 'info', 'icon': 'bi-cup-hot',
+                'text': '予約客数を最新に更新する',
+                'sub':  '予約変更があれば今日時点の数字に更新してください',
+                'url':  url_for('customers.list_periods'),
+            })
 
     return render_template(
         'dashboard/index.html',
