@@ -107,12 +107,15 @@
     display: flex; gap: 6px; margin-top: .5rem; padding-top: .4rem;
     border-top: 1px solid #334155;
   }
-  /* 土日ヘッダーの文字色：背景が薄いため濃色に */
+  /* 土日・祝日ヘッダーの文字色：背景が薄いため濃色に */
   .sched-grid thead th.sat { color: #1e40af !important; }
   .sched-grid thead th.sun { color: #be123c !important; }
   /* 今日 + 土日が重なるケースの文字保証 */
   .sched-grid thead th.today-col.sat,
   .sched-grid thead th.today-col.sun { color: white !important; }
+  /* 祝日は sun クラスと共有だが、土曜祝日は sun 色を優先 */
+  .sat.sun { background: #fff1f2 !important; }
+  .sched-grid thead th.sat.sun { color: #be123c !important; }
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: #cbd5e1; }
@@ -307,13 +310,15 @@
           {% for d in dates %}
           {% set dow = d.weekday() %}
           {% set ds_h = d.isoformat() %}
+          {% set is_holiday = ds_h in holidays %}
           {% set st = staffing.get((ds_h, slot, pos), {}) %}
           {% set hdr_cls = 'short-staff' if st.get('short_staff') else 'short-leader' if st.get('short_leader') else '' %}
           {% set is_today = ds_h == today %}
-          <th class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} {{ hdr_cls }} {{ 'today-col' if is_today else '' }}"
+          {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
+          <th class="text-center {{ day_cls }} {{ hdr_cls }} {{ 'today-col' if is_today else '' }}"
               style="cursor:pointer" onclick="openTimeline('{{ ds_h }}')">
             {{ '★ ' if is_today else '' }}{{ d.strftime('%m/%d') }}<br>
-            <small>{{ ['月','火','水','木','金','土','日'][dow] }}</small>
+            <small>{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
             {% if st %}
             {% set badge_cls = 'count-short' if st.short_staff else 'count-leader' if st.short_leader else 'count-ok' %}
             <span class="count-badge {{ badge_cls }}">{{ st.count }}/{{ st.min }}</span>
@@ -329,7 +334,9 @@
           {% for d in dates %}
           {% set ds = d|string %}
           {% set dow = d.weekday() %}
-          <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}" style="min-width:70px">
+          {% set is_holiday = ds in holidays %}
+          {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
+          <td class="text-center {{ day_cls }}" style="min-width:70px">
             <span class="note-cell d-block small text-muted" style="cursor:pointer;min-height:18px"
               data-date="{{ ds }}" data-period="{{ period.id }}"
               onclick="editNote(this)">{{ notes.get(ds, '') or '' }}</span>
@@ -345,6 +352,7 @@
           {% for d in dates %}
           {% set ds = d|string %}
           {% set dow = d.weekday() %}
+          {% set is_holiday = ds in holidays %}
           {% set day_assignments = asgn_map.get(ds, {}).get(slot, []) %}
           {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
           {# 社員はポジション別デフォルトスロット時間を使用（設定画面で変更可） #}
@@ -352,7 +360,7 @@
           {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[slot] %}
           {% set req_time = time_map.get((emp.id, ds, slot), '') %}
           {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
-          <td class="text-center {{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell"
+          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell"
               style="cursor:pointer"
               data-emp-id="{{ emp.id }}"
               data-emp-name="{{ emp.name }}"

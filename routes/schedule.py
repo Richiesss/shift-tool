@@ -4,6 +4,14 @@ from db import repositories as repo
 from models.schedule import ShiftAssignment
 from utils.constants import TimeSlot, Position, EmploymentType
 
+try:
+    import jpholiday as _jpholiday
+    def _is_holiday(d) -> bool:
+        return bool(_jpholiday.is_holiday(d))
+except ImportError:
+    def _is_holiday(d) -> bool:
+        return False
+
 
 def _compute_staffing(assignments, employees, dates, constraints) -> dict:
     """
@@ -172,6 +180,8 @@ def index(period_id):
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
+    holidays = {d.isoformat() for d in dates if _is_holiday(d)}
+
     # 社員デフォルト勤務時間（ポジション別・設定画面で変更可能）
     def _ft_time(pos_key, slot_key):
         s = repo.get_app_setting(f"ft_{pos_key}_{slot_key}_start",
@@ -205,6 +215,7 @@ def index(period_id):
         needs_regen=needs_regen,
         today=today,
         ft_times=ft_times,
+        holidays=holidays,
         TimeSlot=TimeSlot,
         Position=Position,
     )
