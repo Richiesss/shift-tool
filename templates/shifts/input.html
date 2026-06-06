@@ -49,8 +49,9 @@
     width: 100%; padding: .45rem .55rem; border-radius: 8px;
     border: 1.5px solid rgba(0,0,0,.1); font-size: .8rem;
     text-align: left; cursor: pointer; display: block;
-    touch-action: none; user-select: none;
+    touch-action: auto; user-select: none;
     transition: filter .1s; min-height: 40px; line-height: 1.3;
+    flex-grow: 1;
   }
   .pat-cycle-btn:active { filter: brightness(.88); }
   .pcb-off  { background: #f8fafc; color: #64748b; }
@@ -59,7 +60,12 @@
   .pcb-m    { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
   .pcb-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
   .pcb-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
-  .pcb-painting { outline: 2px solid #6366f1 !important; outline-offset: 1px; }
+  /* 塗り絵モード時 */
+  body.paint-mode .pat-cycle-btn { touch-action: none; cursor: crosshair; }
+  body.paint-mode #paint-toggle  { background: #6366f1; color: #fff; border-color: #6366f1; }
+  /* 手動ピッカー展開ボタン */
+  .pat-edit-btn { flex-shrink: 0; padding: .25rem .45rem; }
+  .pat-picker   { margin-top: 3px; font-size: .78rem; }
 </style>
 {% endblock %}
 {% block content %}
@@ -207,7 +213,7 @@
     {% endif %}
   </div>
   {% endif %}
-  {# 手動一括入力 #}
+  {# 手動一括入力 + 塗り絵モード #}
   <div class="d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
     <span class="small text-muted flex-shrink-0">一括：</span>
     <select id="bulk-pattern" class="form-select form-select-sm flex-grow-1 flex-md-grow-0" style="max-width:160px">
@@ -216,9 +222,15 @@
       <option value="{{ p.id }}">{{ p.label }}</option>
       {% endfor %}
     </select>
-    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
+    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
             onclick="applyBulk('{{ current_emp.id }}')">
       全日に適用
+    </button>
+    <button type="button" id="paint-toggle"
+            class="btn btn-outline-primary btn-sm text-nowrap"
+            onclick="togglePaintMode()"
+            title="ONにすると指でなぞって複数日に同じパターンを塗れます">
+      <i class="bi bi-brush me-1"></i>ドラッグ入力
     </button>
   </div>
 </div>
@@ -283,13 +295,31 @@
                    name="pattern_{{ current_emp.id }}_{{ d }}"
                    id="hid_{{ current_emp.id }}_{{ d }}"
                    value="{{ cur_pid }}">
-            <button type="button"
-                    class="pat-cycle-btn pcb-{{ pcat }}"
-                    data-emp="{{ current_emp.id }}"
-                    data-date="{{ d }}"
-                    onpointerdown="onPatBtnDown(event,'{{ current_emp.id }}','{{ d }}')">
-              {{ cur_label }}
-            </button>
+            <div class="d-flex gap-1">
+              <button type="button"
+                      class="pat-cycle-btn pcb-{{ pcat }}"
+                      data-emp="{{ current_emp.id }}"
+                      data-date="{{ d }}"
+                      onclick="onPatBtnClick('{{ current_emp.id }}','{{ d }}')"
+                      onpointerdown="onPatBtnDown(event,'{{ current_emp.id }}','{{ d }}')">
+                {{ cur_label }}
+              </button>
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary pat-edit-btn border-0 text-muted"
+                      onclick="togglePicker('{{ current_emp.id }}','{{ d }}')"
+                      title="パターンを選択">
+                <i class="bi bi-chevron-expand" style="font-size:.7rem"></i>
+              </button>
+            </div>
+            <select id="picker_{{ current_emp.id }}_{{ d }}"
+                    class="form-select form-select-sm pat-picker"
+                    style="display:none"
+                    onchange="onPickerChange(this,'{{ current_emp.id }}','{{ d }}')">
+              <option value="">（休み）</option>
+              {% for p in patterns %}
+              <option value="{{ p.id }}" {{ 'selected' if cur_pid == p.id else '' }}>{{ p.label }}</option>
+              {% endfor %}
+            </select>
             <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
                  style="{{ 'display:flex' if cur_pid == 'custom' else '' }}">
               <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
@@ -543,23 +573,40 @@ function applyBulk(empId) {
   applyAllPattern(empId, document.getElementById('bulk-pattern').value);
 }
 
-// タップでサイクル → ペイントパターンを返す
-function cyclePat(empId, dateStr) {
+// タップでサイクル（onclick から呼ばれる・塗り絵モード時は無効）
+function onPatBtnClick(empId, dateStr) {
+  if (_paintMode) return; // 塗り絵モード中はクリックを無視
   const cur = document.getElementById(`hid_${empId}_${dateStr}`)?.value ?? '';
   const idx = PAT_CYCLE.indexOf(cur);
   const next = PAT_CYCLE[(idx + 1) % PAT_CYCLE.length];
   applyPatToDate(empId, dateStr, next);
-  return next;
 }
 
-// ── ドラッグ塗り絵 ──────────────────────────────────────────────────────────
+// ── 塗り絵モード ────────────────────────────────────────────────────────────
+let _paintMode = false;
 let _paintActive = false, _paintPat = null, _paintEmp = null;
 
+function togglePaintMode() {
+  _paintMode = !_paintMode;
+  document.body.classList.toggle('paint-mode', _paintMode);
+  const btn = document.getElementById('paint-toggle');
+  if (btn) {
+    btn.innerHTML = _paintMode
+      ? '<i class="bi bi-brush-fill me-1"></i>塗り絵中…'
+      : '<i class="bi bi-brush me-1"></i>ドラッグ入力';
+  }
+}
+
+// pointerdown: 塗り絵モードの時だけ塗り開始
 function onPatBtnDown(e, empId, dateStr) {
+  if (!_paintMode) return;
   e.preventDefault();
   _paintActive = true;
   _paintEmp = empId;
-  _paintPat = cyclePat(empId, dateStr);
+  // ブラシパターン = 一括セレクトの選択値（未選択なら現在セルの値）
+  const bulkPat = document.getElementById('bulk-pattern')?.value ?? '';
+  _paintPat = bulkPat || document.getElementById(`hid_${empId}_${dateStr}`)?.value || '';
+  applyPatToDate(empId, dateStr, _paintPat);
 }
 
 document.addEventListener('pointermove', e => {
@@ -574,6 +621,20 @@ document.addEventListener('pointermove', e => {
 
 document.addEventListener('pointerup',     () => { _paintActive = false; });
 document.addEventListener('pointercancel', () => { _paintActive = false; });
+
+// ── 手動ピッカー ────────────────────────────────────────────────────────────
+function togglePicker(empId, dateStr) {
+  const picker = document.getElementById(`picker_${empId}_${dateStr}`);
+  if (!picker) return;
+  const opening = picker.style.display === 'none';
+  picker.style.display = opening ? 'block' : 'none';
+  if (opening) picker.focus();
+}
+
+function onPickerChange(sel, empId, dateStr) {
+  applyPatToDate(empId, dateStr, sel.value);
+  sel.style.display = 'none';
+}
 
 // ── 名前検索 ──────────────────────────────────────────
 const EMP_LIST = [
