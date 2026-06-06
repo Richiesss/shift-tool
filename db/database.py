@@ -240,6 +240,16 @@ _CREATE_TABLES = [
         min_leader INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (band, position)
     )""",
+    """CREATE TABLE IF NOT EXISTS assignment_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        period_id   INTEGER NOT NULL,
+        employee_id INTEGER NOT NULL,
+        date        TEXT NOT NULL,
+        time_slot   TEXT NOT NULL,
+        position    TEXT,
+        action      TEXT NOT NULL,
+        changed_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    )""",
 ]
 
 _MIGRATIONS = [
@@ -261,6 +271,7 @@ _MIGRATIONS = [
     ("employees",         "display_order",              "INTEGER NOT NULL DEFAULT 0"),
     ("schedule_periods",  "needs_regen",                "INTEGER NOT NULL DEFAULT 0"),
     ("employees",         "output_position",            "TEXT"),
+    ("employees",         "hourly_wage",                "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _INDEXES = [
@@ -270,6 +281,7 @@ _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_fixed_unavail_emp        ON fixed_unavailable_dates(employee_id)",
     "CREATE INDEX IF NOT EXISTS idx_reservation_period       ON reservation_counts(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_schedule_notes_period    ON schedule_notes(period_id)",
+    "CREATE INDEX IF NOT EXISTS idx_assignment_log_period     ON assignment_log(period_id)",
 ]
 
 

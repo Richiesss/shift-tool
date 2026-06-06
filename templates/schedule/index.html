@@ -196,9 +196,12 @@
     <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-file-earmark-pdf"></i>
     </a>
-    <a href="{{ url_for('schedule.stats', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
+    <a href="{{ url_for('schedule.stats_multi') }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-bar-chart-fill"></i>
     </a>
+    <button class="btn btn-outline-light btn-sm" onclick="openHistory({{ period.id }})">
+      <i class="bi bi-clock-history"></i>
+    </button>
     {% endif %}
   </div>
 </div>
@@ -768,6 +771,39 @@ function showToast(msg, type) {
   setTimeout(() => bootstrap.Toast.getOrCreateInstance(el).hide(), 4000);
 }
 
+/* ── 変更履歴 ── */
+async function openHistory(periodId) {
+  const modal = new bootstrap.Modal(document.getElementById('historyModal'));
+  const body  = document.getElementById('historyBody');
+  body.innerHTML = '<div class="text-center py-3 text-muted small">読み込み中…</div>';
+  modal.show();
+  try {
+    const res = await fetch(`/schedule/${periodId}/history`);
+    const logs = await res.json();
+    if (!logs.length) {
+      body.innerHTML = '<div class="text-muted small py-3 text-center">変更履歴がありません</div>';
+      return;
+    }
+    const _ACT = { add: {icon:'bi-plus-circle-fill', cls:'text-success'}, remove: {icon:'bi-dash-circle-fill', cls:'text-danger'} };
+    body.innerHTML = logs.map(l => {
+      const a = _ACT[l.action] || {icon:'bi-circle', cls:'text-muted'};
+      const label = l.action === 'add' ? '追加' : '削除';
+      return `<div class="d-flex align-items-center gap-2 py-2 border-bottom border-secondary">
+        <i class="bi ${a.icon} ${a.cls}" style="font-size:1rem;flex-shrink:0"></i>
+        <div class="flex-grow-1 small">
+          <span class="fw-semibold">${l.emp_name || '(不明)'}</span>
+          <span class="text-muted mx-1">—</span>
+          <span>${l.date} ${l.slot_label} ${l.pos_label}</span>
+          <span class="badge ${l.action==='add'?'bg-success':'bg-danger'} bg-opacity-75 ms-1">${label}</span>
+        </div>
+        <div class="text-muted" style="font-size:.7rem;white-space:nowrap">${(l.changed_at||'').slice(5,16)}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<div class="text-danger small py-2">履歴の取得に失敗しました</div>';
+  }
+}
+
 function editNote(el) {
   const date = el.dataset.date;
   const periodId = el.dataset.period;
@@ -803,4 +839,17 @@ function editNote(el) {
   input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
 }
 </script>
+
+<!-- 変更履歴モーダル -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content" style="background:#1e293b;color:white;border:none">
+      <div class="modal-header" style="border-color:#334155">
+        <h6 class="modal-title"><i class="bi bi-clock-history me-2"></i>手動変更履歴（直近60件）</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="historyBody" style="max-height:70vh"></div>
+    </div>
+  </div>
+</div>
 {% endblock %}

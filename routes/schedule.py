@@ -273,26 +273,45 @@ def save_note(period_id):
 
 @bp.get("/<int:period_id>/stats")
 def stats(period_id):
-    period = repo.get_period(period_id)
-    if not period:
-        return redirect(url_for("schedule.list_periods"))
-    employees  = repo.get_all_employees(active_only=True)
-    assignments = repo.get_assignments(period_id)
-    from utils.constants import TimeSlot, Position
-    from collections import defaultdict
-    counts = defaultdict(lambda: defaultdict(int))
-    for a in assignments:
-        key = f"{a.time_slot.value[0].upper()}/{a.position.value[0].upper()}"
-        counts[a.employee_id][key] += 1
-        counts[a.employee_id]["total"] += 1
-    cols = ["B/H","B/K","D/H","D/K"]
-    col_labels = {"B/H":"朝食ホール","B/K":"朝食キッチン","D/H":"ディナーホール","D/K":"ディナーキッチン"}
-    col_totals = {c: sum(counts[e.id][c] for e in employees) for c in cols}
-    return render_template("schedule/stats.html",
-        period=period, employees=employees, counts=counts,
-        cols=cols, col_labels=col_labels, col_totals=col_totals,
-        total_assignments=len(assignments),
-        periods=repo.get_all_periods())
+    return redirect(url_for("schedule.stats_multi", p=period_id))
+
+
+@bp.get("/<int:period_id>/history")
+def history(period_id):
+    """手動割当の変更履歴をJSONで返す"""
+    logs = repo.get_assignment_log(period_id, limit=60)
+    _SLOT_JP = {"breakfast": "朝食", "dinner": "ディナー"}
+    _POS_JP  = {"hall": "ホール", "kitchen": "キッチン"}
+    for entry in logs:
+        entry["slot_label"] = _SLOT_JP.get(entry.get("time_slot", ""), entry.get("time_slot", ""))
+        entry["pos_label"]  = _POS_JP.get(entry.get("position", ""), entry.get("position", "") or "")
+    return jsonify(logs)
+
+
+@bp.get("/stats")
+def stats_multi():
+    """複数期間をまたいだ統計ページ"""
+    all_periods = repo.get_all_periods()
+    # 選択された期間ID（未選択なら最新4件）
+    sel_ids = request.args.getlist("p", type=int)
+    if not sel_ids and all_periods:
+        sel_ids = [p.id for p in all_periods[:4]]
+
+    employees = repo.get_all_employees(active_only=True)
+    stats_data = repo.get_multi_period_stats(sel_ids)
+    sel_periods = [p for p in all_periods if p.id in sel_ids]
+
+    any_wage = any(e.hourly_wage > 0 for e in employees)
+
+    return render_template(
+        "schedule/stats_multi.html",
+        all_periods=all_periods,
+        sel_periods=sel_periods,
+        sel_ids=sel_ids,
+        employees=employees,
+        stats_data=stats_data,
+        any_wage=any_wage,
+    )
 
 
 @bp.post("/<int:period_id>/confirm")

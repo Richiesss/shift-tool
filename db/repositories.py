@@ -72,13 +72,13 @@ def save_employee(emp: Employee) -> Employee:
         row = conn.execute("SELECT COALESCE(MAX(display_order), -1) AS max_order FROM employees").fetchone()
         next_order = (row["max_order"] if row else -1) + 1
         emp.id = conn.execute_insert(
-            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, 1, next_order)
+            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, hourly_wage, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, 1, next_order)
         )
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, hourly_wage=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, int(emp.is_active), emp.id)
         )
     _save_fixed_patterns(conn, emp)
     _save_fixed_unavailable_dates(conn, emp)
@@ -151,6 +151,7 @@ def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employe
         can_cleanup=bool(row["can_cleanup"]) if "can_cleanup" in keys else False,
         always_available_breakfast=bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False,
         always_available_dinner=bool(row["always_available_dinner"]) if "always_available_dinner" in keys else False,
+        hourly_wage=int(row["hourly_wage"]) if "hourly_wage" in keys and row["hourly_wage"] else 0,
         is_active=bool(row["is_active"]),
         fixed_patterns=[
             FixedPattern(p["day_of_week"], bool(p["breakfast"]), bool(p["dinner"]))
@@ -178,6 +179,7 @@ def _row_to_employee(row, conn) -> Employee:
     cleanup_val = bool(row["can_cleanup"]) if "can_cleanup" in keys else False
     avail_b_val = bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False
     avail_d_val = bool(row["always_available_dinner"])    if "always_available_dinner"    in keys else False
+    wage_val    = int(row["hourly_wage"])  if "hourly_wage" in keys and row["hourly_wage"] else 0
     return Employee(
         id=row["id"],
         name=row["name"],
@@ -191,6 +193,7 @@ def _row_to_employee(row, conn) -> Employee:
         can_cleanup=cleanup_val,
         always_available_breakfast=avail_b_val,
         always_available_dinner=avail_d_val,
+        hourly_wage=wage_val,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         is_active=bool(row["is_active"]),
         fixed_patterns=[
@@ -440,6 +443,11 @@ def add_assignment(period_id: int, assignment: ShiftAssignment):
              assignment.time_slot.value, assignment.position.value,
              int(assignment.is_reinforcement), assignment.reinf_start, assignment.reinf_end)
         )
+        conn.execute(
+            "INSERT INTO assignment_log (period_id, employee_id, date, time_slot, position, action) VALUES (?,?,?,?,?,?)",
+            (period_id, assignment.employee_id, assignment.date,
+             assignment.time_slot.value, assignment.position.value, "add")
+        )
         conn.commit()
     finally:
         conn.close()
@@ -448,9 +456,19 @@ def add_assignment(period_id: int, assignment: ShiftAssignment):
 def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: TimeSlot):
     conn = get_connection()
     try:
+        # ログ用にポジションを事前取得
+        row = conn.execute(
+            "SELECT position FROM shift_assignments WHERE period_id=? AND employee_id=? AND date=? AND time_slot=?",
+            (period_id, employee_id, date, time_slot.value)
+        ).fetchone()
+        pos_val = row["position"] if row else None
         conn.execute(
             "DELETE FROM shift_assignments WHERE period_id=? AND employee_id=? AND date=? AND time_slot=?",
             (period_id, employee_id, date, time_slot.value)
+        )
+        conn.execute(
+            "INSERT INTO assignment_log (period_id, employee_id, date, time_slot, position, action) VALUES (?,?,?,?,?,?)",
+            (period_id, employee_id, date, time_slot.value, pos_val, "remove")
         )
         conn.commit()
     finally:
@@ -686,3 +704,131 @@ def save_shift_constraints(constraints: dict):
     conn.commit()
     conn.close()
     cache.delete_memoized(get_shift_constraints)
+
+
+# ── 変更履歴ログ ─────────────────────────────────────────────────────────
+
+def get_assignment_log(period_id: int, limit: int = 50) -> list[dict]:
+    """手動割当の変更履歴を新しい順で返す"""
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT l.*, e.name as emp_name
+           FROM assignment_log l
+           LEFT JOIN employees e ON e.id = l.employee_id
+           WHERE l.period_id = ?
+           ORDER BY l.id DESC LIMIT ?""",
+        (period_id, limit)
+    ).fetchall()
+    conn.close()
+    return [dict(r._d) if hasattr(r, "_d") else dict(r) for r in rows]
+
+
+# ── 複数期間統計 ─────────────────────────────────────────────────────────
+
+def get_multi_period_stats(period_ids: list[int]) -> dict:
+    """
+    指定した複数期間にわたる従業員別の勤務統計を返す。
+    {
+      emp_id: {
+        "shifts": int,          # 総割当コマ数
+        "hours":  float,        # 推計勤務時間
+        "cost":   float,        # 推計人件費（時給×時間）
+        "by_period": {period_id: {"shifts": int, "hours": float, "cost": float}},
+      }
+    }
+    """
+    from utils.shift_patterns import PATTERN_MAP
+
+    if not period_ids:
+        return {}
+
+    ph = ",".join(["?"] * len(period_ids))
+    conn = get_connection()
+
+    # 全割当
+    asgn_rows = conn.execute(
+        f"SELECT period_id, employee_id, date, time_slot, position FROM shift_assignments WHERE period_id IN ({ph})",
+        period_ids
+    ).fetchall()
+
+    # 全シフト希望（時間計算用）
+    req_rows = conn.execute(
+        f"SELECT period_id, employee_id, date, pattern_id, custom_start, custom_end, breakfast, dinner FROM shift_requests WHERE period_id IN ({ph})",
+        period_ids
+    ).fetchall()
+
+    # app_settings（FT デフォルト時間）
+    setting_rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+    conn.close()
+
+    settings = {r["key"]: r["value"] for r in setting_rows}
+
+    def _ft_hours(slot: str, pos: str) -> float:
+        s = settings.get(f"ft_{pos}_{slot}_start", "06:00" if slot == "breakfast" else "17:00")
+        e = settings.get(f"ft_{pos}_{slot}_end",   "11:00" if slot == "breakfast" else "22:00")
+        sh, sm = map(int, s.split(":"))
+        eh, em = map(int, e.split(":"))
+        return max(0.0, (eh + em / 60.0) - (sh + sm / 60.0))
+
+    # (period_id, emp_id, date, slot) → pattern の時間数マップを構築
+    hour_map: dict[tuple, float] = {}
+    for r in req_rows:
+        pid_r = r["period_id"]
+        eid_r = r["employee_id"]
+        date_r = r["date"]
+        pat_id = r["pattern_id"]
+        if pat_id == "custom" and r["custom_start"] and r["custom_end"]:
+            sh, sm = map(int, r["custom_start"].split(":"))
+            eh, em = map(int, r["custom_end"].split(":"))
+            hrs = max(0.0, (eh + em / 60.0) - (sh + sm / 60.0))
+        elif pat_id and pat_id in PATTERN_MAP:
+            p = PATTERN_MAP[pat_id]
+            if p.force_both:
+                hrs = p.duration_hours()
+            else:
+                hrs = p.duration_hours()
+        else:
+            hrs = 0.0
+        if r["breakfast"]:
+            hour_map[(pid_r, eid_r, date_r, "breakfast")] = hrs
+        if r["dinner"]:
+            # ダブルは朝食だけで全時間を計上済みなので dinner は 0 に
+            if pat_id == "double":
+                hour_map[(pid_r, eid_r, date_r, "dinner")] = 0.0
+            else:
+                hour_map[(pid_r, eid_r, date_r, "dinner")] = hrs
+
+    # 従業員マップ（time給）
+    all_emps = get_all_employees(active_only=False)
+    wage_map = {e.id: e.hourly_wage for e in all_emps}
+
+    result: dict = {}
+    for a in asgn_rows:
+        eid  = a["employee_id"]
+        pid  = a["period_id"]
+        slot = a["time_slot"]
+        pos  = a["position"]
+        key  = (pid, eid, a["date"], slot)
+
+        if key in hour_map:
+            hrs = hour_map[key]
+        else:
+            hrs = _ft_hours(slot, pos)
+
+        wage = wage_map.get(eid, 0)
+        cost = hrs * wage
+
+        if eid not in result:
+            result[eid] = {"shifts": 0, "hours": 0.0, "cost": 0.0, "by_period": {}}
+        result[eid]["shifts"] += 1
+        result[eid]["hours"]  += hrs
+        result[eid]["cost"]   += cost
+
+        bp = result[eid]["by_period"]
+        if pid not in bp:
+            bp[pid] = {"shifts": 0, "hours": 0.0, "cost": 0.0}
+        bp[pid]["shifts"] += 1
+        bp[pid]["hours"]  += hrs
+        bp[pid]["cost"]   += cost
+
+    return result

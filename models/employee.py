@@ -25,6 +25,7 @@ class Employee:
     always_available_breakfast: bool = False              # True = 朝食に希望提出不要・毎日出勤可
     always_available_dinner: bool = False                 # True = ディナーに希望提出不要・毎日出勤可
     primary_timeslot: Optional[TimeSlot] = None          # None = どちらでも可
+    hourly_wage: int = 0
     fixed_patterns: list[FixedPattern] = field(default_factory=list)
     fixed_unavailable_dates: list[str] = field(default_factory=list)  # YYYY-MM-DD
     is_active: bool = True
