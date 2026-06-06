@@ -18,6 +18,7 @@ from reportlab.lib.enums import TA_CENTER
 from models.employee import Employee
 from models.schedule import SchedulePeriod
 from utils.constants import TimeSlot, Position, PrimaryPosition
+from utils.holidays import holiday_set
 
 DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
 
@@ -175,7 +176,7 @@ COL_EVENT_BG = colors.HexColor("#FEF08A")  # 行事行（備考欄）の背景�
 def _build_block_table(
     block_emps, dates, assignments, req_map, col_widths,
     font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
-    events_h: int = 0, notes: dict | None = None,
+    events_h: int = 0, notes: dict | None = None, holidays: set | None = None,
 ):
     """
     従業員グループ1ブロック分のテーブルを生成する。
@@ -195,8 +196,9 @@ def _build_block_table(
     has_events = events_h > 0
     EMP_START  = 3 if has_events else 2
 
+    _hols     = holidays or set()
     row_dates = [period_label] + [str(d.day) for d in dates] + [period_label]
-    row_dows  = [""] + [DAY_JP[d.weekday()] for d in dates] + [""]
+    row_dows  = [""] + [DAY_JP[d.weekday()] + ("(祝)" if d.isoformat() in _hols else "") for d in dates] + [""]
 
     emp_rows = []
     for emp in block_emps:
@@ -253,16 +255,17 @@ def _build_block_table(
             ("ALIGN",      (1, 2),  (-1, 2), "LEFT"),
         ]
 
-    # 土日ヘッダー着色
+    # 土日・祝日ヘッダー着色
     for i, d in enumerate(dates):
-        col = i + 1
-        dow = d.weekday()
-        if dow == 5:
-            cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SAT),
-                     ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SAT)]
-        elif dow == 6:
+        col  = i + 1
+        dow  = d.weekday()
+        is_h = d.isoformat() in _hols
+        if dow == 6 or is_h:
             cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SUN),
                      ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SUN)]
+        elif dow == 5:
+            cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SAT),
+                     ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SAT)]
 
     # 従業員行の着色
     for row_idx, emp in enumerate(block_emps):
@@ -274,14 +277,15 @@ def _build_block_table(
             date_str = d.isoformat()
             dow      = d.weekday()
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
+            is_h = date_str in _hols
             if style == "leave":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_LEAVE))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_LEAVE))
             elif style == "off":
-                if dow == 5:
-                    cmds.append(("BACKGROUND", (col, r), (col, r), COL_SAT_D))
-                elif dow == 6:
+                if dow == 6 or is_h:
                     cmds.append(("BACKGROUND", (col, r), (col, r), COL_SUN_D))
+                elif dow == 5:
+                    cmds.append(("BACKGROUND", (col, r), (col, r), COL_SAT_D))
                 cmds.append(("TEXTCOLOR", (col, r), (col, r), COL_TXT_OFF))
 
     tbl.setStyle(TableStyle(cmds))
@@ -317,8 +321,9 @@ def export_pdf(
         topMargin=MARGIN,  bottomMargin=MARGIN,
     )
 
-    dates = list(period.date_range())
-    n     = len(dates)
+    dates    = list(period.date_range())
+    n        = len(dates)
+    holidays = holiday_set(dates)
 
     # ── 従業員をキッチン／ホールに分類 ───────────────────────────────
     # output_position 優先、未設定なら primary_position で判断
@@ -389,7 +394,7 @@ def export_pdf(
             kitchen_emps, dates, assignments, req_map,
             col_widths, font_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
-            events_h=EVENTS_H, notes=notes,
+            events_h=EVENTS_H, notes=notes, holidays=holidays,
         )
         story.append(tbl)
         if hall_emps:
@@ -401,7 +406,7 @@ def export_pdf(
             hall_emps, dates, assignments, req_map,
             col_widths, font_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
-            events_h=0,
+            events_h=0, holidays=holidays,
         )
         story.append(tbl)
 

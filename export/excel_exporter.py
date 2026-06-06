@@ -12,6 +12,7 @@ from openpyxl.worksheet.properties import PageSetupProperties
 from models.employee import Employee
 from models.schedule import SchedulePeriod
 from utils.constants import TimeSlot, Position, SHIFT_CONSTRAINTS
+from utils.holidays import holiday_set
 
 # ── スタイル定数 ─────────────────────────────────────────────────────────
 THIN = Side(style="thin",   color="CBD5E1")
@@ -197,8 +198,9 @@ def export_excel(
     ws = wb.active
     ws.title = f"シフト表_{period.start_date}"
 
-    dates = period.date_range()
-    n     = len(dates)
+    dates    = period.date_range()
+    n        = len(dates)
+    holidays = holiday_set(dates)
 
     # 列インデックス
     C_NAME_L = 1          # 氏名（左）
@@ -220,10 +222,11 @@ def export_excel(
     _cell(ws, 2, C_NAME_L, "氏名",  fill=FILL_NAME, font=FONT_NAME, align=ALIGN_C, border=BORDER)
     _cell(ws, 2, C_NAME_R, "氏名",  fill=FILL_NAME, font=FONT_NAME, align=ALIGN_C, border=BORDER)
     for i, d in enumerate(dates):
-        col = C_DATA + i
-        dow = d.weekday()
-        fill = FILL_SAT_H if dow == 5 else (FILL_SUN_H if dow == 6 else FILL_WD_H)
-        font = FONT_SAT   if dow == 5 else (FONT_SUN   if dow == 6 else FONT_HDR)
+        col  = C_DATA + i
+        dow  = d.weekday()
+        is_h = d.isoformat() in holidays
+        fill = FILL_SUN_H if (dow == 6 or is_h) else (FILL_SAT_H if dow == 5 else FILL_WD_H)
+        font = FONT_SUN   if (dow == 6 or is_h) else (FONT_SAT   if dow == 5 else FONT_HDR)
         _cell(ws, 2, col, d.day, fill=fill, font=font, align=ALIGN_C, border=BORDER)
     ws.row_dimensions[2].height = 18
 
@@ -233,11 +236,13 @@ def export_excel(
     _cell(ws, 3, C_NAME_L, "", fill=FILL_NAME, border=BORDER)
     _cell(ws, 3, C_NAME_R, "", fill=FILL_NAME, border=BORDER)
     for i, d in enumerate(dates):
-        col = C_DATA + i
-        dow = d.weekday()
-        fill = FILL_SAT_H if dow == 5 else (FILL_SUN_H if dow == 6 else FILL_WD_H)
-        font = FONT_SAT   if dow == 5 else (FONT_SUN   if dow == 6 else FONT_HDR)
-        _cell(ws, 3, col, DAY_JP[dow], fill=fill, font=font, align=ALIGN_C, border=BORDER)
+        col  = C_DATA + i
+        dow  = d.weekday()
+        is_h = d.isoformat() in holidays
+        fill = FILL_SUN_H if (dow == 6 or is_h) else (FILL_SAT_H if dow == 5 else FILL_WD_H)
+        font = FONT_SUN   if (dow == 6 or is_h) else (FONT_SAT   if dow == 5 else FONT_HDR)
+        label = DAY_JP[dow] + ("(祝)" if is_h else "")
+        _cell(ws, 3, col, label, fill=fill, font=font, align=ALIGN_C, border=BORDER)
     ws.row_dimensions[3].height = 15
 
     # ──────────────────────────────────────────────────────────────────
@@ -270,13 +275,14 @@ def export_excel(
             col      = C_DATA + i
             date_str = d.isoformat()
             dow      = d.weekday()
+            is_h     = date_str in holidays
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
 
             if style == "leave":
                 fill = FILL_LEAVE
                 font = FONT_LEAVE
             elif style == "off":
-                fill = FILL_SAT_D if dow == 5 else (FILL_SUN_D if dow == 6 else base_fill)
+                fill = FILL_SUN_D if (dow == 6 or is_h) else (FILL_SAT_D if dow == 5 else base_fill)
                 font = FONT_OFF
             elif style == "assigned_note":
                 fill = base_fill
