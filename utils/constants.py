@@ -57,6 +57,9 @@ class PrimaryPosition(str, Enum):
     def label(self):
         return {"hall": "ホール専任", "kitchen": "キッチン専任"}[self.value]
 
+    def short_label(self):
+        return {"hall": "ホール", "kitchen": "キッチン"}[self.value]
+
 
 # シフト制約定数
 # min_leader: リーダー（最高習熟度）の最低配置人数

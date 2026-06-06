@@ -43,7 +43,7 @@
           <div class="fw-semibold">{{ emp.name }}</div>
           <div class="text-muted small">
             {{ emp.employment_type.label() }} ·
-            {% if emp.primary_position %}{{ emp.primary_position.label() }}{% else %}どちらでも{% endif %} ·
+            {% if emp.primary_position %}{{ emp.primary_position.short_label() }}{% else %}ポジション未設定{% endif %} ·
             {% if emp.primary_timeslot %}{{ emp.primary_timeslot.short_label() }}専任{% else %}どちらでも{% endif %}
           </div>
         </div>
