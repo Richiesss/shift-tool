@@ -162,22 +162,37 @@
   }
 
   // ── 完了・エラー処理 ───────────────────────────────────────────────────
-  function finish(ok, msg) {
+  // ok=true のとき warnings は文字列配列、ok=false のとき errMsg はエラー文字列
+  function finish(ok, warnOrErr) {
     cancelAnimationFrame(rafId);
     setBar(100);
     bar.classList.remove('progress-bar-animated', 'progress-bar-striped',
                           'bg-primary', 'bg-warning');
     bar.style.transition = 'width 0.5s ease-out';
     if (ok) {
-      bar.classList.add('bg-success');
+      const warnings = Array.isArray(warnOrErr) ? warnOrErr : [];
+      bar.classList.add(warnings.length > 0 ? 'bg-warning' : 'bg-success');
       phaseLabel.innerHTML = '<i class="bi bi-check-circle me-1"></i>生成完了';
       phaseLabel.classList.remove('text-primary', 'text-warning');
-      phaseLabel.classList.add('text-success');
+      phaseLabel.classList.add(warnings.length > 0 ? 'text-warning' : 'text-success');
       elapsedLabel.textContent = '完了';
-      statusMsg.innerHTML =
-        '<span class="text-success fw-semibold">シフト表に移動します…</span>';
-      setTimeout(() => { window.location.href = scheduleUrl; }, 800);
+      if (warnings.length > 0) {
+        const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const warnHtml = warnings.map(w =>
+          '<div class="alert alert-warning py-1 px-2 small mb-1 text-start">' +
+          '<i class="bi bi-exclamation-triangle me-1"></i>' + esc(w) + '</div>'
+        ).join('');
+        statusMsg.innerHTML =
+          '<div class="mb-2">' + warnHtml + '</div>' +
+          '<span class="text-warning fw-semibold">シフト表に移動します…</span>';
+        setTimeout(() => { window.location.href = scheduleUrl; }, 5000);
+      } else {
+        statusMsg.innerHTML =
+          '<span class="text-success fw-semibold">シフト表に移動します…</span>';
+        setTimeout(() => { window.location.href = scheduleUrl; }, 800);
+      }
     } else {
+      const msg = typeof warnOrErr === 'string' ? warnOrErr : '';
       bar.classList.add('bg-danger');
       phaseLabel.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>生成失敗';
       phaseLabel.classList.remove('text-primary', 'text-warning');
@@ -210,7 +225,9 @@
       .then(r => r.json())
       .then(data => {
         if (data.status === 'done') {
-          finish(true);
+          const rawMsg = data.message || '';
+          const warnings = rawMsg.split('|').slice(1).filter(w => w.trim());
+          finish(true, warnings);
         } else if (data.status === 'failed') {
           finish(false, data.message);
         } else {

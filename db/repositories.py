@@ -851,6 +851,8 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
     # hourly_wage 列は昇給額（base_wage に上乗せする個人差分）
     wage_map = {e.id: e.hourly_wage for e in all_emps if e.id in pt_ids}
 
+    from datetime import date as _date_cls
+
     result: dict = {}
     for a in asgn_rows:
         eid  = a["employee_id"]
@@ -875,10 +877,15 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
             cost = early_hrs * (base_rate + early_allow) + normal_hrs * base_rate
 
         if eid not in result:
-            result[eid] = {"shifts": 0, "hours": 0.0, "cost": 0.0, "by_period": {}}
+            result[eid] = {"shifts": 0, "hours": 0.0, "cost": 0.0, "by_period": {}, "weekly_hours": {}}
         result[eid]["shifts"] += 1
         result[eid]["hours"]  += hrs
         result[eid]["cost"]   += cost
+
+        # 週次集計（36協定チェック用）
+        iso = _date_cls.fromisoformat(a["date"]).isocalendar()
+        wk  = f"{iso[0]}W{iso[1]:02d}"
+        result[eid]["weekly_hours"][wk] = result[eid]["weekly_hours"].get(wk, 0.0) + hrs
 
         bp = result[eid]["by_period"]
         if pid not in bp:

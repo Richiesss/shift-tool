@@ -151,6 +151,39 @@
     </div>
   </div>
 
+  <!-- 36協定チェック -->
+  <div class="card mb-3 {% if overtime_alerts %}border-warning{% endif %}">
+    <div class="card-body">
+      <div class="small fw-semibold mb-2 {% if overtime_alerts %}text-warning{% else %}text-success{% endif %}">
+        <i class="bi bi-{% if overtime_alerts %}exclamation-triangle-fill{% else %}check-circle-fill{% endif %} me-1"></i>
+        法定労働時間チェック（週{{ weekly_limit|int }}時間）
+      </div>
+      {% if overtime_alerts %}
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-dark">
+            <tr><th>名前</th><th>週</th><th class="text-end">推計時間</th></tr>
+          </thead>
+          <tbody>
+            {% for a in overtime_alerts %}
+            <tr>
+              <td class="fw-semibold">{{ a.name }}</td>
+              <td class="text-muted small">{{ a.week_label }}</td>
+              <td class="text-end text-danger fw-bold">{{ "%.1f"|format(a.hours) }}h</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted small mb-0 mt-2">
+        ※ 週40時間を超えた場合、36協定の締結・届出が必要です。推計値のため実際の勤怠と照合してください。
+      </p>
+      {% else %}
+      <p class="text-muted small mb-0">選択期間内に週40時間超えはありません。</p>
+      {% endif %}
+    </div>
+  </div>
+
   {% if any_wage %}
   <!-- 人件費グラフ -->
   <div class="card mb-3">

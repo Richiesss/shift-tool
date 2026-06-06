@@ -303,6 +303,24 @@ def stats_multi():
 
     any_wage = any(e.hourly_wage > 0 for e in employees)
 
+    # 36協定チェック（週40時間超え）
+    WEEKLY_LIMIT = 40.0
+    emp_map_local = {e.id: e for e in employees}
+    overtime_alerts = []
+    for eid, d in stats_data.items():
+        emp = emp_map_local.get(eid)
+        if not emp:
+            continue
+        for wk, hrs in d.get("weekly_hours", {}).items():
+            if hrs > WEEKLY_LIMIT:
+                year_s, w_s = wk.split("W")
+                overtime_alerts.append({
+                    "name":       emp.name,
+                    "week_label": f"{year_s}年第{int(w_s)}週",
+                    "hours":      hrs,
+                })
+    overtime_alerts.sort(key=lambda x: -x["hours"])
+
     return render_template(
         "schedule/stats_multi.html",
         all_periods=all_periods,
@@ -311,6 +329,8 @@ def stats_multi():
         employees=employees,
         stats_data=stats_data,
         any_wage=any_wage,
+        overtime_alerts=overtime_alerts,
+        weekly_limit=WEEKLY_LIMIT,
     )
 
 
