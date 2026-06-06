@@ -89,7 +89,7 @@
   const scoreLabel  = document.getElementById('score-label');
   const scoreHint   = document.getElementById('score-hint');
 
-  const logUrl = "{{ url_for('generate.view_log') }}";
+  const logUrl = "{{ url_for('generate.log_stream') }}";
 
   // ── 状態 ──────────────────────────────────────────────────────────────
   const pageStart = Date.now();       // ページ読み込み基点
@@ -100,7 +100,6 @@
   let prevObj = null;
   let rafId = null;
   let logVisible = true;
-  let logTimer = null;
 
   // ── バー描画 ──────────────────────────────────────────────────────────
   function setBar(pct) {
@@ -190,7 +189,6 @@
   // ok=true のとき warnings は文字列配列、ok=false のとき errMsg はエラー文字列
   function finish(ok, warnOrErr) {
     stopLogPolling();
-    fetchLog();  // 完了時に最終ログを取得
     cancelAnimationFrame(rafId);
     setBar(100);
     bar.classList.remove('progress-bar-animated', 'progress-bar-striped',
@@ -230,26 +228,28 @@
     }
   }
 
-  // ── ログパネル ────────────────────────────────────────────────────────
-  function fetchLog() {
-    fetch(logUrl)
-      .then(r => r.json())
-      .then(data => {
-        const pre = document.getElementById('log-pre');
-        if (!pre) return;
-        pre.textContent = data.log || '(ログなし)';
-        pre.scrollTop = pre.scrollHeight;
-      })
-      .catch(() => {});
-  }
+  // ── ログパネル（SSEストリーミング） ───────────────────────────────────
+  let evtSource = null;
 
-  function startLogPolling() {
-    fetchLog();
-    logTimer = setInterval(fetchLog, 3000);
+  function startLogStream() {
+    const pre = document.getElementById('log-pre');
+    if (!pre) return;
+    pre.textContent = '';
+
+    evtSource = new EventSource(logUrl);
+    evtSource.onmessage = function(e) {
+      const line = document.createTextNode(e.data + '\n');
+      pre.appendChild(line);
+      pre.scrollTop = pre.scrollHeight;
+    };
+    evtSource.onerror = function() {
+      // SSE切断時は静かに閉じる
+      if (evtSource) { evtSource.close(); evtSource = null; }
+    };
   }
 
   function stopLogPolling() {
-    if (logTimer) { clearInterval(logTimer); logTimer = null; }
+    if (evtSource) { evtSource.close(); evtSource = null; }
   }
 
   function toggleLog() {
@@ -294,7 +294,7 @@
       .catch(() => setTimeout(poll, 3000));
   }
 
-  startLogPolling();
+  startLogStream();
   setTimeout(poll, 1500);
 })();
 </script>
