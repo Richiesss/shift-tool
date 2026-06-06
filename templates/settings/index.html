@@ -1,5 +1,21 @@
 {% extends "base.html" %}
 {% block title %}設定 - SDU-Shift{% endblock %}
+{% block head %}
+<style>
+  .help-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #e0f2fe; color: #0369a1;
+    font-size: .68rem; font-weight: 700;
+    border: 1px solid #7dd3fc; cursor: pointer;
+    vertical-align: middle; margin-left: 5px;
+    flex-shrink: 0; line-height: 1;
+  }
+  .help-btn:hover { background: #bae6fd; }
+  .popover { max-width: 280px; font-size: .82rem; }
+  .popover-header { font-size: .85rem; font-weight: 600; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-gear-fill me-2"></i>設定</h1>
@@ -13,7 +29,11 @@
   <!-- シフト人員制約 -->
   <div class="card mb-3">
     <div class="card-body">
-      <h6 class="card-title text-muted mb-3">シフト人員制約</h6>
+      <h6 class="card-title text-muted mb-3">シフト人員制約
+        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+              data-bs-title="シフト人員制約"
+              data-bs-content="最少：その時間帯・ポジションに必ず配置する最低人数。最多：それ以上配置しない上限。リーダー最少：「リーダー」習熟度のスタッフを最低何名配置するかの制約。">?</span>
+      </h6>
       <div class="table-responsive">
         <table class="table table-sm table-bordered mb-0">
           <thead class="table-light">
@@ -39,7 +59,11 @@
   <!-- 朝食バンド制約 -->
   <div class="card mb-3">
     <div class="card-body">
-      <h6 class="card-title text-muted mb-3">朝食バンド制約（開店準備 / 片付け）</h6>
+      <h6 class="card-title text-muted mb-3">朝食バンド制約（開店準備 / 片付け）
+        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+              data-bs-title="朝食バンド制約"
+              data-bs-content="開店準備（5:45〜）・片付け（〜11:30）の時間帯に参加するスタッフ数の制約です。スタッフ管理で「開店準備対応可」「片付け対応可」にチェックが入ったスタッフのみが対象になります。">?</span>
+      </h6>
       <div class="table-responsive">
         <table class="table table-sm table-bordered mb-0">
           <thead class="table-light">
@@ -103,7 +127,11 @@
   <!-- 予約客数による増員設定 -->
   <div class="card mb-3">
     <div class="card-body">
-      <h6 class="card-title text-muted mb-3">予約客数による増員設定</h6>
+      <h6 class="card-title text-muted mb-3">予約客数による増員設定
+        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+              data-bs-title="予約客数による増員"
+              data-bs-content="閾値を超えた日は自動生成・シフト表の必要人数が「最少＋増員数」に増えます。例：閾値100名・増員1名の場合、予約100名以上の日は最少人数が1名加算されます。">?</span>
+      </h6>
       {% for key, label in [
         ('reserv_threshold_breakfast', '朝食：閾値（人）'),
         ('reserv_extra_breakfast',     '朝食：増員数（人）'),
@@ -191,4 +219,24 @@
   </div>
 </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+    const pop = new bootstrap.Popover(el, { html: false, sanitize: true });
+    el.addEventListener('shown.bs.popover', () => {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(other => {
+        if (other !== el) bootstrap.Popover.getInstance(other)?.hide();
+      });
+    });
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-bs-toggle="popover"]') &&
+        !e.target.closest('.popover')) {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+        bootstrap.Popover.getInstance(el)?.hide();
+      });
+    }
+  });
+</script>
 {% endblock %}

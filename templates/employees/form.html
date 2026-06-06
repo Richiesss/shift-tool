@@ -3,6 +3,20 @@
 
 {% block head %}
 <style>
+  .help-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #e0f2fe; color: #0369a1;
+    font-size: .68rem; font-weight: 700;
+    border: 1px solid #7dd3fc; cursor: pointer;
+    vertical-align: middle; margin-left: 5px;
+    flex-shrink: 0; line-height: 1;
+  }
+  .help-btn:hover { background: #bae6fd; }
+  .popover { max-width: 280px; font-size: .82rem; }
+  .popover-header { font-size: .85rem; font-weight: 600; }
+</style>
+<style>
   .pos-btn {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: .7rem .5rem; border: 1.5px solid #e2e8f0;
@@ -139,7 +153,11 @@
       <!-- 習熟度（ポジションに応じて表示切替） -->
       <div class="row g-3" id="skill-row">
         <div class="col-12 col-md-6" id="hall-skill-block">
-          <label class="form-label fw-semibold">ホール習熟度</label>
+          <label class="form-label fw-semibold">ホール習熟度
+            <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                  data-bs-title="習熟度"
+                  data-bs-content="「リーダー」に設定したスタッフが、設定画面の「リーダー最少」制約の対象になります。ベテラン以下は人員数のカウントのみに使用されます。">?</span>
+          </label>
           <select name="hall_skill" class="form-select">
             {% for sl in skill_levels %}
             <option value="{{ sl.value }}" {{ 'selected' if emp and emp.hall_skill == sl else '' }}>
@@ -193,12 +211,20 @@
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_breakfast" id="aab"
             {{ 'checked' if emp and emp.always_available_breakfast else '' }}>
-          <label class="form-check-label" for="aab">朝食：希望提出不要（毎日出勤可）</label>
+          <label class="form-check-label" for="aab">朝食：希望提出不要（毎日出勤可）
+            <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                  data-bs-title="希望提出不要"
+                  data-bs-content="希望シフトを提出しなくても、毎朝食に出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
+          </label>
         </div>
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_dinner" id="aad"
             {{ 'checked' if emp and emp.always_available_dinner else '' }}>
-          <label class="form-check-label" for="aad">ディナー：希望提出不要（毎日出勤可）</label>
+          <label class="form-check-label" for="aad">ディナー：希望提出不要（毎日出勤可）
+            <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+                  data-bs-title="希望提出不要"
+                  data-bs-content="希望シフトを提出しなくても、毎ディナーに出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
+          </label>
         </div>
       </div>
     </div>
@@ -207,7 +233,11 @@
   <!-- 固定シフトパターン -->
   <div class="card mb-3">
     <div class="card-body">
-      <h6 class="card-title text-muted mb-3">固定シフトパターン（アルバイト）</h6>
+      <h6 class="card-title text-muted mb-3">固定シフトパターン（アルバイト）
+        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
+              data-bs-title="固定シフトパターン"
+              data-bs-content="毎週決まった曜日に出勤するスタッフに設定します。チェックした曜日は希望シフト提出と同様に扱われ、自動生成の対象になります。希望シフトで別の入力がある場合はそちらが優先されます。">?</span>
+      </h6>
       <div class="table-responsive">
         <table class="table table-sm table-bordered text-center mb-0">
           <thead class="table-light">
@@ -271,6 +301,24 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+    new bootstrap.Popover(el, { html: false, sanitize: true });
+    el.addEventListener('shown.bs.popover', () => {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(other => {
+        if (other !== el) bootstrap.Popover.getInstance(other)?.hide();
+      });
+    });
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[data-bs-toggle="popover"]') &&
+        !e.target.closest('.popover')) {
+      document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+        bootstrap.Popover.getInstance(el)?.hide();
+      });
+    }
+  });
+</script>
 <script>
 function onPositionChange() {
   const checked = document.querySelector('input[name="primary_position"]:checked');
