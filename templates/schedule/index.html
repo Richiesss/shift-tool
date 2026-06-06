@@ -211,42 +211,43 @@
   </div>
   {% else %}
 
-  <!-- 期間セレクター -->
-  <div class="d-flex gap-2 mb-3 align-items-center flex-nowrap overflow-x-auto pb-2" style="-webkit-overflow-scrolling:touch">
-    <select class="form-select form-select-sm flex-shrink-0" style="max-width:220px; width:auto;"
-      onchange="location.href='/schedule/'+this.value">
-      {% for p in periods %}
-      <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
-        {{ p.start_date }} 〜 {{ p.end_date }}
-      </option>
-      {% endfor %}
-    </select>
-
-    <!-- 朝食/ディナー タブ -->
-    <div class="btn-group btn-group-sm flex-shrink-0">
-      <a href="?slot=breakfast&pos={{ pos }}" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
-      <a href="?slot=dinner&pos={{ pos }}"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
+  <!-- コントロール：2行レイアウト（スマホ対応） -->
+  <div class="d-flex flex-column gap-2 mb-3">
+    <!-- 1行目：期間セレクタ ＋ 確定ボタン -->
+    <div class="d-flex gap-2 align-items-center">
+      <select class="form-select form-select-sm" style="max-width:240px;"
+        onchange="location.href='/schedule/'+this.value">
+        {% for p in periods %}
+        <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
+          {{ p.start_date }} 〜 {{ p.end_date }}
+        </option>
+        {% endfor %}
+      </select>
+      {% if period.status == 'draft' %}
+      <form method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" class="flex-shrink-0">
+        <button class="btn btn-success btn-sm">
+          <i class="bi bi-check-lg"></i> 確定
+        </button>
+      </form>
+      {% else %}
+      <span class="badge bg-success flex-shrink-0">確定済</span>
+      {% endif %}
     </div>
-
-    <!-- ホール/キッチン タブ -->
-    <div class="btn-group btn-group-sm flex-shrink-0">
-      <a href="?slot={{ slot }}&pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
-        <i class="bi bi-people me-1"></i>ホール
-      </a>
-      <a href="?slot={{ slot }}&pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
-        <i class="bi bi-egg-fried me-1"></i>キッチン
-      </a>
+    <!-- 2行目：朝食/ディナー ＋ ホール/キッチン -->
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <div class="btn-group btn-group-sm">
+        <a href="?slot=breakfast&pos={{ pos }}" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
+        <a href="?slot=dinner&pos={{ pos }}"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
+      </div>
+      <div class="btn-group btn-group-sm">
+        <a href="?slot={{ slot }}&pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
+          <i class="bi bi-people me-1"></i>ホール
+        </a>
+        <a href="?slot={{ slot }}&pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
+          <i class="bi bi-egg-fried me-1"></i>キッチン
+        </a>
+      </div>
     </div>
-
-    {% if period.status == 'draft' %}
-    <form method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" class="flex-shrink-0">
-      <button class="btn btn-success btn-sm">
-        <i class="bi bi-check-lg"></i> 確定
-      </button>
-    </form>
-    {% else %}
-    <span class="badge bg-success flex-shrink-0">確定済</span>
-    {% endif %}
   </div>
 
   {% if not employees %}
