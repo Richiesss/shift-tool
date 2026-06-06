@@ -81,25 +81,92 @@
 
   /* 開発者カード */
   .dev-card {
-    background: #1e293b; color: white; border-radius: 12px;
-    padding: 1.25rem; margin-top: .5rem;
+    background: #1e293b; color: white; border-radius: 16px;
+    overflow: hidden; margin-top: .5rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,.18);
+  }
+  .dev-profile-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+    padding: 1.5rem 1.25rem 1.25rem;
+    position: relative; overflow: hidden;
+  }
+  .dev-profile-header::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 70% 50%, rgba(14,165,233,.15) 0%, transparent 70%);
+    pointer-events: none;
   }
   .dev-avatar {
-    width: 52px; height: 52px; border-radius: 50%;
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem; flex-shrink: 0;
+    font-size: 1.6rem; flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(14,165,233,.35), 0 2px 8px rgba(0,0,0,.3);
   }
-  .dev-contact a {
-    display: flex; align-items: center; gap: .5rem;
-    color: #94a3b8; text-decoration: none; font-size: .85rem;
-    padding: .35rem 0; transition: color .15s;
+  .dev-name {
+    font-size: 1.1rem; font-weight: 800; color: #f1f5f9;
+    letter-spacing: .02em;
   }
-  .dev-contact a:hover { color: #38bdf8; }
+  .dev-role {
+    font-size: .78rem; color: #7dd3fc; margin-top: 2px;
+    font-weight: 500;
+  }
   .version-badge {
-    display: inline-block; background: #334155; color: #94a3b8;
-    border-radius: 20px; padding: 2px 10px; font-size: .72rem;
-    font-family: monospace;
+    display: inline-block; background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.15);
+    color: #94a3b8; border-radius: 20px;
+    padding: 2px 10px; font-size: .7rem; font-family: monospace;
+    margin-top: 6px;
+  }
+  .dev-body { padding: 1.1rem 1.25rem 1.25rem; }
+  .dev-section-label {
+    font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: #475569; margin-bottom: .55rem;
+  }
+  .dev-quote {
+    position: relative; padding: .85rem 1rem .85rem 1.1rem;
+    background: #0f172a; border-radius: 10px;
+    border-left: 3px solid #0ea5e9; margin-bottom: 1.1rem;
+  }
+  .dev-quote::before {
+    content: '\201C';
+    position: absolute; top: -.1rem; left: .6rem;
+    font-size: 2.8rem; line-height: 1; color: #0ea5e9;
+    opacity: .3; font-family: Georgia, serif; pointer-events: none;
+  }
+  .dev-quote p {
+    font-size: .84rem; color: #cbd5e1; line-height: 1.8; margin: 0;
+    padding-left: .8rem;
+  }
+  .dev-contact-btn {
+    display: flex; align-items: center; gap: .65rem;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px; padding: .6rem .85rem;
+    text-decoration: none; color: #e2e8f0; font-size: .84rem;
+    transition: background .15s, border-color .15s, transform .1s;
+    margin-bottom: .5rem;
+  }
+  .dev-contact-btn:last-child { margin-bottom: 0; }
+  .dev-contact-btn:hover {
+    background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.18);
+    color: white; transform: translateX(2px);
+  }
+  .dev-contact-icon {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; flex-shrink: 0;
+  }
+  .dev-contact-sub { font-size: .72rem; color: #64748b; margin-top: 1px; }
+  .dev-stack-tag {
+    border-radius: 8px; padding: 4px 11px;
+    font-size: .74rem; font-weight: 700;
+    border: 1px solid rgba(255,255,255,.08);
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .dev-bug-box {
+    background: rgba(14,165,233,.08); border: 1px solid rgba(14,165,233,.2);
+    border-radius: 10px; padding: .75rem 1rem;
+    font-size: .82rem; color: #7dd3fc; line-height: 1.7;
   }
 </style>
 {% endblock %}
@@ -422,76 +489,86 @@
     </div>
     <div class="dev-card">
 
-      <!-- 開発者プロフィール -->
-      <div class="d-flex align-items-center gap-3 mb-3">
-        <div class="dev-avatar">👨‍💻</div>
-        <div>
-          <div style="font-size:1.05rem;font-weight:700;color:#f1f5f9">島野 凌</div>
-          <div style="font-size:.8rem;color:#94a3b8;margin-top:1px">個人開発 / SDU-Shift</div>
-          <span class="version-badge" style="margin-top:4px;display:inline-block">v1.0 &nbsp;Flask + OR-Tools</span>
+      <!-- プロフィールヘッダー -->
+      <div class="dev-profile-header">
+        <div class="d-flex align-items-center gap-3">
+          <div class="dev-avatar">👨‍💻</div>
+          <div>
+            <div class="dev-name">島野 凌</div>
+            <div class="dev-role">Developer &amp; Designer · SDU-Shift</div>
+            <span class="version-badge">v1.0 &nbsp;·&nbsp; Flask + OR-Tools</span>
+          </div>
         </div>
       </div>
 
-      <!-- 開発の背景 -->
-      <div style="background:#0f172a;border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem">
-        <div style="font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#38bdf8;margin-bottom:.5rem">
-          開発の背景
-        </div>
-        <p style="font-size:.85rem;color:#cbd5e1;line-height:1.75;margin:0">
-          飲食店でのシフト作成は、毎回多くの時間と労力を必要とする作業です。
-          <strong style="color:#f1f5f9">「シフト作成という無駄な時間を極力ゼロにしたい」</strong>という思いからこのアプリを開発しました。
-          スタッフの希望を自動で収集・最適化し、数十秒でシフトを生成することで、
-          本来の業務に集中できる環境を目指しています。
-        </p>
-      </div>
+      <div class="dev-body">
 
-      <!-- 連絡先 -->
-      <div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem">
-        連絡先
-      </div>
-      <div class="dev-contact">
-        <a href="mailto:srinrin502.728@gmail.com">
-          <i class="bi bi-envelope-fill" style="color:#38bdf8;width:18px"></i>
-          <span style="color:#e2e8f0">srinrin502.728@gmail.com</span>
+        <!-- 開発の背景 -->
+        <div class="dev-section-label">開発の背景</div>
+        <div class="dev-quote">
+          <p>
+            飲食店でのシフト作成は、毎回多くの時間と労力を必要とする作業です。<br>
+            <strong style="color:#f1f5f9">「シフト作成という無駄な時間を極力ゼロにしたい」</strong>という思いからこのアプリを開発しました。<br>
+            スタッフの希望を自動で収集・最適化し、数十秒でシフトを生成することで、本来の業務に集中できる環境を目指しています。
+          </p>
+        </div>
+
+        <!-- 連絡先 -->
+        <div class="dev-section-label">連絡先 / コンタクト</div>
+        <a href="mailto:srinrin502.728@gmail.com" class="dev-contact-btn">
+          <div class="dev-contact-icon" style="background:rgba(14,165,233,.15)">
+            <i class="bi bi-envelope-fill" style="color:#38bdf8"></i>
+          </div>
+          <div>
+            <div>srinrin502.728@gmail.com</div>
+            <div class="dev-contact-sub">メールでのお問い合わせ</div>
+          </div>
         </a>
-        <a href="https://github.com/Richiesss/shift-tool" target="_blank" rel="noopener">
-          <i class="bi bi-github" style="color:#94a3b8;width:18px"></i>
-          <span style="color:#e2e8f0">github.com/Richiesss/shift-tool</span>
+        <a href="https://github.com/Richiesss/shift-tool" target="_blank" rel="noopener" class="dev-contact-btn">
+          <div class="dev-contact-icon" style="background:rgba(255,255,255,.08)">
+            <i class="bi bi-github" style="color:#e2e8f0"></i>
+          </div>
+          <div>
+            <div>github.com/Richiesss/shift-tool</div>
+            <div class="dev-contact-sub">ソースコード・Issues</div>
+          </div>
         </a>
-        <div style="display:flex;align-items:center;gap:.5rem;padding:.35rem 0;font-size:.85rem">
-          <i class="bi bi-chat-fill" style="color:#06c755;width:18px"></i>
-          <span style="color:#e2e8f0">LINE（知人の方はこちらからでも）</span>
+        <div class="dev-contact-btn" style="cursor:default">
+          <div class="dev-contact-icon" style="background:rgba(6,199,85,.12)">
+            <i class="bi bi-chat-fill" style="color:#06c755"></i>
+          </div>
+          <div>
+            <div style="color:#e2e8f0">LINE</div>
+            <div class="dev-contact-sub">知人の方はこちらからでも</div>
+          </div>
         </div>
-      </div>
 
-      <hr style="border-color:#334155;margin:.85rem 0">
+        <!-- バグ報告 -->
+        <div class="dev-bug-box mt-3">
+          <i class="bi bi-bug-fill me-1" style="opacity:.7"></i>
+          <strong style="color:#f1f5f9">バグ報告・機能要望</strong>はメール・GitHub Issues・LINE からお気軽にどうぞ。
+        </div>
 
-      <!-- バグ報告 -->
-      <div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem">
-        バグ報告・機能要望
-      </div>
-      <div style="font-size:.83rem;color:#94a3b8;line-height:1.7;margin-bottom:1rem">
-        上記メール、GitHub Issues、または島野個人のLINEにてお気軽にご連絡ください。
-      </div>
+        <hr style="border-color:#334155;margin:1rem 0 .85rem">
 
-      <!-- 技術情報 -->
-      <div style="font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.5rem">
-        技術スタック
-      </div>
-      <div class="d-flex flex-wrap gap-2">
-        {% for tag, color in [
-          ('Flask',                '#38bdf8'),
-          ('PostgreSQL (Neon)',    '#4ade80'),
-          ('OR-Tools CP-SAT',     '#fb923c'),
-          ('Bootstrap 5',         '#a78bfa'),
-          ('HuggingFace Spaces',  '#fbbf24'),
-        ] %}
-        <span style="background:#334155;color:{{ color }};border-radius:6px;padding:3px 10px;font-size:.75rem;font-weight:600">
-          {{ tag }}
-        </span>
-        {% endfor %}
-      </div>
+        <!-- 技術スタック -->
+        <div class="dev-section-label">技術スタック</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for tag, color, icon in [
+            ('Flask',                '#38bdf8', 'bi-server'),
+            ('PostgreSQL · Neon',    '#4ade80', 'bi-database-fill'),
+            ('OR-Tools CP-SAT',      '#fb923c', 'bi-cpu-fill'),
+            ('Bootstrap 5',          '#a78bfa', 'bi-layout-text-window'),
+            ('HuggingFace Spaces',   '#fbbf24', 'bi-cloud-fill'),
+          ] %}
+          <span class="dev-stack-tag" style="background:rgba(255,255,255,.05);color:{{ color }}">
+            <i class="bi {{ icon }}" style="font-size:.75rem;opacity:.8"></i>
+            {{ tag }}
+          </span>
+          {% endfor %}
+        </div>
 
+      </div>
     </div>
   </div>
 
