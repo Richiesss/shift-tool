@@ -413,6 +413,23 @@
   </button>
 </div>
 
+<!-- 未保存離脱ガードモーダル（全ページ共通） -->
+<div class="modal fade" id="unsavedModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:14px">
+      <div class="modal-body p-4 text-center">
+        <i class="bi bi-exclamation-triangle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
+        <div class="fw-semibold mb-1">未保存の変更があります</div>
+        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">保存せずに移動しますか？</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">戻る</button>
+          <button class="btn btn-danger flex-grow-1" id="unsaved-proceed-btn">移動する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Flash Messages -->
 <div class="toast-container">
   {% for cat, msg in get_flashed_messages(with_categories=true) %}
@@ -474,6 +491,50 @@
     img.alt = 'ホーム'; img.className = 'header-brand-logo';
     a.appendChild(img);
     hdr.insertBefore(a, hdr.firstChild);
+  })();
+
+  // ── 未保存離脱ガード（全ページ共通） ────────────────────────────
+  (function() {
+    window._formDirty = false;
+    let _pendingNav = null;
+    let _guardModal = null;
+    function _getModal() {
+      return _guardModal || (_guardModal = new bootstrap.Modal(document.getElementById('unsavedModal')));
+    }
+    // data-dirty-form を持つフォームを自動監視
+    document.querySelectorAll('form[data-dirty-form]').forEach(form => {
+      form.querySelectorAll('input, select, textarea').forEach(el => {
+        el.addEventListener('change', () => { window._formDirty = true; });
+        if (['text','number','time','search'].includes(el.type) || el.tagName === 'TEXTAREA') {
+          el.addEventListener('input', () => { window._formDirty = true; });
+        }
+      });
+      form.addEventListener('submit', () => { window._formDirty = false; });
+    });
+    // 「移動する」ボタン
+    document.getElementById('unsaved-proceed-btn').addEventListener('click', () => {
+      window._formDirty = false;
+      _getModal().hide();
+      if (_pendingNav) location.href = _pendingNav;
+    });
+    // 全リンクのクリックを監視（ページ内アンカー・javascript: は除外）
+    document.addEventListener('click', e => {
+      if (!window._formDirty) return;
+      const a = e.target.closest('a[href]');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      _pendingNav = a.href;
+      _getModal().show();
+    }, true);
+    // ブラウザの戻る・リロード
+    window.addEventListener('beforeunload', e => {
+      if (!window._formDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
   })();
 
   if ('serviceWorker' in navigator) {

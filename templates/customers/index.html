@@ -40,7 +40,7 @@
     {% endfor %}
   </select>
 
-  <form id="cust-form" method="post" action="{{ url_for('customers.save', period_id=period.id) }}">
+  <form id="cust-form" method="post" action="{{ url_for('customers.save', period_id=period.id) }}" data-dirty-form>
     <div class="card">
       <div class="table-responsive">
         <table class="table table-bordered table-sm mb-0">

@@ -164,7 +164,7 @@
   {% set is_done = emp.id in filled_emp_ids or emp.employment_type.value == 'full_time' %}
   <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=loop.index0) }}"
      class="emp-chip{{ ' active' if is_active }}{{ ' done' if is_done }}"
-     data-nav-link>
+>
     {{ emp.name }}{% if is_done and not is_active %} ✓{% endif %}
   </a>
   {% endfor %}
@@ -301,45 +301,16 @@
 </div>
 {% endif %}
 
-{# 未保存確認モーダル #}
-<div class="modal fade" id="unsavedModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:14px">
-      <div class="modal-body p-4 text-center">
-        <i class="bi bi-exclamation-triangle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
-        <div class="fw-semibold mb-1">未保存の変更があります</div>
-        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">保存せずに移動しますか？</div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">戻る</button>
-          <button class="btn btn-danger flex-grow-1" onclick="proceedNav()">移動する</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// ── 状態 ──────────────────────────────────────────────────────────
-let _changed = false;
-let _pendingNav = null;
-
 // ── チップ自動スクロール ───────────────────────────────────────────
 const _activeChip = document.querySelector('.emp-chip.active');
 _activeChip?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
 
-// ── ナビゲーション保護 ────────────────────────────────────────────
-document.querySelectorAll('[data-nav-link]').forEach(a => {
-  a.addEventListener('click', e => {
-    if (!_changed) return;
-    e.preventDefault();
-    _pendingNav = a.href;
-    new bootstrap.Modal(document.getElementById('unsavedModal')).show();
-  });
-});
-function proceedNav() { if (_pendingNav) location.href = _pendingNav; }
-document.getElementById('shift-form')?.addEventListener('submit', () => { _changed = false; });
+// フォーム送信時に離脱ガードをリセット
+document.getElementById('shift-form')?.addEventListener('submit', () => { window._formDirty = false; });
 
 // ── パターンデータ ────────────────────────────────────────────────
 const PAT_LABELS = {
@@ -381,7 +352,7 @@ function applyPat(empId, dateStr, patId) {
     cust.style.display = patId === 'custom' ? 'flex' : 'none';
     if (patId === 'custom') cust.querySelector('input')?.focus();
   }
-  _changed = true;
+  window._formDirty = true;
 }
 
 // タップサイクル
@@ -412,7 +383,7 @@ function cycleOff(btn) {
   hid.value = next.val;
   btn.className = `pat-btn ${next.cls}`;
   btn.innerHTML = next.html;
-  _changed = true;
+  window._formDirty = true;
 }
 
 function bulkFull(targetVal) {
@@ -424,7 +395,7 @@ function bulkFull(targetVal) {
     btn.className = `pat-btn ${s.cls}`;
     btn.innerHTML = s.html;
   });
-  _changed = true;
+  window._formDirty = true;
 }
 
 // ── 手動ピッカー ──────────────────────────────────────────────────
