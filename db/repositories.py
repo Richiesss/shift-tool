@@ -576,7 +576,7 @@ def get_employee_dow_patterns(emp_id: int) -> dict[int, str]:
            FROM shift_requests
            WHERE employee_id=? AND pattern_id IS NOT NULL AND pattern_id != ''
              AND pattern_id != 'custom'
-           GROUP BY dow, pattern_id""",
+           GROUP BY strftime('%w', date), pattern_id""",
         (emp_id,)
     ).fetchall()
     conn.close()
@@ -584,14 +584,24 @@ def get_employee_dow_patterns(emp_id: int) -> dict[int, str]:
     sqlite_to_py = {0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
     dow_counts: dict[int, dict[str, int]] = {}
     for r in rows:
-        py_dow = sqlite_to_py[int(r["dow"])]
+        dow_val = r["dow"]
+        if dow_val is None:
+            continue
+        py_dow = sqlite_to_py.get(int(dow_val))
+        if py_dow is None:
+            continue
+        pid = r["pattern_id"]
+        cnt = int(r["cnt"])
         dow_counts.setdefault(py_dow, {})
-        dow_counts[py_dow][r["pattern_id"]] = dow_counts[py_dow].get(r["pattern_id"], 0) + r["cnt"]
-    return {
-        dow: max(patterns, key=patterns.get)
-        for dow, patterns in dow_counts.items()
-        if max(patterns.values()) >= 2
-    }
+        dow_counts[py_dow][pid] = dow_counts[py_dow].get(pid, 0) + cnt
+    result = {}
+    for dow, patterns in dow_counts.items():
+        if not patterns:
+            continue
+        best_pid = max(patterns, key=patterns.get)
+        if patterns[best_pid] >= 2:
+            result[dow] = best_pid
+    return result
 
 
 def get_schedule_notes(period_id: int) -> dict[str, str]:

@@ -40,6 +40,12 @@ def _to_pg(sql: str) -> str:
     sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY",
                  sql, flags=re.IGNORECASE)
     sql = sql.replace("DEFAULT (datetime('now','localtime'))", "DEFAULT CURRENT_TIMESTAMP")
+    # SQLite の日付関数 → PostgreSQL 相当
+    sql = re.sub(
+        r"strftime\('%w',\s*(\w+)\)",
+        r"EXTRACT(DOW FROM \1::date)::int",
+        sql,
+    )
     return sql
 
 

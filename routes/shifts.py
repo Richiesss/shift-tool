@@ -93,11 +93,14 @@ def input(period_id):
     top_patterns = []
     dow_suggestions = {}
     if current_emp and current_emp.employment_type != EmploymentType.FULL_TIME:
-        top_patterns = [
-            (pid, cnt) for pid, cnt in repo.get_employee_pattern_history(current_emp.id)
-            if pid in PATTERN_MAP
-        ]
-        dow_suggestions = repo.get_employee_dow_patterns(current_emp.id)
+        try:
+            top_patterns = [
+                (pid, cnt) for pid, cnt in repo.get_employee_pattern_history(current_emp.id)
+                if pid in PATTERN_MAP
+            ]
+            dow_suggestions = repo.get_employee_dow_patterns(current_emp.id)
+        except Exception:
+            pass
 
     return render_template(
         "shifts/input.html",
