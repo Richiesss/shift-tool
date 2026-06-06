@@ -341,18 +341,26 @@ function proceedNav() { if (_pendingNav) location.href = _pendingNav; }
 document.getElementById('shift-form')?.addEventListener('submit', () => { _changed = false; });
 
 // ── パターンデータ ────────────────────────────────────────────────
-const PAT_LABELS = { '': '（休み）', {% for p in patterns %}{{ p.id|tojson }}: {{ p.label|tojson }},{% endfor %} };
-const PAT_CATS_JS = { {% for pid, cat in PAT_CATS.items() %}{{ pid|tojson }}: {{ cat|tojson }},{% endfor %} };
+const PAT_LABELS = {
+  '': '（休み）', 'paid_leave': '有給', 'custom': 'カスタム',
+  {% for p in patterns %}{{ p.id|tojson }}: {{ p.label|tojson }},{% endfor %}
+};
+const PAT_CATS_JS = {
+  'paid_leave': 'leave',
+  {% for pid, cat in PAT_CATS.items() %}{{ pid|tojson }}: {{ cat|tojson }},{% endfor %}
+};
 
-// タップサイクル順：[休み, 過去上位3件, デフォルト補完]
+// タップサイクル順：[休み, 過去履歴サジェスト(最大3), 有給, カスタム手動入力]
 const PAT_CYCLE = (() => {
   const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
   const defs = ['d_std1', 'b_std', 'mid'];
-  const seen = new Set(['']);
+  const seen = new Set(['', 'paid_leave', 'custom']); // 末尾固定枠を予約
   const cycle = [''];
   for (const p of [...tops, ...defs]) {
     if (!seen.has(p) && PAT_LABELS[p]) { seen.add(p); cycle.push(p); if (cycle.length >= 4) break; }
   }
+  cycle.push('paid_leave'); // 有給（固定）
+  cycle.push('custom');     // カスタム手動入力（固定）
   return cycle;
 })();
 
