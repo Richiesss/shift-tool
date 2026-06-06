@@ -287,7 +287,10 @@
         padding: .5rem 1rem 1rem;
         border-bottom: 1px solid rgba(255,255,255,.06);
         margin-bottom: .5rem;
+        text-decoration: none;
+        transition: opacity var(--transition);
       }
+      .sidebar .brand:hover { opacity: .8; }
       .sidebar .brand img {
         width: 34px; height: 34px; border-radius: 8px; object-fit: contain;
         flex-shrink: 0;
@@ -321,18 +324,19 @@
 
 <!-- Desktop Sidebar -->
 <nav class="sidebar">
-  <div class="brand">
+  <a href="{{ url_for('dashboard.index') }}" class="brand" style="text-decoration:none">
     <img src="/static/icons/apple-touch-icon.png" alt="SDU-Shift">
     <span>SDU-Shift</span>
-  </div>
+  </a>
   {% set nav_items = [
-    ('employees.index',      'bi-people-fill',    'スタッフ管理'),
-    ('shifts.index',         'bi-pencil-square',  '希望シフト'),
-    ('generate.index',       'bi-lightning-fill', '自動生成'),
-    ('schedule.list_periods','bi-calendar3',      'シフト表'),
-    ('customers.list_periods','bi-cup-hot-fill',  '客数管理'),
-    ('settings.index',       'bi-gear-fill',      '設定'),
-    ('help.index',           'bi-question-circle','ヘルプ'),
+    ('dashboard.index',       'bi-house-fill',     'ホーム'),
+    ('shifts.index',          'bi-pencil-square',  '希望シフト'),
+    ('generate.index',        'bi-lightning-fill', '自動生成'),
+    ('schedule.list_periods', 'bi-calendar3',      'シフト表'),
+    ('customers.list_periods','bi-cup-hot-fill',   '客数管理'),
+    ('employees.index',       'bi-people-fill',    'スタッフ管理'),
+    ('settings.index',        'bi-gear-fill',      '設定'),
+    ('help.index',            'bi-question-circle','ヘルプ'),
   ] %}
   {% for endpoint, icon, label in nav_items %}
   <a href="{{ url_for(endpoint) }}"
@@ -350,12 +354,13 @@
 <!-- Mobile Bottom Nav -->
 {% set _in_drawer = request.endpoint and (
     request.endpoint.startswith('customers') or
+    request.endpoint.startswith('employees') or
     request.endpoint.startswith('settings') or
     request.endpoint.startswith('help')
 ) %}
 <div class="bottom-nav">
   {% for endpoint, icon, label in [
-    ('employees.index',       'bi-people-fill',    'スタッフ'),
+    ('dashboard.index',       'bi-house-fill',     'ホーム'),
     ('shifts.index',          'bi-pencil-square',  'シフト入力'),
     ('generate.index',        'bi-lightning-fill', '自動生成'),
     ('schedule.list_periods', 'bi-calendar3',      'シフト表'),
@@ -378,9 +383,10 @@
   <div class="drawer-handle"></div>
   <div class="drawer-title">メニュー</div>
   {% for endpoint, icon, label, desc in [
-    ('customers.list_periods', 'bi-cup-hot-fill',    '客数管理',  '予約客数の入力'),
-    ('settings.index',         'bi-gear-fill',       '設定',      'シフト制約・アプリ設定'),
-    ('help.index',             'bi-question-circle', 'ヘルプ',    '使い方・開発者情報'),
+    ('customers.list_periods', 'bi-cup-hot-fill',    '客数管理',    '予約客数の入力'),
+    ('employees.index',        'bi-people-fill',     'スタッフ管理','スタッフの登録・編集'),
+    ('settings.index',         'bi-gear-fill',       '設定',        'シフト制約・アプリ設定'),
+    ('help.index',             'bi-question-circle', 'ヘルプ',      '使い方・開発者情報'),
   ] %}
   <a href="{{ url_for(endpoint) }}"
      class="{{ 'active' if request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) else '' }}"
@@ -461,10 +467,13 @@
     if (window.innerWidth >= 768) return;
     const hdr = document.querySelector('.page-header');
     if (!hdr) return;
+    const a = document.createElement('a');
+    a.href = '/'; a.style.display = 'flex'; a.style.flexShrink = '0';
     const img = document.createElement('img');
     img.src = '/static/icons/apple-touch-icon.png';
-    img.alt = ''; img.className = 'header-brand-logo';
-    hdr.insertBefore(img, hdr.firstChild);
+    img.alt = 'ホーム'; img.className = 'header-brand-logo';
+    a.appendChild(img);
+    hdr.insertBefore(a, hdr.firstChild);
   })();
 
   if ('serviceWorker' in navigator) {

@@ -51,7 +51,9 @@ def create_app():
         pass
 
     from routes.auth_routes import bp as auth_bp
+    from routes.dashboard import bp as dashboard_bp
     app.register_blueprint(auth_bp)
+    app.register_blueprint(dashboard_bp)
 
     @app.context_processor
     def inject_auth():
@@ -94,10 +96,7 @@ def create_app():
             conn._flask_managed = False
             conn.close()
 
-    @app.get("/")
-    def index():
-        from flask import redirect, url_for
-        return redirect(url_for("employees.index"))
+    # / は dashboard blueprint が処理するため不要
 
     return app
 

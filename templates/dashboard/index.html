@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}ホーム - SDU-Shift{% endblock %}
+{% block head %}
+<style>
+  .dash-greeting {
+    font-size: 1.05rem; font-weight: 700; color: #e2e8f0;
+  }
+  .dash-date {
+    font-size: .75rem; color: #64748b; margin-top: 2px;
+  }
+  .dash-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(226,232,240,.7);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.1rem;
+  }
+  .dash-card-dark {
+    background: #1e293b;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255,255,255,.06);
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.1rem;
+    color: #e2e8f0;
+  }
+  .stat-row {
+    display: flex; gap: .75rem; flex-wrap: wrap;
+  }
+  .stat-box {
+    flex: 1 1 0; min-width: 80px;
+    background: rgba(255,255,255,.06);
+    border-radius: var(--radius-md);
+    padding: .65rem .8rem;
+    text-align: center;
+  }
+  .stat-box .val {
+    font-size: 1.6rem; font-weight: 800; line-height: 1; color: var(--accent);
+  }
+  .stat-box .lbl {
+    font-size: .7rem; color: #64748b; margin-top: 3px;
+  }
+  .quick-btn {
+    display: flex; align-items: center; gap: .75rem;
+    background: white; border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: .85rem 1rem;
+    text-decoration: none; color: var(--text);
+    transition: all var(--transition);
+    box-shadow: var(--shadow-xs);
+  }
+  .quick-btn:hover {
+    border-color: var(--primary); color: var(--primary);
+    box-shadow: var(--shadow-sm); transform: translateY(-1px);
+  }
+  .quick-btn i {
+    font-size: 1.4rem; width: 30px; text-align: center; flex-shrink: 0;
+  }
+  .quick-btn .q-title { font-weight: 600; font-size: .9rem; line-height: 1.3; }
+  .quick-btn .q-sub   { font-size: .73rem; color: var(--text-muted); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    border-radius: 20px; padding: 2px 10px;
+    font-size: .72rem; font-weight: 700;
+  }
+  .pill-draft     { background: #fef3c7; color: #92400e; }
+  .pill-confirmed { background: #dcfce7; color: #166534; }
+  .pill-past      { background: #f1f5f9; color: #64748b; }
+  .shortage-alert {
+    background: rgba(239,68,68,.1);
+    border: 1px solid rgba(239,68,68,.25);
+    border-radius: var(--radius-md);
+    padding: .55rem .85rem;
+    font-size: .82rem; color: #fca5a5;
+    display: flex; align-items: center; gap: .5rem;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="fs-6 fw-semibold"><i class="bi bi-house-fill me-1"></i>ホーム</div>
+  </div>
+</div>
+
+<div class="content" style="max-width:480px;margin:0 auto">
+
+  <!-- 今日 -->
+  <div class="dash-card-dark mb-3">
+    <div class="dash-greeting">SKY DINING UOMAN</div>
+    <div class="dash-date">
+      {{ today.strftime('%Y年%-m月%-d日') }}（{{ ['月','火','水','木','金','土','日'][today.weekday()] }}）
+    </div>
+
+    <div class="stat-row mt-3">
+      <div class="stat-box">
+        <div class="val">{{ staff_count }}</div>
+        <div class="lbl">スタッフ数</div>
+      </div>
+      {% if period_info and period_info.in_range %}
+      <div class="stat-box">
+        <div class="val">{{ period_info.today_breakfast }}</div>
+        <div class="lbl">今日の朝食</div>
+      </div>
+      <div class="stat-box">
+        <div class="val">{{ period_info.today_dinner }}</div>
+        <div class="lbl">今日のディナー</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 最新期間 -->
+  {% if period_info %}
+  {% set p = period_info.period %}
+  {% set days = period_info.days_left %}
+  <div class="dash-card mb-3">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="fw-semibold" style="font-size:.88rem">現在の期間</span>
+      {% if not period_info.in_range and days < 0 %}
+        <span class="status-pill pill-past">終了</span>
+      {% elif p.status == 'confirmed' %}
+        <span class="status-pill pill-confirmed"><i class="bi bi-check-circle-fill"></i>確定済</span>
+      {% else %}
+        <span class="status-pill pill-draft">下書き</span>
+      {% endif %}
+      {% if period_info.in_range and days >= 0 %}
+      <span class="ms-auto" style="font-size:.75rem;color:var(--text-muted)">残り {{ days }} 日</span>
+      {% endif %}
+    </div>
+    <div style="font-size:.82rem;color:var(--text-muted)">
+      {{ p.start_date }} 〜 {{ p.end_date }}
+    </div>
+
+    {% if period_info.shortage_count > 0 %}
+    <div class="shortage-alert mt-2">
+      <i class="bi bi-exclamation-triangle-fill" style="color:#ef4444;flex-shrink:0"></i>
+      人員不足の日が <strong>{{ period_info.shortage_count }} 日</strong> あります
+    </div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mt-3" style="font-size:.8rem">
+      <span style="color:var(--text-muted)">希望提出：</span>
+      <strong>{{ period_info.request_count }} / {{ staff_count }} 名</strong>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- クイックアクション -->
+  <div class="fw-semibold mb-2" style="font-size:.78rem;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase">クイックアクション</div>
+  <div class="d-flex flex-column gap-2">
+
+    <a href="{{ url_for('schedule.list_periods') }}" class="quick-btn">
+      <i class="bi bi-calendar3" style="color:#0ea5e9"></i>
+      <div>
+        <div class="q-title">シフト表</div>
+        <div class="q-sub">現在のシフトを確認・編集する</div>
+      </div>
+      <i class="bi bi-chevron-right ms-auto" style="font-size:.85rem;color:#cbd5e1"></i>
+    </a>
+
+    <a href="{{ url_for('shifts.index') }}" class="quick-btn">
+      <i class="bi bi-pencil-square" style="color:#8b5cf6"></i>
+      <div>
+        <div class="q-title">希望シフト入力</div>
+        <div class="q-sub">スタッフの希望を登録・確認する</div>
+      </div>
+      <i class="bi bi-chevron-right ms-auto" style="font-size:.85rem;color:#cbd5e1"></i>
+    </a>
+
+    <a href="{{ url_for('generate.index') }}" class="quick-btn">
+      <i class="bi bi-lightning-fill" style="color:#f59e0b"></i>
+      <div>
+        <div class="q-title">自動生成</div>
+        <div class="q-sub">シフトを自動で作成する</div>
+      </div>
+      <i class="bi bi-chevron-right ms-auto" style="font-size:.85rem;color:#cbd5e1"></i>
+    </a>
+
+    <a href="{{ url_for('customers.list_periods') }}" class="quick-btn">
+      <i class="bi bi-cup-hot-fill" style="color:#10b981"></i>
+      <div>
+        <div class="q-title">客数管理</div>
+        <div class="q-sub">予約客数を入力する</div>
+      </div>
+      <i class="bi bi-chevron-right ms-auto" style="font-size:.85rem;color:#cbd5e1"></i>
+    </a>
+
+    <a href="{{ url_for('employees.index') }}" class="quick-btn">
+      <i class="bi bi-people-fill" style="color:#64748b"></i>
+      <div>
+        <div class="q-title">スタッフ管理</div>
+        <div class="q-sub">スタッフの登録・編集</div>
+      </div>
+      <i class="bi bi-chevron-right ms-auto" style="font-size:.85rem;color:#cbd5e1"></i>
+    </a>
+
+  </div>
+</div>
+{% endblock %}
