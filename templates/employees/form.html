@@ -52,17 +52,6 @@
         </select>
       </div>
 
-      <div class="mb-3">
-        <label class="form-label fw-semibold">時給 <span class="text-muted fw-normal small">（人件費集計に使用）</span></label>
-        <div class="input-group" style="max-width:200px">
-          <input type="number" name="hourly_wage" class="form-control"
-                 min="0" max="9999" step="1"
-                 value="{{ emp.hourly_wage if emp else 0 }}"
-                 placeholder="0">
-          <span class="input-group-text">円/時</span>
-        </div>
-      </div>
-
       <!-- 所属ポジション -->
       <div class="mb-3">
         <label class="form-label fw-semibold">所属ポジション</label>

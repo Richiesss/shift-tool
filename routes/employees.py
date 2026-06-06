@@ -123,7 +123,6 @@ def _form_to_employee(emp_id):
         id=emp_id,
         name=f["name"].strip(),
         employment_type=EmploymentType(f["employment_type"]),
-        hourly_wage=int(f.get("hourly_wage") or 0),
         hall_skill=SkillLevel(f.get("hall_skill") or "novice"),
         kitchen_skill=SkillLevel(f.get("kitchen_skill") or "novice"),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,

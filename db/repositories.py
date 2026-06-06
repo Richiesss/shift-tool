@@ -88,6 +88,21 @@ def save_employee(emp: Employee) -> Employee:
     return emp
 
 
+def save_employee_wages(wages: dict) -> None:
+    """PT スタッフの時給を一括更新 {employee_id: hourly_wage}"""
+    if not wages:
+        return
+    conn = get_connection()
+    for emp_id, wage in wages.items():
+        conn.execute(
+            "UPDATE employees SET hourly_wage=? WHERE id=?",
+            (max(0, int(wage)), int(emp_id))
+        )
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_all_employees)
+
+
 def delete_employee(employee_id: int):
     conn = get_connection()
     conn.execute("UPDATE employees SET is_active=0 WHERE id=?", (employee_id,))
@@ -798,9 +813,10 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
             else:
                 hour_map[(pid_r, eid_r, date_r, "dinner")] = hrs
 
-    # 従業員マップ（time給）
+    # 従業員マップ（PT のみ。社員は時給計算対象外）
     all_emps = get_all_employees(active_only=False)
-    wage_map = {e.id: e.hourly_wage for e in all_emps}
+    pt_ids   = {e.id for e in all_emps if e.employment_type != EmploymentType.FULL_TIME}
+    wage_map = {e.id: e.hourly_wage for e in all_emps if e.id in pt_ids}
 
     result: dict = {}
     for a in asgn_rows:
@@ -815,7 +831,8 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
         else:
             hrs = _ft_hours(slot, pos)
 
-        wage = wage_map.get(eid, 0)
+        # 社員は時給計算対象外（コストは 0 のまま）
+        wage = wage_map.get(eid, 0) if eid in pt_ids else 0
         cost = hrs * wage
 
         if eid not in result:

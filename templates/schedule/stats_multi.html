@@ -111,9 +111,14 @@
                 {% if hours > 0 %}{{ "%.1f"|format(hours) }}h{% else %}—{% endif %}
               </td>
               {% if any_wage %}
-              <td class="num text-center cost-col">
-                {% if cost > 0 %}¥{{ "{:,.0f}".format(cost) }}{% elif emp.hourly_wage == 0 %}
-                <span class="text-muted small">時給未設定</span>{% else %}—{% endif %}
+              <td class="num text-center">
+                {% if emp.employment_type.value == 'full_time' %}
+                <span class="text-muted small">対象外</span>
+                {% elif cost > 0 %}
+                <span class="cost-col">¥{{ "{:,.0f}".format(cost) }}</span>
+                {% elif emp.hourly_wage == 0 %}
+                <span class="text-muted small">時給未設定</span>
+                {% else %}—{% endif %}
               </td>
               {% endif %}
             </tr>

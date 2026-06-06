@@ -12,11 +12,15 @@ def index():
     constraints = repo.get_shift_constraints()
     settings = repo.get_all_app_settings()
     band_constraints = repo.get_breakfast_band_constraints()
+    from utils.constants import EmploymentType
+    all_employees = repo.get_all_employees(active_only=True)
+    pt_employees = [e for e in all_employees if e.employment_type != EmploymentType.FULL_TIME]
     return render_template(
         "settings/index.html",
         constraints=constraints,
         settings=settings,
         band_constraints=band_constraints,
+        pt_employees=pt_employees,
         TimeSlot=TimeSlot,
         Position=Position,
     )
@@ -58,6 +62,22 @@ def save():
     repo.save_breakfast_band_constraints(new_band)
 
     flash("設定を保存しました", "success")
+    return redirect(url_for("settings.index"))
+
+
+@bp.post("/save-wages")
+def save_wages():
+    """PT スタッフの時給を一括保存"""
+    wages = {}
+    for key, val in request.form.items():
+        if key.startswith("wage_"):
+            try:
+                emp_id = int(key[5:])
+                wages[emp_id] = int(val or 0)
+            except ValueError:
+                pass
+    repo.save_employee_wages(wages)
+    flash("時給を保存しました", "success")
     return redirect(url_for("settings.index"))
 
 
