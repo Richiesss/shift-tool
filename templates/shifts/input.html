@@ -2,436 +2,312 @@
 {% block title %}シフト入力 {{ period.start_date }} - SDU-Shift{% endblock %}
 {% block head %}
 <style>
-  /* ── グリッドモード ─────────────────────────────── */
-  .shift-grid {
-    overflow: auto;
-    max-height: calc(100vh - 200px);
+  /* ── スタッフチップ列 ───────────────────────────────── */
+  .emp-strip {
+    display: flex;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 8px 12px 6px;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
-  .shift-grid table { min-width: max-content; font-size: .82rem; }
-  .shift-grid th, .shift-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; }
-  .shift-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
-  .shift-grid thead th { position: sticky; top: 0; z-index: 2; background: #1e293b; color: white; }
-  .shift-grid thead th.emp-col { z-index: 3; background: #0f172a; }
-  .shift-grid .sat { background: #eff6ff; }
-  .shift-grid .sun { background: #fff1f2; }
-  .shift-grid thead th.sat { color: #1e40af !important; }
-  .shift-grid thead th.sun { color: #991b1b !important; }
+  .emp-strip::-webkit-scrollbar { display: none; }
 
-  /* ── 1人フォーカスモード ─────────────────────────── */
-  .focus-day-col { min-width: 155px; }
-  .focus-day-col.sat { background: #eff6ff; }
-  .focus-day-col.sun { background: #fff1f2; }
-  .focus-day-label { font-size: .78rem; font-weight: 600; }
-  .focus-day-label.sat { color: #1e40af; }
-  .focus-day-label.sun { color: #991b1b; }
-  .pattern-badge { font-size: .72rem; padding: 1px 6px; border-radius: 10px;
-                   background: #e2e8f0; color: #475569; white-space: nowrap; }
-
-  select.pattern-sel { font-size: .78rem; min-width: 140px; padding: 2px 4px; }
-  .custom-time { display: none; gap: 4px; margin-top: 3px; align-items: center; }
-  .custom-time input { width: 80px; font-size: .78rem; padding: 2px 4px; }
-  @media (max-width: 767px) {
-    select.pattern-sel { min-width: 0 !important; width: 100% !important; }
-    .custom-time { justify-content: space-between; }
-    .custom-time input { width: 45% !important; font-size: .72rem; }
+  .emp-chip {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1.5px solid #e2e8f0;
+    font-size: .8rem;
+    cursor: pointer;
+    text-decoration: none;
+    color: #475569;
+    background: #f8fafc;
+    white-space: nowrap;
+    transition: background .12s;
   }
-  /* パターンカテゴリ別の行左ボーダー */
-  tr.pcat-b > th:first-child  { border-left: 4px solid #3b82f6 !important; }
-  tr.pcat-d > th:first-child  { border-left: 4px solid #f97316 !important; }
-  tr.pcat-m > th:first-child  { border-left: 4px solid #a855f7 !important; }
-  tr.pcat-db > th:first-child { border-left: 4px solid #10b981 !important; }
-  .suggest-banner { background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; }
-  .suggest-banner .label { color:#1d4ed8; font-size:.78rem; font-weight:600; }
-
-  /* タップ＋ドラッグ入力ボタン */
-  .pat-cycle-btn {
-    width: 100%; padding: .45rem .55rem; border-radius: 8px;
-    border: 1.5px solid rgba(0,0,0,.1); font-size: .8rem;
-    text-align: left; cursor: pointer; display: block;
-    touch-action: auto; user-select: none;
-    transition: filter .1s; min-height: 40px; line-height: 1.3;
-    flex-grow: 1;
+  .emp-chip.active {
+    background: #1e293b;
+    color: white;
+    border-color: #1e293b;
+    font-weight: 600;
   }
-  .pat-cycle-btn:active { filter: brightness(.88); }
-  .pcb-off  { background: #f8fafc; color: #64748b; }
-  .pcb-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .pcb-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
-  .pcb-m    { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
-  .pcb-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-  .pcb-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
-  /* 塗り絵モード時 */
-  body.paint-mode .pat-cycle-btn { touch-action: none; cursor: crosshair; }
-  body.paint-mode #paint-toggle  { background: #6366f1; color: #fff; border-color: #6366f1; }
-  /* 手動ピッカー展開ボタン */
-  .pat-edit-btn { flex-shrink: 0; padding: .25rem .45rem; }
-  .pat-picker   { margin-top: 3px; font-size: .78rem; }
+  .emp-chip.done {
+    border-color: #86efac;
+    color: #166534;
+    background: #f0fdf4;
+  }
+  .emp-chip.done.active {
+    background: #166534;
+    border-color: #166534;
+    color: white;
+  }
+
+  /* ── 一括ボタン行 ──────────────────────────────────── */
+  .bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+    background: #fafafa;
+  }
+  .bulk-bar .label { font-size: .75rem; color: #94a3b8; align-self: center; flex-shrink: 0; }
+
+  /* ── 日付行 ─────────────────────────────────────────── */
+  .day-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .day-row:last-of-type { border-bottom: none; }
+  .day-row.sat { background: #fafcff; }
+  .day-row.sun { background: #fff9f9; }
+
+  .day-label {
+    width: 58px;
+    flex-shrink: 0;
+    text-align: center;
+    line-height: 1.25;
+  }
+  .day-label .dt { font-size: .82rem; font-weight: 600; color: #334155; }
+  .day-label .dw { font-size: .7rem; color: #94a3b8; }
+  .day-row.sat .day-label .dt,
+  .day-row.sat .day-label .dw { color: #1e40af; }
+  .day-row.sun .day-label .dt,
+  .day-row.sun .day-label .dw { color: #dc2626; }
+
+  /* ── パターンボタン ───────────────────────────────── */
+  .pat-btn {
+    flex: 1;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1.5px solid rgba(0,0,0,.08);
+    font-size: .82rem;
+    cursor: pointer;
+    text-align: left;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: filter .1s;
+    line-height: 1.3;
+    min-height: 42px;
+    background: #f8fafc;
+    color: #64748b;
+  }
+  .pat-btn:active { filter: brightness(.88); }
+
+  /* パターンカテゴリ別カラー */
+  .pat-work { background: #dcfce7; color: #166534; border-color: #86efac; }
+  .pat-ofr  { background: #fecaca; color: #991b1b; border-color: #f87171; }
+  .pat-leave{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  .pat-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .pat-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
+  .pat-m    { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+  .pat-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+  .pat-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+
+  /* 展開ボタン */
+  .pat-expand {
+    flex-shrink: 0;
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: .7rem;
+  }
+  .pat-expand:hover { color: #64748b; }
+
+  /* ピッカー */
+  .pat-picker {
+    margin: 0 12px 6px;
+    font-size: .82rem;
+  }
+
+  /* カスタム時刻 */
+  .custom-time {
+    display: none;
+    gap: 6px;
+    padding: 0 12px 6px;
+    align-items: center;
+  }
+  .custom-time input { font-size: .82rem; }
+
+  /* ── スティッキー保存バー ─────────────────────────── */
+  .save-bar {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding: 10px 12px;
+    border-top: 1px solid #e2e8f0;
+    z-index: 10;
+  }
 </style>
 {% endblock %}
+
 {% block content %}
 <div class="page-header">
   <a href="{{ url_for('shifts.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
   <h1 class="fs-6">{{ period.start_date }} 〜 {{ period.end_date }}</h1>
-  <div class="ms-auto d-flex gap-2">
-    {% if emp_idx is none %}
-    <a href="{{ url_for('shifts.input', period_id=period.id) }}"
-       class="btn btn-outline-light btn-sm">
-      <i class="bi bi-person-fill me-1"></i>1人ずつ
-    </a>
-    <button form="shift-form" type="submit" class="btn btn-primary btn-sm"
-            data-loading="保存中…">
-      <i class="bi bi-floppy-fill"></i> 保存
-    </button>
-    {% else %}
-    <a href="{{ url_for('shifts.import_csv_form', period_id=period.id) }}"
-       class="btn btn-outline-light btn-sm">
-      <i class="bi bi-filetype-csv"></i>
-    </a>
-    <a href="{{ url_for('shifts.input', period_id=period.id, grid=1) }}"
-       class="btn btn-outline-light btn-sm">
-      <i class="bi bi-table me-1"></i>全員一覧
-    </a>
-    {% endif %}
+  <div class="ms-auto">
+    <span class="small opacity-75">{{ filled_count }} / {{ employees|length }} 人</span>
   </div>
 </div>
 
-{% if emp_idx is not none and current_emp %}
-{# ══════════════════════════════════════════════════
-   1人フォーカスモード
-══════════════════════════════════════════════════ #}
-
-{# 名前検索 #}
-<div class="px-3 pt-2 pb-1 position-relative">
-  <div class="input-group input-group-sm">
-    <span class="input-group-text"><i class="bi bi-search"></i></span>
-    <input type="text" id="emp-search" class="form-control"
-           placeholder="スタッフ名で検索…" autocomplete="off"
-           oninput="filterEmps(this.value)" onfocus="showDropdown()"
-           onblur="setTimeout(hideDropdown,150)">
-  </div>
-  <div id="emp-dropdown"
-       class="position-absolute start-0 end-0 mx-3 bg-white border rounded shadow-sm"
-       style="display:none;z-index:9999;max-height:200px;overflow-y:auto">
-  </div>
+{# ── スタッフチップ列 ── #}
+<div class="emp-strip" id="emp-strip">
+  {% for emp in employees %}
+  {% set is_active = (emp_idx is not none and loop.index0 == emp_idx) %}
+  {% set is_done = emp.id in filled_emp_ids or emp.employment_type.value == 'full_time' %}
+  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=loop.index0) }}"
+     class="emp-chip{{ ' active' if is_active }}{{ ' done' if is_done }}"
+     data-nav-link>
+    {{ emp.name }}{% if is_done and not is_active %} ✓{% endif %}
+  </a>
+  {% endfor %}
 </div>
 
-{# 進捗バー #}
-<div class="px-3 pt-1">
-  <div class="d-flex justify-content-between small text-muted mb-1">
-    <span>入力済み <strong>{{ filled_count }}</strong> / {{ employees|length }} 人</span>
-    <span>{{ emp_idx + 1 }} / {{ employees|length }}</span>
-  </div>
-  <div class="progress mb-2" style="height:6px">
-    <div class="progress-bar bg-success"
-         style="width:{{ (filled_count / employees|length * 100)|int }}%"></div>
-  </div>
-</div>
-
-{# 従業員ナビゲーション #}
-<div class="d-flex align-items-center gap-2 px-3 pb-2">
-  {% if prev_idx is not none %}
-  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=prev_idx) }}"
-     class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i></a>
-  {% else %}
-  <button class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-chevron-left"></i></button>
-  {% endif %}
-
-  <div class="flex-grow-1 text-center">
-    <strong class="fs-5">{{ current_emp.name }}</strong>
-    <span class="ms-2 small text-muted">
-      {{ '正社員' if current_emp.employment_type.value == 'full_time' else 'アルバイト' }}
-      {% if current_emp.primary_position %}
-        · {{ 'ホール' if current_emp.primary_position.value == 'hall' else 'キッチン' }}専任
-      {% endif %}
-    </span>
-  </div>
-
-  {% if next_idx is not none %}
-  <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=next_idx) }}"
-     class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-right"></i></a>
-  {% else %}
-  <button class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-chevron-right"></i></button>
-  {% endif %}
-</div>
-
-{# 固定パターン参照 #}
-{% set fp_days = current_emp.fixed_patterns %}
-{% if fp_days %}
-<div class="px-3 pb-2">
-  <div class="small text-muted mb-1"><i class="bi bi-pin-fill me-1"></i>固定パターン（参考）</div>
-  <div class="d-flex flex-wrap gap-1">
-    {% for fp in fp_days %}
-    <span class="pattern-badge">
-      {{ DAY_JP[fp.day_of_week] }}:
-      {% if fp.breakfast and fp.dinner %}両方{% elif fp.breakfast %}朝食{% elif fp.dinner %}ディナー{% endif %}
-    </span>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
-
-{# 一括入力 #}
-{% if current_emp.employment_type.value == 'full_time' %}
-<div class="px-3 pb-2 d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
-  <span class="small text-muted flex-shrink-0">一括：</span>
-  <button type="button" class="btn btn-outline-danger btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
-          onclick="bulkOff('{{ current_emp.id }}', 'off_request')">
-    <i class="bi bi-x-circle me-1"></i>休希望
-  </button>
-  <button type="button" class="btn btn-outline-warning btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
-          onclick="bulkOff('{{ current_emp.id }}', 'paid_leave')">
-    <i class="bi bi-calendar-check me-1"></i>有休
-  </button>
-  <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-grow-1 flex-md-grow-0"
-          onclick="bulkOff('{{ current_emp.id }}', '')">
-    <i class="bi bi-check2 me-1"></i>出勤
-  </button>
-</div>
-{% else %}
-<div class="px-3 pb-2">
-  {# 過去パターン提案バナー #}
-  {% if top_patterns %}
-  <div class="suggest-banner p-2 mb-2">
-    <div class="label mb-1"><i class="bi bi-clock-history me-1"></i>よく使うパターン（タップで全日に適用）</div>
-    <div class="d-flex flex-wrap gap-1 mb-2">
-      {% for pid, cnt in top_patterns[:2] %}
-      {% set p = PATTERN_MAP.get(pid) %}
-      {% if p %}
-      <button type="button" class="btn btn-outline-primary btn-sm"
-              onclick="applyAllPattern('{{ current_emp.id }}', '{{ pid }}')">
-        {{ p.label }}
-        <span class="badge bg-primary bg-opacity-75 ms-1">{{ cnt }}回</span>
-      </button>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% if dow_suggestions %}
-    <button type="button" class="btn btn-primary btn-sm w-100"
-            onclick="applyDowSuggestions('{{ current_emp.id }}')">
-      <i class="bi bi-calendar3 me-1"></i>曜日別おすすめで一括入力
-    </button>
-    {% endif %}
-  </div>
-  {% endif %}
-  {# 手動一括入力 + 塗り絵モード #}
-  <div class="d-flex flex-wrap gap-2 align-items-center mobile-btn-wrap">
-    <span class="small text-muted flex-shrink-0">一括：</span>
-    <select id="bulk-pattern" class="form-select form-select-sm flex-grow-1 flex-md-grow-0" style="max-width:160px">
-      <option value="">（休み）</option>
-      {% for p in patterns %}
-      <option value="{{ p.id }}">{{ p.label }}</option>
-      {% endfor %}
-    </select>
-    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
-            onclick="applyBulk('{{ current_emp.id }}')">
-      全日に適用
-    </button>
-    <button type="button" id="paint-toggle"
-            class="btn btn-outline-primary btn-sm text-nowrap"
-            onclick="togglePaintMode()"
-            title="ONにすると指でなぞって複数日に同じパターンを塗れます">
-      <i class="bi bi-brush me-1"></i>ドラッグ入力
-    </button>
-  </div>
-</div>
-{% endif %}
-
-{# 入力フォーム #}
+{% if current_emp %}
 <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
   <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
   {% if next_idx is not none %}
   <input type="hidden" name="next_emp_idx" value="{{ next_idx }}">
   {% endif %}
 
-  {# 日付を行に縦並び #}
-  <div class="px-3">
-    <table class="table table-sm table-bordered mb-0">
-      <tbody>
-        {% for d in dates %}
-        {% set req = req_map.get((current_emp.id, d|string)) %}
-        {% set dow = d.weekday() %}
-        {% set day_cls = 'sat' if dow == 5 else 'sun' if dow == 6 else '' %}
-        {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
-        {% set pcat = PAT_CATS.get(cur_pid, 'off') if current_emp.employment_type.value != 'full_time' else '' %}
-        <tr class="{{ day_cls }}{% if pcat and pcat != 'off' %} pcat-{{ pcat }}{% endif %}">
-          {# 日付ラベル #}
-          <th class="align-middle text-center {{ day_cls }}"
-              style="width:80px;white-space:nowrap">
-            <div class="focus-day-label {{ day_cls }}">
-              {{ d.strftime('%m/%d') }}
-            </div>
-            <div class="focus-day-label {{ day_cls }}" style="font-size:.72rem">
-              （{{ DAY_JP[dow] }}）
-            </div>
-          </th>
-          {% if current_emp.employment_type.value == 'full_time' %}
-          {# 社員：出勤予定 / 休希望 / 有休 の3状態サイクル #}
-          <td class="{{ day_cls }} align-middle">
-            <input type="hidden"
-                   name="pattern_{{ current_emp.id }}_{{ d }}"
-                   id="off_{{ current_emp.id }}_{{ d }}"
-                   value="{{ cur_pid }}">
-            <button type="button"
-                    class="btn btn-sm w-100 off-btn
-                      {{ 'btn-danger' if cur_pid == 'off_request'
-                         else 'btn-warning text-dark' if cur_pid == 'paid_leave'
-                         else 'btn-outline-secondary' }}"
-                    data-emp="{{ current_emp.id }}" data-date="{{ d }}"
-                    onclick="toggleOff(this)">
-              {% if cur_pid == 'off_request' %}
-              <i class="bi bi-x-circle me-1"></i>休希望
-              {% elif cur_pid == 'paid_leave' %}
-              <i class="bi bi-calendar-check me-1"></i>有休
-              {% else %}
-              <i class="bi bi-check2 me-1"></i>出勤予定
-              {% endif %}
-            </button>
-          </td>
-          {% else %}
-          {# アルバイト：タップ＋ドラッグ入力ボタン #}
-          {% set cur_label = PATTERN_MAP[cur_pid].label if cur_pid in PATTERN_MAP else '（休み）' %}
-          <td class="{{ day_cls }}" style="padding:.25rem .4rem">
-            <input type="hidden"
-                   name="pattern_{{ current_emp.id }}_{{ d }}"
-                   id="hid_{{ current_emp.id }}_{{ d }}"
-                   value="{{ cur_pid }}">
-            <div class="d-flex gap-1">
-              <button type="button"
-                      class="pat-cycle-btn pcb-{{ pcat }}"
-                      data-emp="{{ current_emp.id }}"
-                      data-date="{{ d }}"
-                      onclick="onPatBtnClick('{{ current_emp.id }}','{{ d }}')"
-                      onpointerdown="onPatBtnDown(event,'{{ current_emp.id }}','{{ d }}')">
-                {{ cur_label }}
-              </button>
-              <button type="button"
-                      class="btn btn-sm btn-outline-secondary pat-edit-btn border-0 text-muted"
-                      onclick="togglePicker('{{ current_emp.id }}','{{ d }}')"
-                      title="パターンを選択">
-                <i class="bi bi-chevron-expand" style="font-size:.7rem"></i>
-              </button>
-            </div>
-            <select id="picker_{{ current_emp.id }}_{{ d }}"
-                    class="form-select form-select-sm pat-picker"
-                    style="display:none"
-                    onchange="onPickerChange(this,'{{ current_emp.id }}','{{ d }}')">
-              <option value="">（休み）</option>
-              {% for p in patterns %}
-              <option value="{{ p.id }}" {{ 'selected' if cur_pid == p.id else '' }}>{{ p.label }}</option>
-              {% endfor %}
-            </select>
-            <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
-                 style="{{ 'display:flex' if cur_pid == 'custom' else '' }}">
-              <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
-                     value="{{ req.custom_start if req and req.custom_start else '' }}"
-                     class="form-control form-control-sm">
-              <span class="align-self-center small px-1">〜</span>
-              <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
-                     value="{{ req.custom_end if req and req.custom_end else '' }}"
-                     class="form-control form-control-sm">
-            </div>
-          </td>
-          {% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  {# ── 一括ボタン ── #}
+  <div class="bulk-bar">
+    {% if current_emp.employment_type.value == 'full_time' %}
+    <span class="label">一括：</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkFull('')">
+      <i class="bi bi-check2 me-1"></i>出勤
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkFull('off_request')">
+      <i class="bi bi-x-circle me-1"></i>休希望
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-warning" onclick="bulkFull('paid_leave')">
+      <i class="bi bi-calendar-check me-1"></i>有休
+    </button>
+    {% else %}
+    <span class="label">全日：</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkPart('')">
+      （休み）
+    </button>
+    {% for pid, cnt in top_patterns[:3] %}
+    {% set p = PATTERN_MAP.get(pid) %}
+    {% if p %}
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkPart('{{ pid }}')">
+      {{ p.label }}
+    </button>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
   </div>
 
-  <div class="px-3 pt-3 pb-4 d-flex gap-2">
-    <button type="submit" class="btn btn-primary flex-grow-1">
-      <i class="bi bi-floppy-fill me-1"></i>保存
-      {% if next_idx is not none %}して次へ →{% endif %}
+  {# ── 日付行 ── #}
+  {% for d in dates %}
+  {% set req = req_map.get((current_emp.id, d|string)) %}
+  {% set dow = d.weekday() %}
+  {% set day_cls = 'sat' if dow == 5 else 'sun' if dow == 6 else '' %}
+  {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
+
+  {% if current_emp.employment_type.value == 'full_time' %}
+    {% set btn_cls = 'pat-work' if cur_pid == '' else 'pat-ofr' if cur_pid == 'off_request' else 'pat-leave' %}
+    {% set btn_html %}
+      {% if cur_pid == 'off_request' %}<i class="bi bi-x-circle me-1"></i>休希望
+      {% elif cur_pid == 'paid_leave' %}<i class="bi bi-calendar-check me-1"></i>有休
+      {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
+    {% endset %}
+  {% else %}
+    {% set pcat = PAT_CATS.get(cur_pid, 'off') %}
+    {% set btn_cls = 'pat-' + pcat %}
+    {% set btn_html = PATTERN_MAP[cur_pid].label if cur_pid in PATTERN_MAP else '（休み）' %}
+  {% endif %}
+
+  <div class="day-row {{ day_cls }}">
+    <div class="day-label">
+      <div class="dt">{{ d.strftime('%m/%d') }}</div>
+      <div class="dw">{{ DAY_JP[dow] }}</div>
+    </div>
+
+    <input type="hidden"
+           name="pattern_{{ current_emp.id }}_{{ d }}"
+           id="hid_{{ current_emp.id }}_{{ d }}"
+           value="{{ cur_pid }}">
+
+    {% if current_emp.employment_type.value == 'full_time' %}
+    <button type="button"
+            class="pat-btn {{ btn_cls }}"
+            data-emp="{{ current_emp.id }}"
+            data-date="{{ d }}"
+            data-mode="full"
+            onclick="cycleOff(this)">
+      {{ btn_html }}
     </button>
-    {% if next_idx is none %}
-    <a href="{{ url_for('shifts.input', period_id=period.id) }}"
-       class="btn btn-outline-success">
-      <i class="bi bi-check2-all me-1"></i>完了
-    </a>
+    {% else %}
+    <button type="button"
+            class="pat-btn {{ btn_cls }}"
+            data-emp="{{ current_emp.id }}"
+            data-date="{{ d }}"
+            data-mode="part"
+            onclick="cyclePart('{{ current_emp.id }}', '{{ d }}')">
+      {{ btn_html }}
+    </button>
+    <button type="button" class="pat-expand"
+            onclick="togglePicker('{{ current_emp.id }}', '{{ d }}')"
+            title="パターンを選択">
+      <i class="bi bi-chevron-expand"></i>
+    </button>
     {% endif %}
+  </div>
+
+  {% if current_emp.employment_type.value != 'full_time' %}
+  <div id="picker_{{ current_emp.id }}_{{ d }}" style="display:none">
+    <select class="form-select form-select-sm pat-picker"
+            onchange="onPickerChange(this,'{{ current_emp.id }}','{{ d }}')">
+      <option value="">（休み）</option>
+      {% for p in patterns %}
+      <option value="{{ p.id }}" {{ 'selected' if cur_pid == p.id else '' }}>{{ p.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
+       style="{{ 'display:flex' if cur_pid == 'custom' else '' }}">
+    <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
+           value="{{ req.custom_start if req and req.custom_start else '' }}"
+           class="form-control form-control-sm">
+    <span class="small text-muted">〜</span>
+    <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
+           value="{{ req.custom_end if req and req.custom_end else '' }}"
+           class="form-control form-control-sm">
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <div class="save-bar">
+    <button type="submit" class="btn btn-primary w-100">
+      <i class="bi bi-floppy-fill me-1"></i>保存{% if next_idx is not none %} して次へ →{% endif %}
+    </button>
   </div>
 </form>
 
 {% else %}
-{# ══════════════════════════════════════════════════
-   全員グリッドモード（従来）
-══════════════════════════════════════════════════ #}
-
-{# 進捗 #}
-<div class="px-3 pt-2 pb-1 d-flex justify-content-between small text-muted">
-  <span>入力済み <strong>{{ filled_count }}</strong> / {{ employees|length }} 人</span>
-  <a href="{{ url_for('shifts.input', period_id=period.id) }}" class="text-primary">
-    1人ずつ入力 →
-  </a>
+<div class="p-5 text-center text-muted">
+  <i class="bi bi-person-x d-block mb-2" style="font-size:2rem"></i>
+  スタッフが登録されていません
 </div>
-
-<form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
-<div class="shift-grid p-2">
-  <table class="table table-bordered table-sm mb-0">
-    <thead>
-      <tr>
-        <th class="emp-col">名前</th>
-        {% for d in dates %}
-        {% set dow = d.weekday() %}
-        <th class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }} text-center">
-          {{ d.strftime('%m/%d') }}<br>
-          <small>{{ DAY_JP[dow] }}</small>
-        </th>
-        {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for emp in employees %}
-      <tr>
-        <td class="emp-col">
-          {{ emp.name }}
-          {% if emp.id in filled_emp_ids %}<span class="text-success ms-1" style="font-size:.7rem">✓</span>{% endif %}
-        </td>
-        {% for d in dates %}
-        {% set req = req_map.get((emp.id, d|string)) %}
-        {% set dow = d.weekday() %}
-        <td class="{{ 'sat' if dow == 5 else 'sun' if dow == 6 else '' }}">
-          <select name="pattern_{{ emp.id }}_{{ d }}"
-                  class="form-select form-select-sm pattern-sel"
-                  onchange="toggleCustom(this, '{{ emp.id }}_{{ d }}')">
-            <option value="">（休み）</option>
-            {% for p in patterns %}
-            <option value="{{ p.id }}"
-              {{ 'selected' if req and req.pattern_id == p.id else '' }}>
-              {{ p.label }}
-            </option>
-            {% endfor %}
-          </select>
-          <div id="custom_{{ emp.id }}_{{ d }}" class="custom-time"
-               style="{{ 'display:flex' if req and req.pattern_id == 'custom' else '' }}">
-            <input type="time" name="custom_start_{{ emp.id }}_{{ d }}"
-                   value="{{ req.custom_start if req and req.custom_start else '' }}"
-                   class="form-control form-control-sm" placeholder="開始">
-            <span class="align-self-center">〜</span>
-            <input type="time" name="custom_end_{{ emp.id }}_{{ d }}"
-                   value="{{ req.custom_end if req and req.custom_end else '' }}"
-                   class="form-control form-control-sm" placeholder="終了">
-          </div>
-        </td>
-        {% endfor %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-</form>
 {% endif %}
 
-<!-- 未保存変更の確認モーダル -->
+{# 未保存確認モーダル #}
 <div class="modal fade" id="unsavedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:14px">
       <div class="modal-body p-4 text-center">
         <i class="bi bi-exclamation-triangle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
-        <div class="fw-semibold mb-1" style="font-size:1rem">未保存の変更があります</div>
-        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">
-          保存せずに移動しますか？
-        </div>
+        <div class="fw-semibold mb-1">未保存の変更があります</div>
+        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">保存せずに移動しますか？</div>
         <div class="d-flex gap-2">
           <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">戻る</button>
           <button class="btn btn-danger flex-grow-1" onclick="proceedNav()">移動する</button>
@@ -444,232 +320,115 @@
 
 {% block scripts %}
 <script>
-function proceedNav() { if (_pendingNav) location.href = _pendingNav; }
-
-// ── 社員：休希望/有休 3状態サイクル ──────────────────────────
-const OFF_STATES = [
-  { val: '',            cls: 'btn-outline-secondary', html: '<i class="bi bi-check2 me-1"></i>出勤予定' },
-  { val: 'off_request', cls: 'btn-danger',            html: '<i class="bi bi-x-circle me-1"></i>休希望' },
-  { val: 'paid_leave',  cls: 'btn-warning text-dark', html: '<i class="bi bi-calendar-check me-1"></i>有休' },
-];
-
-function toggleOff(btn) {
-  const empId = btn.dataset.emp;
-  const date  = btn.dataset.date;
-  const input = document.getElementById(`off_${empId}_${date}`);
-  const cur   = OFF_STATES.findIndex(s => s.val === input.value);
-  const next  = OFF_STATES[(cur + 1) % OFF_STATES.length];
-  input.value = next.val;
-  OFF_STATES.forEach(s => s.cls.split(' ').forEach(c => btn.classList.remove(c)));
-  next.cls.split(' ').forEach(c => btn.classList.add(c));
-  btn.innerHTML = next.html;
-  _changed = true;
-}
-
-function bulkOff(empId, targetVal) {
-  document.querySelectorAll(`.off-btn[data-emp="${empId}"]`).forEach(btn => {
-    const input = document.getElementById(`off_${empId}_${btn.dataset.date}`);
-    if (input.value === targetVal) return;
-    let guard = 0;
-    while (input.value !== targetVal && guard++ < 3) toggleOff(btn);
-  });
-}
-
-function toggleCustom(sel, key) {
-  const div = document.getElementById('custom_' + key);
-  if (div) div.style.display = sel.value === 'custom' ? 'flex' : 'none';
-}
-
-// 未保存変更の検知
+// ── 状態 ──────────────────────────────────────────────────────────
 let _changed = false;
-document.querySelectorAll('select.pattern-sel, input[type=time]').forEach(el => {
-  el.addEventListener('change', () => { _changed = true; });
+let _pendingNav = null;
+
+// ── チップ自動スクロール ───────────────────────────────────────────
+const _activeChip = document.querySelector('.emp-chip.active');
+_activeChip?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+
+// ── ナビゲーション保護 ────────────────────────────────────────────
+document.querySelectorAll('[data-nav-link]').forEach(a => {
+  a.addEventListener('click', e => {
+    if (!_changed) return;
+    e.preventDefault();
+    _pendingNav = a.href;
+    new bootstrap.Modal(document.getElementById('unsavedModal')).show();
+  });
 });
+function proceedNav() { if (_pendingNav) location.href = _pendingNav; }
 document.getElementById('shift-form')?.addEventListener('submit', () => { _changed = false; });
 
-// 前後ナビゲーション時に未保存なら確認モーダル
-let _pendingNav = null;
-document.querySelectorAll('a[href*="emp_idx"]').forEach(a => {
-  if (!a.href.includes('grid=')) {
-    a.addEventListener('click', e => {
-      if (_changed) {
-        e.preventDefault();
-        _pendingNav = a.href;
-        new bootstrap.Modal(document.getElementById('unsavedModal')).show();
-      }
-    });
-  }
-});
+// ── パターンデータ ────────────────────────────────────────────────
+const PAT_LABELS = { '': '（休み）', {% for p in patterns %}{{ p.id|tojson }}: {{ p.label|tojson }},{% endfor %} };
+const PAT_CATS_JS = { {% for pid, cat in PAT_CATS.items() %}{{ pid|tojson }}: {{ cat|tojson }},{% endfor %} };
 
-// ── カレンダー入力（タップサイクル＋ドラッグ塗り絵） ──────────────────────────
-
-const DOW_SUGGESTIONS = {{ dow_suggestions | tojson if dow_suggestions is defined else '{}' }};
-
-// パターンラベルマップ
-const PAT_LABELS = { '': '（休み）', {% for p in patterns %}{{ p.id | tojson }}: {{ p.label | tojson }}, {% endfor %} };
-
-// パターンカテゴリマップ
-const PAT_CATS_JS = { {% for pid, cat in PAT_CATS.items() %}{{ pid | tojson }}: {{ cat | tojson }}, {% endfor %} };
-
-// タップサイクル順：[休み, 上位3パターン] → 不足時はデフォルト3つで補完
+// タップサイクル順：[休み, 過去上位3件, デフォルト補完]
 const PAT_CYCLE = (() => {
-  const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid | tojson }},{% endfor %}];
-  const defaults = ['d_std1', 'b_std', 'mid'];
+  const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
+  const defs = ['d_std1', 'b_std', 'mid'];
   const seen = new Set(['']);
   const cycle = [''];
-  for (const pid of [...tops, ...defaults]) {
-    if (!seen.has(pid) && cycle.length < 4) { seen.add(pid); cycle.push(pid); }
+  for (const p of [...tops, ...defs]) {
+    if (!seen.has(p) && PAT_LABELS[p]) { seen.add(p); cycle.push(p); if (cycle.length >= 4) break; }
   }
   return cycle;
 })();
 
-// 行の pcat- クラスを更新
-function updateRowCat(row, cat) {
-  if (!row) return;
-  row.classList.remove('pcat-b','pcat-d','pcat-m','pcat-db');
-  const cls = {b:'pcat-b', d:'pcat-d', m:'pcat-m', db:'pcat-db'}[cat];
-  if (cls) row.classList.add(cls);
-}
-
-// ボタンの見た目を更新
-function updateBtnAppearance(btn, patId) {
-  btn.textContent = PAT_LABELS[patId] ?? patId;
-  btn.className = btn.className.replace(/\bpcb-\S+/g, '').trim();
-  btn.classList.add('pcb-' + (PAT_CATS_JS[patId] || 'off'));
-  updateRowCat(btn.closest('tr'), PAT_CATS_JS[patId]);
-}
-
-// 1日分のパターンを適用（全変更の共通パス）
-function applyPatToDate(empId, dateStr, patId) {
+// ── アルバイト：パターン適用（共通パス） ─────────────────────────
+function applyPat(empId, dateStr, patId) {
   const hid = document.getElementById(`hid_${empId}_${dateStr}`);
   if (!hid) return;
   hid.value = patId;
-  const btn = document.querySelector(`.pat-cycle-btn[data-emp="${empId}"][data-date="${dateStr}"]`);
-  if (btn) updateBtnAppearance(btn, patId);
-  const customDiv = document.getElementById(`custom_${empId}_${dateStr}`);
-  if (customDiv) customDiv.style.display = patId === 'custom' ? 'flex' : 'none';
+  const btn = document.querySelector(`.pat-btn[data-emp="${empId}"][data-date="${dateStr}"]`);
+  if (btn) {
+    const cat = PAT_CATS_JS[patId] || 'off';
+    btn.className = `pat-btn pat-${cat}`;
+    btn.textContent = PAT_LABELS[patId] ?? patId;
+  }
+  const cust = document.getElementById(`custom_${empId}_${dateStr}`);
+  if (cust) {
+    cust.style.display = patId === 'custom' ? 'flex' : 'none';
+    if (patId === 'custom') cust.querySelector('input')?.focus();
+  }
   _changed = true;
 }
 
-// 全日に同じパターンを適用
-function applyAllPattern(empId, patId) {
-  document.querySelectorAll(`.pat-cycle-btn[data-emp="${empId}"]`).forEach(btn => {
-    applyPatToDate(empId, btn.dataset.date, patId);
-  });
-}
-
-// 曜日別おすすめで一括入力
-function applyDowSuggestions(empId) {
-  document.querySelectorAll(`.pat-cycle-btn[data-emp="${empId}"]`).forEach(btn => {
-    const jsDow = new Date(btn.dataset.date + 'T00:00:00').getDay();
-    const pyDow = jsDow === 0 ? 6 : jsDow - 1;
-    const suggested = DOW_SUGGESTIONS[String(pyDow)];
-    if (suggested !== undefined) applyPatToDate(empId, btn.dataset.date, suggested);
-  });
-}
-
-// 一括入力セレクト
-function applyBulk(empId) {
-  applyAllPattern(empId, document.getElementById('bulk-pattern').value);
-}
-
-// タップでサイクル（onclick から呼ばれる・塗り絵モード時は無効）
-function onPatBtnClick(empId, dateStr) {
-  if (_paintMode) return; // 塗り絵モード中はクリックを無視
+// タップサイクル
+function cyclePart(empId, dateStr) {
   const cur = document.getElementById(`hid_${empId}_${dateStr}`)?.value ?? '';
   const idx = PAT_CYCLE.indexOf(cur);
-  const next = PAT_CYCLE[(idx + 1) % PAT_CYCLE.length];
-  applyPatToDate(empId, dateStr, next);
+  applyPat(empId, dateStr, PAT_CYCLE[(idx + 1) % PAT_CYCLE.length]);
 }
 
-// ── 塗り絵モード ────────────────────────────────────────────────────────────
-let _paintMode = false;
-let _paintActive = false, _paintPat = null, _paintEmp = null;
-
-function togglePaintMode() {
-  _paintMode = !_paintMode;
-  document.body.classList.toggle('paint-mode', _paintMode);
-  const btn = document.getElementById('paint-toggle');
-  if (btn) {
-    btn.innerHTML = _paintMode
-      ? '<i class="bi bi-brush-fill me-1"></i>塗り絵中…'
-      : '<i class="bi bi-brush me-1"></i>ドラッグ入力';
-  }
+// 全日一括
+function bulkPart(patId) {
+  document.querySelectorAll('.pat-btn[data-mode="part"]').forEach(btn => {
+    applyPat(btn.dataset.emp, btn.dataset.date, patId);
+  });
 }
 
-// pointerdown: 塗り絵モードの時だけ塗り開始
-function onPatBtnDown(e, empId, dateStr) {
-  if (!_paintMode) return;
-  e.preventDefault();
-  _paintActive = true;
-  _paintEmp = empId;
-  // ブラシパターン = 一括セレクトの選択値（未選択なら現在セルの値）
-  const bulkPat = document.getElementById('bulk-pattern')?.value ?? '';
-  _paintPat = bulkPat || document.getElementById(`hid_${empId}_${dateStr}`)?.value || '';
-  applyPatToDate(empId, dateStr, _paintPat);
-}
-
-document.addEventListener('pointermove', e => {
-  if (!_paintActive) return;
-  e.preventDefault();
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  const btn = el?.closest('.pat-cycle-btn');
-  if (btn && btn.dataset.emp === _paintEmp) {
-    applyPatToDate(_paintEmp, btn.dataset.date, _paintPat);
-  }
-}, { passive: false });
-
-document.addEventListener('pointerup',     () => { _paintActive = false; });
-document.addEventListener('pointercancel', () => { _paintActive = false; });
-
-// ── 手動ピッカー ────────────────────────────────────────────────────────────
-function togglePicker(empId, dateStr) {
-  const picker = document.getElementById(`picker_${empId}_${dateStr}`);
-  if (!picker) return;
-  const opening = picker.style.display === 'none';
-  picker.style.display = opening ? 'block' : 'none';
-  if (opening) picker.focus();
-}
-
-function onPickerChange(sel, empId, dateStr) {
-  applyPatToDate(empId, dateStr, sel.value);
-  sel.style.display = 'none';
-}
-
-// ── 名前検索 ──────────────────────────────────────────
-const EMP_LIST = [
-  {% for e in employees %}
-  { name: {{ e.name | tojson }}, idx: {{ loop.index0 }} },
-  {% endfor %}
+// ── 社員：3状態サイクル ────────────────────────────────────────────
+const FULL_STATES = [
+  { val: '',            cls: 'pat-work', html: '<i class="bi bi-check2 me-1"></i>出勤予定' },
+  { val: 'off_request', cls: 'pat-ofr',  html: '<i class="bi bi-x-circle me-1"></i>休希望' },
+  { val: 'paid_leave',  cls: 'pat-leave',html: '<i class="bi bi-calendar-check me-1"></i>有休' },
 ];
-const BASE_URL = "{{ url_for('shifts.input', period_id=period.id) }}";
 
-function filterEmps(q) {
-  const dropdown = document.getElementById('emp-dropdown');
-  const hits = q.trim()
-    ? EMP_LIST.filter(e => e.name.includes(q.trim()))
-    : EMP_LIST;
-  renderDropdown(hits, dropdown);
-  dropdown.style.display = hits.length ? 'block' : 'none';
+function cycleOff(btn) {
+  const hid = document.getElementById(`hid_${btn.dataset.emp}_${btn.dataset.date}`);
+  const cur = FULL_STATES.findIndex(s => s.val === hid.value);
+  const next = FULL_STATES[(cur + 1) % FULL_STATES.length];
+  hid.value = next.val;
+  btn.className = `pat-btn ${next.cls}`;
+  btn.innerHTML = next.html;
+  _changed = true;
 }
 
-function showDropdown() {
-  const q = document.getElementById('emp-search').value;
-  filterEmps(q || '');
+function bulkFull(targetVal) {
+  const s = FULL_STATES.find(s => s.val === targetVal);
+  if (!s) return;
+  document.querySelectorAll('.pat-btn[data-mode="full"]').forEach(btn => {
+    const hid = document.getElementById(`hid_${btn.dataset.emp}_${btn.dataset.date}`);
+    if (hid) hid.value = targetVal;
+    btn.className = `pat-btn ${s.cls}`;
+    btn.innerHTML = s.html;
+  });
+  _changed = true;
 }
 
-function hideDropdown() {
-  document.getElementById('emp-dropdown').style.display = 'none';
+// ── 手動ピッカー ──────────────────────────────────────────────────
+function togglePicker(empId, dateStr) {
+  const row = document.getElementById(`picker_${empId}_${dateStr}`);
+  if (!row) return;
+  const opening = row.style.display === 'none';
+  row.style.display = opening ? 'block' : 'none';
+  if (opening) row.querySelector('select')?.focus();
 }
-
-function renderDropdown(hits, dropdown) {
-  dropdown.innerHTML = hits.map(e =>
-    `<a href="${BASE_URL}?emp_idx=${e.idx}"
-        class="d-block px-3 py-2 text-decoration-none text-dark"
-        style="cursor:pointer"
-        onmouseover="this.style.background='#f1f5f9'"
-        onmouseout="this.style.background=''">${e.name}</a>`
-  ).join('');
+function onPickerChange(sel, empId, dateStr) {
+  applyPat(empId, dateStr, sel.value);
+  document.getElementById(`picker_${empId}_${dateStr}`).style.display = 'none';
 }
 </script>
 {% endblock %}
