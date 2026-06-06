@@ -96,6 +96,14 @@ def delete_employee(employee_id: int):
     cache.delete_memoized(get_all_employees)
 
 
+def purge_employee(employee_id: int):
+    conn = get_connection()
+    conn.execute("DELETE FROM employees WHERE id=?", (employee_id,))
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_all_employees)
+
+
 def restore_employee(employee_id: int):
     conn = get_connection()
     conn.execute("UPDATE employees SET is_active=1 WHERE id=?", (employee_id,))

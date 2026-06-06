@@ -80,7 +80,16 @@ def reorder():
 def archive(emp_id):
     repo.delete_employee(emp_id)
     flash("アーカイブしました", "success")
-    return redirect(url_for("employees.index"))
+    return redirect(url_for("employees.index") + "?archive=1")
+
+
+@bp.post("/<int:emp_id>/purge")
+def purge(emp_id):
+    emp = repo.get_employee(emp_id)
+    name = emp.name if emp else "スタッフ"
+    repo.purge_employee(emp_id)
+    flash(f"{name} を完全に削除しました", "success")
+    return redirect(url_for("employees.index") + "?archive=1")
 
 
 @bp.post("/<int:emp_id>/restore")
