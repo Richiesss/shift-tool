@@ -22,6 +22,9 @@ def excel(period_id):
     if not period:
         flash("期間が見つかりません", "error")
         return redirect(url_for("schedule.index", period_id=period_id))
+    if period.status != "confirmed":
+        flash("確定済みのシフトのみエクスポートできます", "error")
+        return redirect(url_for("schedule.index", period_id=period_id))
     employees = repo.get_all_employees(active_only=True)
     assignments = _assignments_dict(period_id)
     buf = io.BytesIO()
@@ -37,6 +40,9 @@ def pdf(period_id):
     period = repo.get_period(period_id)
     if not period:
         flash("期間が見つかりません", "error")
+        return redirect(url_for("schedule.index", period_id=period_id))
+    if period.status != "confirmed":
+        flash("確定済みのシフトのみエクスポートできます", "error")
         return redirect(url_for("schedule.index", period_id=period_id))
     employees = repo.get_all_employees(active_only=True)
     assignments = _assignments_dict(period_id)

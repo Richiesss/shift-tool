@@ -190,12 +190,21 @@
   </div>
   <div class="ms-auto d-flex gap-1">
     {% if period %}
+    {% if period.status == 'confirmed' %}
     <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-file-earmark-spreadsheet"></i>
     </a>
     <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-file-earmark-pdf"></i>
     </a>
+    {% else %}
+    <button class="btn btn-outline-secondary btn-sm" disabled title="確定後にエクスポートできます">
+      <i class="bi bi-file-earmark-spreadsheet"></i>
+    </button>
+    <button class="btn btn-outline-secondary btn-sm" disabled title="確定後にエクスポートできます">
+      <i class="bi bi-file-earmark-pdf"></i>
+    </button>
+    {% endif %}
     <a href="{{ url_for('schedule.stats_multi') }}" class="btn btn-outline-light btn-sm">
       <i class="bi bi-bar-chart-fill"></i>
     </a>
