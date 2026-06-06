@@ -7,9 +7,13 @@ from utils.constants import TimeSlot, Position, EmploymentType
 from utils.holidays import holiday_set
 
 
-def _compute_staffing(assignments, employees, dates, constraints) -> dict:
+def _compute_staffing(assignments, employees, dates, constraints,
+                      reservation_counts=None,
+                      reserv_thresh_b=0, reserv_extra_b=0,
+                      reserv_thresh_d=0, reserv_extra_d=0) -> dict:
     """
     各日×スロット×ポジションの人員充足状況を計算して返す。
+    予約客数が閾値を超える日は最小人員を動的に加算する（ソルバーと同じロジック）。
 
     返り値: {(date_str, slot_val, pos_val): {
         count, min, leaders, min_leader, short_staff, short_leader
@@ -25,16 +29,25 @@ def _compute_staffing(assignments, employees, dates, constraints) -> dict:
         if e and e.is_leader(a.position.value):
             leader_map[key] += 1
 
+    rc_map = reservation_counts or {}
     result = {}
     for d in dates:
-        ds = d.isoformat()
+        ds  = d.isoformat()
+        rc  = rc_map.get(ds, {})
+        b_count = rc.get("breakfast", 0)
+        d_count = rc.get("dinner", 0)
         for slot in TimeSlot:
             for pos in Position:
-                c = constraints.get((slot, pos), {})
+                c     = constraints.get((slot, pos), {})
                 min_s = c.get("min", 0)
                 min_l = c.get("min_leader", 0)
-                cnt   = count_map[(ds, slot.value, pos.value)]
-                ldrs  = leader_map[(ds, slot.value, pos.value)]
+                # 予約客数による動的増員（ソルバーと同じ判定）
+                if slot == TimeSlot.BREAKFAST and reserv_thresh_b > 0 and b_count >= reserv_thresh_b:
+                    min_s += reserv_extra_b
+                elif slot == TimeSlot.DINNER and reserv_thresh_d > 0 and d_count >= reserv_thresh_d:
+                    min_s += reserv_extra_d
+                cnt  = count_map[(ds, slot.value, pos.value)]
+                ldrs = leader_map[(ds, slot.value, pos.value)]
                 result[(ds, slot.value, pos.value)] = {
                     "count":        cnt,
                     "min":          min_s,
@@ -108,9 +121,23 @@ def index(period_id):
     time_map = _build_time_map(shift_requests)
 
     # 人員充足チェック
-    all_employees = repo.get_all_employees(active_only=True)
-    constraints   = repo.get_shift_constraints()
-    staffing      = _compute_staffing(assignments, all_employees, dates, constraints)
+    all_employees    = repo.get_all_employees(active_only=True)
+    constraints      = repo.get_shift_constraints()
+    reservation_counts = repo.get_reservation_counts(period_id)
+    try:
+        reserv_thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
+        reserv_extra_b  = int(repo.get_app_setting("reserv_extra_breakfast",     "1"))
+        reserv_thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
+        reserv_extra_d  = int(repo.get_app_setting("reserv_extra_dinner",        "1"))
+    except Exception:
+        reserv_thresh_b = 100; reserv_extra_b = 1
+        reserv_thresh_d = 25;  reserv_extra_d = 1
+    staffing = _compute_staffing(
+        assignments, all_employees, dates, constraints,
+        reservation_counts=reservation_counts,
+        reserv_thresh_b=reserv_thresh_b, reserv_extra_b=reserv_extra_b,
+        reserv_thresh_d=reserv_thresh_d, reserv_extra_d=reserv_extra_d,
+    )
 
     # 人員不足を 4区分（朝食/ディナー × ホール/キッチン）ごとに集計
     # 不足がない区分も含めて常時表示するため全組み合わせを構築する
