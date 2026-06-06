@@ -11,12 +11,14 @@ bp = Blueprint("generate", __name__, url_prefix="/generate")
 @bp.get("/")
 def index():
     periods = repo.get_all_periods()
-    employees_count = len(repo.get_all_employees(active_only=True))
+    active_employees = repo.get_all_employees(active_only=True)
+    employees_count  = len(active_employees)
+    active_ids       = {e.id for e in active_employees}
     # 各期間の前提条件チェック情報を事前計算
     period_checklist = {}
     for p in periods:
         requests     = repo.get_shift_requests(p.id)
-        filled       = len({r.employee_id for r in requests})
+        filled       = len({r.employee_id for r in requests if r.employee_id in active_ids})
         counts       = repo.get_reservation_counts(p.id)
         has_counts   = any(
             c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
@@ -43,9 +45,11 @@ def index():
 @bp.get("/checklist/<int:period_id>")
 def checklist(period_id):
     """チェックリストを最新状態で返す軽量 API"""
-    employees_count = len(repo.get_all_employees(active_only=True))
-    requests_list   = repo.get_shift_requests(period_id)
-    filled          = len({r.employee_id for r in requests_list})
+    active_employees = repo.get_all_employees(active_only=True)
+    employees_count  = len(active_employees)
+    active_ids       = {e.id for e in active_employees}
+    requests_list    = repo.get_shift_requests(period_id)
+    filled           = len({r.employee_id for r in requests_list if r.employee_id in active_ids})
     counts          = repo.get_reservation_counts(period_id)
     has_counts      = any(
         c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
