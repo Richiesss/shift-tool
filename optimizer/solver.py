@@ -470,6 +470,19 @@ def solve(
 
     # P3b: primary_timeslot 専任制約は P5 のハード制約でカバー済みのため削除（FIX⑦）
 
+    # P3c: 社会保険加入アルバイト優先配置
+    # 未加入PTが割り当てられたときにペナルティを与え、加入済みPTを優先する
+    SI_PREF_PENALTY = 300
+    for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME:
+            continue
+        if emp.has_social_insurance:
+            continue  # 加入済みはペナルティなし
+        for ds in date_strs:
+            for slot in slots:
+                for pos in positions:
+                    penalty_terms.append(SI_PREF_PENALTY * assign[emp.id][ds][slot.value][pos.value])
+
     # P4: 人員バランス = ポジション毎の総シフト数の偏差を最小化
     # 各日の各（スロット×ポジション）の担当人数を均等にするため、
     # 1日の担当数の最大・最小差をペナルティに
@@ -831,6 +844,15 @@ def _solve_best_effort(
                     model.add(worked == 0).only_enforce_if(not_worked)
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
                     penalty_terms.append(PT_PENALTY * not_worked)
+
+    # 社会保険加入アルバイト優先（ベストエフォートフェーズでも同様）
+    for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME or emp.has_social_insurance:
+            continue
+        for ds in date_strs:
+            for slot in slots:
+                for pos in positions:
+                    penalty_terms.append(300 * assign[emp.id][ds][slot.value][pos.value])
 
     # FIX⑥: ベストエフォートにも P5 スロット分業のソフト誘導を追加
     BE_BREAKFAST_FT_COST = 500_000

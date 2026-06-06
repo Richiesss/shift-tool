@@ -272,6 +272,7 @@ _MIGRATIONS = [
     ("schedule_periods",  "needs_regen",                "INTEGER NOT NULL DEFAULT 0"),
     ("employees",         "output_position",            "TEXT"),
     ("employees",         "hourly_wage",                "INTEGER NOT NULL DEFAULT 0"),
+    ("employees",         "has_social_insurance",       "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _INDEXES = [
