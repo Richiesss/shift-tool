@@ -778,40 +778,64 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
 
     settings = {r["key"]: r["value"] for r in setting_rows}
 
-    def _ft_hours(slot: str, pos: str) -> float:
+    EARLY_START = 5.5   # 5:30
+    EARLY_END   = 9.0   # 9:00
+
+    def _early_overlap(start_h: float, end_h: float) -> float:
+        """5:30〜9:00 と重複する時間数を返す"""
+        return max(0.0, min(end_h, EARLY_END) - max(start_h, EARLY_START))
+
+    def _parse_hm(t: str) -> float:
+        h, m = map(int, t.split(":"))
+        return h + m / 60.0
+
+    def _ft_times(slot: str, pos: str) -> tuple[float, float]:
         s = settings.get(f"ft_{pos}_{slot}_start", "06:00" if slot == "breakfast" else "17:00")
         e = settings.get(f"ft_{pos}_{slot}_end",   "11:00" if slot == "breakfast" else "22:00")
-        sh, sm = map(int, s.split(":"))
-        eh, em = map(int, e.split(":"))
-        return max(0.0, (eh + em / 60.0) - (sh + sm / 60.0))
+        return _parse_hm(s), _parse_hm(e)
 
-    # (period_id, emp_id, date, slot) → pattern の時間数マップを構築
-    hour_map: dict[tuple, float] = {}
+    def _ft_hours_early(slot: str, pos: str) -> tuple[float, float]:
+        sh, eh = _ft_times(slot, pos)
+        return max(0.0, eh - sh), _early_overlap(sh, eh)
+
+    # (period_id, emp_id, date, slot) → (総時間, 早朝重複時間)
+    hour_map: dict[tuple, tuple[float, float]] = {}
     for r in req_rows:
-        pid_r = r["period_id"]
-        eid_r = r["employee_id"]
+        pid_r  = r["period_id"]
+        eid_r  = r["employee_id"]
         date_r = r["date"]
         pat_id = r["pattern_id"]
+
         if pat_id == "custom" and r["custom_start"] and r["custom_end"]:
-            sh, sm = map(int, r["custom_start"].split(":"))
-            eh, em = map(int, r["custom_end"].split(":"))
-            hrs = max(0.0, (eh + em / 60.0) - (sh + sm / 60.0))
+            sh = _parse_hm(r["custom_start"])
+            eh = _parse_hm(r["custom_end"])
+            hrs   = max(0.0, eh - sh)
+            early = _early_overlap(sh, eh)
+        elif pat_id == "double":
+            # ダブル: 朝食部(6:00-11:00) + ディナー部(17:00-23:00) = 11h
+            # 早朝重複は朝食部の 6:00-11:00 と 5:30-9:00 の重複
+            hrs   = 11.0
+            early = _early_overlap(6.0, 11.0)
         elif pat_id and pat_id in PATTERN_MAP:
             p = PATTERN_MAP[pat_id]
-            if p.force_both:
-                hrs = p.duration_hours()
+            if p.start and p.end:
+                sh = _parse_hm(p.start)
+                eh = _parse_hm(p.end)
+                hrs   = max(0.0, eh - sh)
+                early = _early_overlap(sh, eh)
             else:
-                hrs = p.duration_hours()
+                hrs, early = 0.0, 0.0
         else:
-            hrs = 0.0
+            hrs, early = 0.0, 0.0
+
         if r["breakfast"]:
-            hour_map[(pid_r, eid_r, date_r, "breakfast")] = hrs
+            hour_map[(pid_r, eid_r, date_r, "breakfast")] = (hrs, early)
         if r["dinner"]:
-            # ダブルは朝食だけで全時間を計上済みなので dinner は 0 に
+            # ダブルはディナー側を 0 にして重複計上を避ける
             if pat_id == "double":
-                hour_map[(pid_r, eid_r, date_r, "dinner")] = 0.0
+                hour_map[(pid_r, eid_r, date_r, "dinner")] = (0.0, 0.0)
             else:
-                hour_map[(pid_r, eid_r, date_r, "dinner")] = hrs
+                hour_map[(pid_r, eid_r, date_r, "dinner")] = (hrs, early)
 
     # グローバル賃金設定
     base_wage   = int(settings.get("base_hourly_wage",        "0") or 0)
@@ -832,20 +856,19 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
         key  = (pid, eid, a["date"], slot)
 
         if key in hour_map:
-            hrs = hour_map[key]
+            hrs, early_hrs = hour_map[key]
         else:
-            hrs = _ft_hours(slot, pos)
+            hrs, early_hrs = _ft_hours_early(slot, pos)
 
         # 社員は時給計算対象外（コストは 0 のまま）
         if eid not in pt_ids:
             cost = 0.0
         else:
-            raise_amt  = wage_map.get(eid, 0)
-            hourly     = base_wage + raise_amt
-            # 朝食シフトは早朝手当を加算
-            if slot == "breakfast":
-                hourly += early_allow
-            cost = hrs * hourly
+            raise_amt    = wage_map.get(eid, 0)
+            base_rate    = base_wage + raise_amt
+            normal_hrs   = hrs - early_hrs
+            # 早朝時間帯（5:30〜9:00）のみ早朝手当を加算
+            cost = early_hrs * (base_rate + early_allow) + normal_hrs * base_rate
 
         if eid not in result:
             result[eid] = {"shifts": 0, "hours": 0.0, "cost": 0.0, "by_period": {}}
