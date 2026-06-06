@@ -1,8 +1,6 @@
 import logging
-import os
 import threading
-import time
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, make_response, Response, stream_with_context
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, make_response
 from db import repositories as repo
 from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE, SolveProgressCallback
 from utils.solver_logger import logger, log_path
@@ -169,48 +167,6 @@ def view_log():
         return jsonify({"log": tail, "path": path, "total_lines": len(lines)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@bp.get("/log/stream")
-def log_stream():
-    """ソルバーログをSSEでリアルタイムストリーミング（生成中画面用）"""
-    def generate():
-        path = log_path()
-        last_pos = 0
-
-        # まず既存ログ全行を送信
-        if os.path.exists(path):
-            with open(path, encoding="utf-8", errors="replace") as f:
-                content = f.read()
-                last_pos = f.tell()
-            for line in content.splitlines():
-                if line.strip():
-                    yield f"data: {line}\n\n"
-
-        # 以降は差分のみ（最大480回 × 0.25秒 ≒ 2分）
-        for _ in range(480):
-            time.sleep(0.25)
-            try:
-                cur_size = os.path.getsize(path)
-            except OSError:
-                yield ": hb\n\n"
-                continue
-            if cur_size > last_pos:
-                with open(path, encoding="utf-8", errors="replace") as f:
-                    f.seek(last_pos)
-                    chunk = f.read()
-                    last_pos = f.tell()
-                for line in chunk.splitlines():
-                    if line.strip():
-                        yield f"data: {line}\n\n"
-            else:
-                yield ": hb\n\n"
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 
 @bp.get("/diag/<int:period_id>")
