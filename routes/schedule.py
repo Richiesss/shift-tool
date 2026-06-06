@@ -174,6 +174,9 @@ def index(period_id):
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
+    submitted_ids = {r.employee_id for r in shift_requests}
+    unsubmitted_count = sum(1 for e in all_employees if e.id not in submitted_ids)
+
     holidays = holiday_set(dates)
 
     # 社員デフォルト勤務時間（ポジション別・設定画面で変更可能）
@@ -207,6 +210,7 @@ def index(period_id):
         shortage_groups=shortage_groups,
         total_shortage=total_shortage,
         needs_regen=needs_regen,
+        unsubmitted_count=unsubmitted_count,
         today=today,
         ft_times=ft_times,
         holidays=holidays,
@@ -233,6 +237,9 @@ def assign(period_id):
         period = repo.get_period(period_id)
         if not period:
             return jsonify({"ok": False, "error": "期間が見つかりません"}), 400
+
+        if period.status == "confirmed":
+            return jsonify({"ok": False, "error": "確定済みのシフトは変更できません。変更するには確定を解除してください。"}), 403
 
         # 日付が期間内かチェック
         if date_str and not (period.start_date <= date_str <= period.end_date):
@@ -341,4 +348,14 @@ def confirm(period_id):
         period.status = "confirmed"
         repo.save_period(period)
         flash("シフトを確定しました", "success")
+    return redirect(url_for("schedule.index", period_id=period_id))
+
+
+@bp.post("/<int:period_id>/unconfirm")
+def unconfirm(period_id):
+    period = repo.get_period(period_id)
+    if period:
+        period.status = "draft"
+        repo.save_period(period)
+        flash("確定を解除しました", "info")
     return redirect(url_for("schedule.index", period_id=period_id))

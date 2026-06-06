@@ -227,13 +227,17 @@
         {% endfor %}
       </select>
       {% if period.status == 'draft' %}
-      <form method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" class="flex-shrink-0">
-        <button class="btn btn-success btn-sm">
-          <i class="bi bi-check-lg"></i> 確定
+      <button class="btn btn-success btn-sm flex-shrink-0" onclick="openConfirmDialog()">
+        <i class="bi bi-check-lg"></i> 確定
+      </button>
+      <form id="confirm-form" method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" style="display:none"></form>
+      {% else %}
+      <span class="badge bg-success flex-shrink-0"><i class="bi bi-lock-fill me-1"></i>確定済</span>
+      <form method="post" action="{{ url_for('schedule.unconfirm', period_id=period.id) }}" class="flex-shrink-0">
+        <button class="btn btn-outline-warning btn-sm">
+          <i class="bi bi-lock-fill me-1"></i>確定解除
         </button>
       </form>
-      {% else %}
-      <span class="badge bg-success flex-shrink-0">確定済</span>
       {% endif %}
     </div>
     <!-- 2行目：朝食/ディナー ＋ ホール/キッチン -->
@@ -258,6 +262,18 @@
     <i class="bi bi-info-circle me-2"></i>
     表示するスタッフがいません。
     <a href="{{ url_for('employees.index') }}" class="alert-link">スタッフ管理</a>からスタッフを登録してください。
+  </div>
+  {% endif %}
+
+  {# ── 確定済みロックバナー ── #}
+  {% if period.status == 'confirmed' %}
+  <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+       style="background:#1e293b;border-left:4px solid #22c55e">
+    <i class="bi bi-lock-fill text-success mt-1" style="flex-shrink:0"></i>
+    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6">
+      このシフトは<strong style="color:#86efac">確定済み</strong>です。担当の追加・削除はロックされています。<br>
+      変更するには「確定解除」ボタンを押してください。
+    </div>
   </div>
   {% endif %}
 
@@ -510,6 +526,10 @@
 </div>
 
 <script>
+const IS_CONFIRMED     = {{ 'true' if period.status == 'confirmed' else 'false' }};
+const TOTAL_SHORTAGE   = {{ total_shortage }};
+const UNSUBMITTED_COUNT = {{ unsubmitted_count }};
+
 // ── タイムライン ─────────────────────────────────────
 const TL_ASGN = {
   {% for ds, slot_map in asgn_map.items() %}
@@ -661,7 +681,31 @@ function applyPreset(start, end, el) {
   if (el) el.classList.add('active');
 }
 
+function openConfirmDialog() {
+  let html = '';
+  const hasIssue = TOTAL_SHORTAGE > 0 || UNSUBMITTED_COUNT > 0;
+  if (hasIssue) {
+    html += '<div class="mb-3" style="font-size:.85rem;color:#fbbf24"><i class="bi bi-exclamation-triangle-fill me-1"></i>以下の問題があります：</div>';
+    if (TOTAL_SHORTAGE > 0) {
+      html += `<div class="mb-2 small"><i class="bi bi-x-circle-fill text-danger me-1"></i>人員不足の日が <strong>${TOTAL_SHORTAGE}日</strong> あります</div>`;
+    }
+    if (UNSUBMITTED_COUNT > 0) {
+      html += `<div class="mb-2 small"><i class="bi bi-person-x-fill text-warning me-1"></i>希望シフト未提出が <strong>${UNSUBMITTED_COUNT}名</strong> います</div>`;
+    }
+    html += '<hr style="border-color:#334155;margin:.75rem 0"><div class="small" style="color:#94a3b8">このまま確定しますか？</div>';
+  } else {
+    html = '<div class="text-center py-2"><i class="bi bi-check-circle-fill text-success" style="font-size:2rem"></i><div class="mt-2" style="font-size:.9rem;color:#e2e8f0">問題は検出されませんでした。<br>シフトを確定します。</div></div>';
+  }
+  document.getElementById('confirm-dialog-body').innerHTML = html;
+  document.getElementById('btn-do-confirm').onclick = () => document.getElementById('confirm-form').submit();
+  new bootstrap.Modal(document.getElementById('confirmDialog')).show();
+}
+
 function openAssignModal(cell) {
+  if (IS_CONFIRMED) {
+    showToast('確定済みのシフトは変更できません。変更するには確定を解除してください。', 'warning');
+    return;
+  }
   _cell = cell;
   const { empName, date, slot, assigned, pos, reinf, reinfStart, reinfEnd, shiftTime, hasRequest } = cell.dataset;
   const slotJp = slot === 'breakfast' ? '朝食' : 'ディナー';
@@ -839,6 +883,25 @@ function editNote(el) {
   input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
 }
 </script>
+
+<!-- 確定確認ダイアログ -->
+<div class="modal fade" id="confirmDialog" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px">
+    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:16px">
+      <div class="modal-header border-secondary py-2 px-3">
+        <h6 class="modal-title"><i class="bi bi-check-circle me-2"></i>シフトを確定しますか？</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-3 py-3" id="confirm-dialog-body"></div>
+      <div class="modal-footer border-secondary py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-success btn-sm" id="btn-do-confirm">
+          <i class="bi bi-check-lg me-1"></i>確定する
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 変更履歴モーダル -->
 <div class="modal fade" id="historyModal" tabindex="-1">

@@ -297,7 +297,7 @@
     <div class="phase-bar">
       <div class="phase-step {{ 'done' if phase in ('generate','confirm') else 'active' }}">希望収集</div>
       <div class="phase-step {{ 'done' if phase == 'confirm' else 'active' if phase == 'generate' else '' }}">自動生成</div>
-      <div class="phase-step {{ 'done active' if phase == 'confirm' else '' }}">確定</div>
+      <div class="phase-step {{ 'done' if phase == 'confirm' else '' }}">確定</div>
     </div>
     <div class="period-meta">
       <strong>{{ p.start_date }}</strong> 〜 <strong>{{ p.end_date }}</strong>
