@@ -44,7 +44,7 @@
           <div class="text-muted small">
             {{ emp.employment_type.label() }} ·
             {% if emp.primary_position %}{{ emp.primary_position.label() }}{% else %}どちらでも{% endif %} ·
-            H:{{ emp.hall_skill.label() }} / K:{{ emp.kitchen_skill.label() }}
+            {% if emp.primary_timeslot %}{{ emp.primary_timeslot.short_label() }}専任{% else %}どちらでも{% endif %}
           </div>
         </div>
         <div class="d-flex gap-1">
