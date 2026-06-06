@@ -126,6 +126,9 @@ Sortable.create(document.getElementById('emp-list'), {
   handle: '.drag-handle',
   animation: 150,
   ghostClass: 'opacity-50',
+  scroll: true,
+  scrollSensitivity: 80,
+  scrollSpeed: 12,
   onEnd() {
     // デバウンス：連続操作後に1回だけ保存
     clearTimeout(saveTimer);
