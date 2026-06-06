@@ -395,8 +395,27 @@
           <li><span class="step-num">1</span><div>上部タブで<strong>朝食 / ディナー</strong>・<strong>ホール / キッチン</strong>の表示を切り替えます。</div></li>
           <li><span class="step-num">2</span><div><strong>セルをタップ</strong>するとその日・そのスタッフの担当を手動で追加・変更できます。</div></li>
           <li><span class="step-num">3</span><div><strong>日付ヘッダーをタップ</strong>するとその日の全員のタイムラインが確認できます。</div></li>
-          <li><span class="step-num">4</span><div>右上のボタンから <strong>Excel / PDF</strong> でエクスポートできます。</div></li>
+          <li><span class="step-num">4</span><div>内容が確定したら<strong>「確定」ボタン</strong>を押します。確定後に Excel / PDF エクスポートが可能になります。</div></li>
         </ul>
+
+        <div class="sub-heading">確定・確定解除</div>
+        <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
+          <thead class="table-light"><tr><th>操作</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><i class="bi bi-check-lg text-success me-1"></i>確定</td>
+              <td>ボタンを押すと<strong>確認ダイアログ</strong>が表示されます。人員不足の日数・希望未提出のスタッフ数が一覧表示され、問題を把握したうえで確定できます。確定後はセルの編集がロックされます。</td>
+            </tr>
+            <tr>
+              <td><i class="bi bi-lock-fill text-danger me-1"></i>確定解除</td>
+              <td>確定済みのシフトを再び編集可能な状態に戻します。修正後は再度「確定」を押してください。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="sub-heading">Excel / PDF エクスポート</div>
+        <p style="font-size:.82rem">右上の <i class="bi bi-file-earmark-spreadsheet"></i> / <i class="bi bi-file-earmark-pdf"></i> ボタンからエクスポートできます。<br>
+        シフトが<strong>未確定の場合はボタンがグレーアウト</strong>されます。タップすると「確定」を促すメッセージが表示されます。</p>
 
         <div class="sub-heading">人員状況グリッド（ページ上部）</div>
         <p class="mb-2">ページ上部の4マスのグリッドで、朝食ホール・朝食キッチン・ディナーホール・ディナーキッチン別の人員不足状況を一覧できます。タップすると不足している日付チップが展開されます。</p>
@@ -405,11 +424,12 @@
           <span style="background:#f59e0b;color:white;border-radius:4px;padding:2px 8px;font-weight:600">黄：リーダー不足</span>
           <span style="background:#22c55e;color:white;border-radius:4px;padding:2px 8px;font-weight:600">緑：充足</span>
         </div>
-        <p class="mb-0" style="font-size:.82rem">日付ヘッダーにも同様の色でボーダーが付きます（赤：人員不足 / 黄：リーダー不足）。</p>
+        <p style="font-size:.82rem">日付ヘッダーにも同様の色でボーダーが付きます（赤：人員不足 / 黄：リーダー不足）。<br>
+        表の「予約」行には、現在表示中の時間帯（朝食 / ディナー）のその日の予約客数が表示されます。</p>
 
         <div class="sub-heading">応援要員の追加</div>
-        <p class="mb-1">セルをタップ →「応援で追加」セクションで時間帯を指定して追加できます。<br>
-        プリセット（全時間 / 早番 / 遅番）で素早く設定できます。</p>
+        <p class="mb-1">セルをタップ →「時間を指定する」で時間帯を指定して追加できます。<br>
+        プリセット（全時間 / 早番 / 遅番）で素早く設定できます。ポジション選択は現在表示中のポジション（ホール / キッチン）が初期選択されます。</p>
 
         <div class="tip-box">
           <i class="bi bi-lightbulb-fill me-1"></i>
