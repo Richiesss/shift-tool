@@ -380,6 +380,13 @@ def stats_multi():
                 })
     overtime_alerts.sort(key=lambda x: -x["hours"])
 
+    # 客数あたり人件費（人員配置の妥当性を判断する指標）
+    customer_counts = repo.get_total_customer_counts(sel_ids)
+    total_labor_cost = sum(d.get("cost", 0.0) for d in stats_data.values())
+    cost_per_customer = (
+        total_labor_cost / customer_counts["total"] if customer_counts["total"] > 0 else None
+    )
+
     return render_template(
         "schedule/stats_multi.html",
         all_periods=all_periods,
@@ -390,6 +397,9 @@ def stats_multi():
         any_wage=any_wage,
         overtime_alerts=overtime_alerts,
         weekly_limit=WEEKLY_LIMIT,
+        customer_counts=customer_counts,
+        total_labor_cost=total_labor_cost,
+        cost_per_customer=cost_per_customer,
     )
 
 

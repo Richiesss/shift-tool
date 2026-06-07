@@ -509,6 +509,22 @@ def get_reservation_counts(period_id: int) -> dict[str, dict[str, int]]:
     return {r["date"]: {"breakfast": r["breakfast"], "dinner": r["dinner"]} for r in rows}
 
 
+def get_total_customer_counts(period_ids: list[int]) -> dict[str, int]:
+    """指定した複数期間にわたる来客数の合計を {"breakfast": int, "dinner": int, "total": int} で返す"""
+    if not period_ids:
+        return {"breakfast": 0, "dinner": 0, "total": 0}
+    ph = ",".join(["?"] * len(period_ids))
+    conn = get_connection()
+    row = conn.execute(
+        f"SELECT COALESCE(SUM(breakfast),0) AS b, COALESCE(SUM(dinner),0) AS d "
+        f"FROM reservation_counts WHERE period_id IN ({ph})",
+        period_ids
+    ).fetchone()
+    conn.close()
+    b, d = row["b"], row["d"]
+    return {"breakfast": b, "dinner": d, "total": b + d}
+
+
 def save_reservation_count(period_id: int, date_str: str, breakfast: int, dinner: int):
     """予約客数を保存"""
     conn = get_connection()

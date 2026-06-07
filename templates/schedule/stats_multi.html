@@ -68,12 +68,11 @@
               <th>名前</th>
               {% if sel_periods|length > 1 %}
               {% for p in sel_periods %}
-              <th class="text-center" title="{{ p.start_date }}〜{{ p.end_date }}">
+              <th class="text-center hours-col" title="{{ p.start_date }}〜{{ p.end_date }}">
                 {{ p.start_date[5:] }}〜
               </th>
               {% endfor %}
               {% endif %}
-              <th class="text-center">総コマ数</th>
               <th class="text-center hours-col">推計時間</th>
               {% if any_wage %}
               <th class="text-center cost-col">推計人件費</th>
@@ -81,7 +80,6 @@
             </tr>
           </thead>
           <tbody>
-            {% set total_shifts = namespace(v=0) %}
             {% set total_hours  = namespace(v=0.0) %}
             {% set total_cost   = namespace(v=0.0) %}
             {% for emp in employees %}
@@ -89,7 +87,6 @@
             {% set shifts = d.get('shifts', 0) %}
             {% set hours  = d.get('hours', 0.0) %}
             {% set cost   = d.get('cost', 0.0) %}
-            {% set total_shifts.v = total_shifts.v + shifts %}
             {% set total_hours.v  = total_hours.v  + hours %}
             {% set total_cost.v   = total_cost.v   + cost %}
             <tr>
@@ -97,16 +94,12 @@
               {% if sel_periods|length > 1 %}
               {% for p in sel_periods %}
               {% set bp = d.get('by_period', {}).get(p.id, {}) %}
-              <td class="num text-center">
-                {% if bp.get('shifts', 0) > 0 %}
-                <span class="badge bg-primary bg-opacity-75">{{ bp.shifts }}</span>
-                {% else %}
-                <span class="text-muted">—</span>
-                {% endif %}
+              <td class="num text-center hours-col">
+                {% if bp.get('hours', 0) > 0 %}{{ "%.1f"|format(bp.hours) }}h
+                {% else %}<span class="text-muted">—</span>{% endif %}
               </td>
               {% endfor %}
               {% endif %}
-              <td class="num text-center fw-bold">{{ shifts if shifts > 0 else '—' }}</td>
               <td class="num text-center hours-col">
                 {% if hours > 0 %}{{ "%.1f"|format(hours) }}h{% else %}—{% endif %}
               </td>
@@ -129,17 +122,16 @@
               <td>合計</td>
               {% if sel_periods|length > 1 %}
               {% for p in sel_periods %}
-              <td class="num text-center">
-                {% set p_total = namespace(v=0) %}
+              <td class="num text-center hours-col">
+                {% set p_total = namespace(v=0.0) %}
                 {% for emp in employees %}
                 {% set bp = stats_data.get(emp.id, {}).get('by_period', {}).get(p.id, {}) %}
-                {% set p_total.v = p_total.v + bp.get('shifts', 0) %}
+                {% set p_total.v = p_total.v + bp.get('hours', 0.0) %}
                 {% endfor %}
-                {{ p_total.v }}
+                {{ "%.1f"|format(p_total.v) }}h
               </td>
               {% endfor %}
               {% endif %}
-              <td class="num text-center">{{ total_shifts.v }}</td>
               <td class="num text-center hours-col">{{ "%.1f"|format(total_hours.v) }}h</td>
               {% if any_wage %}
               <td class="num text-center cost-col">¥{{ "{:,.0f}".format(total_cost.v) }}</td>
@@ -183,6 +175,36 @@
       {% endif %}
     </div>
   </div>
+
+  {% if any_wage %}
+  <!-- 客数あたり人件費（人員配置の妥当性指標） -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="small fw-semibold text-muted mb-2">
+        <i class="bi bi-graph-up me-1"></i>客数あたり人件費
+      </div>
+      {% if cost_per_customer is not none %}
+      <div class="d-flex align-items-baseline gap-2 mb-2">
+        <span class="fs-3 fw-bold cost-col">¥{{ "{:,.0f}".format(cost_per_customer) }}</span>
+        <span class="text-muted small">/ 来客1人あたり</span>
+      </div>
+      <div class="text-muted small">
+        合計人件費 ¥{{ "{:,.0f}".format(total_labor_cost) }}　÷
+        来客数 {{ "{:,}".format(customer_counts.total) }}人
+        （朝食 {{ "{:,}".format(customer_counts.breakfast) }} ／ ディナー {{ "{:,}".format(customer_counts.dinner) }}）
+      </div>
+      <p class="text-muted small mb-0 mt-2">
+        ※ 選択期間の合計人件費を、同期間の来客数（「客数管理」で入力した予約客数）で割った概算値です。
+        前期間と比べて高ければ、忙しさに対して人員を厚く配置しすぎている可能性があります。
+      </p>
+      {% else %}
+      <p class="text-muted small mb-0">
+        来客数が未入力のため算出できません。「客数管理」画面で予約客数を入力してください。
+      </p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 
   {% if any_wage %}
   <!-- 人件費グラフ -->
