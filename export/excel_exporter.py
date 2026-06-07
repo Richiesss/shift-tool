@@ -28,7 +28,8 @@ FILL_WD_H    = PatternFill("solid", fgColor="E2E8F0")   # 薄グレー（平日�
 FILL_SAT_D   = PatternFill("solid", fgColor="EFF6FF")   # 極薄青（土曜データ）
 FILL_SUN_D   = PatternFill("solid", fgColor="FFF1F2")   # 極薄赤（日曜データ）
 FILL_LEAVE   = PatternFill("solid", fgColor="D1FAE5")   # 緑（有給）
-FILL_FT_OFF  = PatternFill("solid", fgColor="FCA5A5")   # 赤塗りつぶし（正社員希望休）
+FILL_FT_OFF   = PatternFill("solid", fgColor="FCA5A5")   # 赤塗りつぶし（正社員希望休）
+FILL_CELL_NOTE = PatternFill("solid", fgColor="FDE047")  # 黄色（セルコメント）
 FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")   # 白（通常・白地）
 FILL_EVEN    = PatternFill("solid", fgColor="FFFFFF")   # 白（偶数行も白で統一）
 FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行
@@ -43,7 +44,8 @@ FONT_NAME   = Font(bold=True, size=9)
 FONT_DATA   = Font(size=9)
 FONT_NOTE   = Font(size=8, bold=True)
 FONT_LEAVE  = Font(color="166534", bold=True, size=9)   # 有給：緑
-FONT_FT_OFF = Font(color="DC2626", bold=True, size=9)   # 正社員希望休：赤
+FONT_FT_OFF   = Font(color="DC2626", bold=True, size=9)   # 正社員希望休：赤
+FONT_CELL_NOTE = Font(color="78350F", bold=True, size=7)  # セルコメント：濃黄文字・小さめ
 FONT_OFF    = Font(color="9CA3AF", size=9)
 FONT_SUM    = Font(size=8)
 
@@ -78,10 +80,11 @@ def _get_shift_text(
     date_str: str,
     assignments: dict,
     req_map: dict,
+    cell_notes: dict | None = None,
 ) -> tuple[str, str]:
     """
     (セルテキスト, スタイル種別) を返す。
-    スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off'
+    スタイル種別: 'assigned' | 'assigned_note' | 'cell_note' | 'leave' | 'ft_off' | 'off'
 
     表示フォーマット:
       通常シフト   : "13 - 22.5"
@@ -93,8 +96,9 @@ def _get_shift_text(
     """
     from utils.shift_patterns import PATTERN_MAP
 
-    req  = req_map.get((emp_id, date_str))
-    note = (req.note or "").strip() if req else ""
+    req       = req_map.get((emp_id, date_str))
+    note      = (req.note or "").strip() if req else ""
+    cell_note = (cell_notes or {}).get((emp_id, date_str), "").strip()
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
@@ -109,6 +113,8 @@ def _get_shift_text(
     d_raw = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
 
     if not b_raw and not d_raw:
+        if cell_note:
+            return cell_note, "cell_note"
         return "-", "off"
 
     # 4タプルから位置情報を展開
@@ -146,7 +152,9 @@ def _get_shift_text(
     else:
         s, e = _slot_default(b_pos, d_pos)
 
-    # 備考を時刻の間に挟む形式
+    # セルコメントを時刻の間に挟む（ハイフン置き換え）
+    if cell_note:
+        return f"{s} {cell_note} {e}", "cell_note"
     if note:
         return f"{s} {note} {e}", "assigned_note"
     return f"{s} - {e}", "assigned"
@@ -185,6 +193,7 @@ def export_excel(
     period: SchedulePeriod,
     employees: list[Employee],
     assignments: dict,
+    cell_notes: dict | None = None,
 ):
     """
     シフト表を Excel に出力する。
@@ -282,9 +291,12 @@ def export_excel(
             date_str = d.isoformat()
             dow      = d.weekday()
             is_h     = date_str in holidays
-            text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
+            text, style = _get_shift_text(emp.id, date_str, assignments, req_map, cell_notes)
 
-            if style == "ft_off":
+            if style == "cell_note":
+                fill = FILL_CELL_NOTE
+                font = FONT_CELL_NOTE
+            elif style == "ft_off":
                 fill = FILL_FT_OFF
                 font = FONT_FT_OFF
             elif style == "leave":

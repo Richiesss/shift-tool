@@ -33,10 +33,11 @@ def excel(period_id):
     if period.status != "confirmed":
         flash("確定済みのシフトのみエクスポートできます", "error")
         return redirect(url_for("schedule.index", period_id=period_id))
-    employees = repo.get_all_employees(active_only=True)
+    employees   = repo.get_all_employees(active_only=True)
     assignments = _assignments_dict(period_id)
+    cell_notes  = repo.get_cell_notes(period_id)
     buf = io.BytesIO()
-    export_excel(buf, period, employees, assignments)
+    export_excel(buf, period, employees, assignments, cell_notes=cell_notes)
     buf.seek(0)
     filename = _period_filename(period, "xlsx")
     return send_file(buf, as_attachment=True, download_name=filename,
@@ -52,10 +53,11 @@ def pdf(period_id):
     if period.status != "confirmed":
         flash("確定済みのシフトのみエクスポートできます", "error")
         return redirect(url_for("schedule.index", period_id=period_id))
-    employees = repo.get_all_employees(active_only=True)
+    employees   = repo.get_all_employees(active_only=True)
     assignments = _assignments_dict(period_id)
+    cell_notes  = repo.get_cell_notes(period_id)
     buf = io.BytesIO()
-    export_pdf(buf, period, employees, assignments)
+    export_pdf(buf, period, employees, assignments, cell_notes=cell_notes)
     buf.seek(0)
     filename = _period_filename(period, "pdf")
     return send_file(buf, as_attachment=True, download_name=filename,

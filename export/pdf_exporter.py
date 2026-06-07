@@ -38,8 +38,10 @@ COL_TXT_SAT   = colors.HexColor("#1D4ED8")   # 土曜文字（青）
 COL_TXT_SUN   = colors.HexColor("#DC2626")   # 日曜文字（赤）
 COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
 COL_TXT_LEAVE = colors.HexColor("#166534")   # 有給文字（緑）
-COL_FT_OFF_BG = colors.HexColor("#FCA5A5")   # 正社員希望休背景（赤塗りつぶし）
-COL_FT_OFF_TX = colors.HexColor("#DC2626")   # 正社員希望休文字（赤）
+COL_FT_OFF_BG   = colors.HexColor("#FCA5A5")   # 正社員希望休背景（赤塗りつぶし）
+COL_FT_OFF_TX   = colors.HexColor("#DC2626")   # 正社員希望休文字（赤）
+COL_CELL_NOTE_BG = colors.HexColor("#FDE047")  # セルコメント背景（黄色）
+COL_CELL_NOTE_TX = colors.HexColor("#78350F")  # セルコメント文字（濃茶）
 
 
 # ── フォント登録 ─────────────────────────────────────────────────────────
@@ -94,17 +96,19 @@ def _get_shift_text(
     date_str: str,
     assignments: dict,
     req_map: dict,
+    cell_notes: dict | None = None,
 ) -> tuple[str, str]:
     """
     (セルテキスト, スタイル種別) を返す。
-    スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off'
+    スタイル種別: 'assigned' | 'assigned_note' | 'cell_note' | 'leave' | 'ft_off' | 'off'
 
     assignments の値は (position_value, is_reinforcement, reinf_start, reinf_end) の4タプル。
     """
     from utils.shift_patterns import PATTERN_MAP
 
-    req  = req_map.get((emp_id, date_str))
-    note = (req.note or "").strip() if req else ""
+    req       = req_map.get((emp_id, date_str))
+    note      = (req.note or "").strip() if req else ""
+    cell_note = (cell_notes or {}).get((emp_id, date_str), "").strip()
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
@@ -117,6 +121,8 @@ def _get_shift_text(
     d_raw = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
 
     if not b_raw and not d_raw:
+        if cell_note:
+            return cell_note, "cell_note"
         return "-", "off"
 
     # 4タプルから位置情報を展開
@@ -153,6 +159,8 @@ def _get_shift_text(
     else:
         s, e = _slot_default(b_pos, d_pos)
 
+    if cell_note:
+        return f"{s} {cell_note} {e}", "cell_note"
     if note:
         return f"{s} {note} {e}", "assigned_note"
     return f"{s}-{e}", "assigned"
@@ -183,6 +191,7 @@ def _build_block_table(
     block_emps, dates, assignments, req_map, col_widths,
     font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
     events_h: int = 0, notes: dict | None = None, holidays: set | None = None,
+    cell_notes: dict | None = None,
 ):
     """
     従業員グループ1ブロック分のテーブルを生成する。
@@ -210,7 +219,7 @@ def _build_block_table(
     for emp in block_emps:
         row = [emp.name]
         for d in dates:
-            text, _ = _get_shift_text(emp.id, d.isoformat(), assignments, req_map)
+            text, _ = _get_shift_text(emp.id, d.isoformat(), assignments, req_map, cell_notes)
             row.append(text)
         row.append(emp.name)
         emp_rows.append(row)
@@ -284,7 +293,11 @@ def _build_block_table(
             dow      = d.weekday()
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
             is_h = date_str in _hols
-            if style == "ft_off":
+            if style == "cell_note":
+                cmds.append(("BACKGROUND", (col, r), (col, r), COL_CELL_NOTE_BG))
+                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_CELL_NOTE_TX))
+                cmds.append(("FONTSIZE",   (col, r), (col, r), max(5, font_size - 1)))
+            elif style == "ft_off":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_FT_OFF_BG))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_FT_OFF_TX))
             elif style == "leave":
@@ -306,6 +319,7 @@ def export_pdf(
     period: SchedulePeriod,
     employees: list[Employee],
     assignments: dict,
+    cell_notes: dict | None = None,
 ):
     """
     シフト表を PDF に出力する（横向き A4・1ページ）。
@@ -406,6 +420,7 @@ def export_pdf(
             col_widths, font_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
             events_h=EVENTS_H, notes=notes, holidays=holidays,
+            cell_notes=cell_notes,
         )
         story.append(tbl)
         if hall_emps:
@@ -418,6 +433,7 @@ def export_pdf(
             col_widths, font_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
             events_h=0, holidays=holidays,
+            cell_notes=cell_notes,
         )
         story.append(tbl)
 
