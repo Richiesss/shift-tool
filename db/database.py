@@ -9,12 +9,12 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 # SQLite fallback path (desktop / dev)
 if getattr(sys, "frozen", False):
     if sys.platform == "darwin":
-        _DB_PATH = (Path.home() / "Library" / "Application Support"
+        DB_PATH = (Path.home() / "Library" / "Application Support"
                     / "SDU-Shift" / "shift_tool.db")
     else:
-        _DB_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "SDU-Shift" / "shift_tool.db"
+        DB_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "SDU-Shift" / "shift_tool.db"
 else:
-    _DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
+    DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 
 # PostgreSQL connection pool (reuse connections across requests)
 _pg_pool = None
@@ -77,8 +77,8 @@ class Connection:
             self.backend = "postgres"
         else:
             import sqlite3
-            _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(str(_DB_PATH), timeout=30)
+            DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(str(DB_PATH), timeout=30)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA foreign_keys = ON")
             self._conn.execute("PRAGMA journal_mode = WAL")
