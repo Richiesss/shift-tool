@@ -119,6 +119,15 @@
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: #cbd5e1; }
+  /* 正社員の希望休：赤斜線ハッチング */
+  .ft-off {
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(220,38,38,.18) 0px, rgba(220,38,38,.18) 1.5px,
+      transparent 1.5px, transparent 7px
+    );
+    background-color: #fff1f2;
+  }
   /* スタッフ名リンク */
   .emp-name-link {
     color: inherit; text-decoration: none; display: block;
@@ -410,7 +419,8 @@
           {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[slot] %}
           {% set req_time = time_map.get((emp.id, ds, slot), '') %}
           {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
-          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell"
+          {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
+          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell {{ 'ft-off' if is_ft_off else '' }}"
               style="cursor:pointer"
               data-emp-id="{{ emp.id }}"
               data-emp-name="{{ emp.name }}"

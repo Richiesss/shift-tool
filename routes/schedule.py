@@ -204,6 +204,15 @@ def index(period_id):
     submitted_ids = {r.employee_id for r in shift_requests}
     unsubmitted_count = sum(1 for e in all_employees if e.id not in submitted_ids)
 
+    # 正社員の希望休日（off_request）セット
+    ft_off_dates = {
+        (r.employee_id, r.date)
+        for r in shift_requests
+        if r.pattern_id == 'off_request'
+        and emp_map.get(r.employee_id) is not None
+        and emp_map[r.employee_id].employment_type.value == 'full_time'
+    }
+
     holidays = holiday_set(dates)
 
     # 社員デフォルト勤務時間（ポジション別・設定画面で変更可能）
@@ -239,6 +248,7 @@ def index(period_id):
         needs_regen=needs_regen,
         unsubmitted_count=unsubmitted_count,
         reservation_counts=reservation_counts,
+        ft_off_dates=ft_off_dates,
         today=today,
         ft_times=ft_times,
         holidays=holidays,

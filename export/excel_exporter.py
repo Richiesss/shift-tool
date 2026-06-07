@@ -28,6 +28,7 @@ FILL_WD_H    = PatternFill("solid", fgColor="E2E8F0")   # 薄グレー（平日�
 FILL_SAT_D   = PatternFill("solid", fgColor="EFF6FF")   # 極薄青（土曜データ）
 FILL_SUN_D   = PatternFill("solid", fgColor="FFF1F2")   # 極薄赤（日曜データ）
 FILL_LEAVE   = PatternFill("solid", fgColor="D1FAE5")   # 緑（有給）
+FILL_FT_OFF  = PatternFill(patternType="lightDown", fgColor="DC2626", bgColor="FFFFFF")  # 赤斜線（正社員希望休）
 FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")   # 白（通常・白地）
 FILL_EVEN    = PatternFill("solid", fgColor="FFFFFF")   # 白（偶数行も白で統一）
 FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行
@@ -42,6 +43,7 @@ FONT_NAME   = Font(bold=True, size=9)
 FONT_DATA   = Font(size=9)
 FONT_NOTE   = Font(size=8, bold=True)
 FONT_LEAVE  = Font(color="166534", bold=True, size=9)   # 有給：緑
+FONT_FT_OFF = Font(color="DC2626", bold=True, size=9)   # 正社員希望休：赤
 FONT_OFF    = Font(color="9CA3AF", size=9)
 FONT_SUM    = Font(size=8)
 
@@ -93,6 +95,10 @@ def _get_shift_text(
 
     req  = req_map.get((emp_id, date_str))
     note = (req.note or "").strip() if req else ""
+
+    # 正社員希望休
+    if req and req.pattern_id == "off_request":
+        return "休", "ft_off"
 
     # 有給チェック（paid_leave パターン or メモに「有給」）
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
@@ -278,7 +284,10 @@ def export_excel(
             is_h     = date_str in holidays
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
 
-            if style == "leave":
+            if style == "ft_off":
+                fill = FILL_FT_OFF
+                font = FONT_FT_OFF
+            elif style == "leave":
                 fill = FILL_LEAVE
                 font = FONT_LEAVE
             elif style == "off":

@@ -38,6 +38,8 @@ COL_TXT_SAT   = colors.HexColor("#1D4ED8")   # 土曜文字（青）
 COL_TXT_SUN   = colors.HexColor("#DC2626")   # 日曜文字（赤）
 COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
 COL_TXT_LEAVE = colors.HexColor("#166534")   # 有給文字（緑）
+COL_FT_OFF_BG = colors.HexColor("#FEE2E2")   # 正社員希望休背景（薄赤）
+COL_FT_OFF_TX = colors.HexColor("#DC2626")   # 正社員希望休文字（赤）
 
 
 # ── フォント登録 ─────────────────────────────────────────────────────────
@@ -103,6 +105,10 @@ def _get_shift_text(
 
     req  = req_map.get((emp_id, date_str))
     note = (req.note or "").strip() if req else ""
+
+    # 正社員希望休
+    if req and req.pattern_id == "off_request":
+        return "休", "ft_off"
 
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
         return "有給", "leave"
@@ -278,7 +284,10 @@ def _build_block_table(
             dow      = d.weekday()
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
             is_h = date_str in _hols
-            if style == "leave":
+            if style == "ft_off":
+                cmds.append(("BACKGROUND", (col, r), (col, r), COL_FT_OFF_BG))
+                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_FT_OFF_TX))
+            elif style == "leave":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_LEAVE))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_LEAVE))
             elif style == "off":
