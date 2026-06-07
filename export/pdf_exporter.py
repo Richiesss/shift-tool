@@ -296,7 +296,7 @@ def _build_block_table(
             if style == "cell_note":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_CELL_NOTE_BG))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_CELL_NOTE_TX))
-                cmds.append(("FONTSIZE",   (col, r), (col, r), max(5, font_size - 1)))
+                cmds.append(("FONTSIZE",   (col, r), (col, r), 4.5))
             elif style == "ft_off":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_FT_OFF_BG))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_FT_OFF_TX))

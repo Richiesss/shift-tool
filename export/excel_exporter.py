@@ -45,7 +45,7 @@ FONT_DATA   = Font(size=6, bold=True)
 FONT_NOTE   = Font(size=6, bold=True)
 FONT_LEAVE  = Font(color="166534", bold=True, size=6)   # 有給：緑
 FONT_FT_OFF   = Font(color="DC2626", bold=True, size=6)   # 正社員希望休：赤
-FONT_CELL_NOTE = Font(color="78350F", bold=True, size=6)  # セルコメント：濃黄文字
+FONT_CELL_NOTE = Font(color="78350F", bold=True, size=4.5)  # セルコメント：濃黄文字
 FONT_OFF    = Font(color="9CA3AF", size=6, bold=True)
 FONT_SUM    = Font(size=8)
 
