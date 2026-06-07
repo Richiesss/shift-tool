@@ -160,7 +160,7 @@ def _get_shift_text(
         s, e = _slot_default(b_pos, d_pos)
 
     if cell_note:
-        return f"{s} {cell_note} {e}", "cell_note"
+        return (s, cell_note, e), "cell_note"
     if note:
         return f"{s} {note} {e}", "assigned_note"
     return f"{s}-{e}", "assigned"
@@ -220,6 +220,8 @@ def _build_block_table(
         row = [emp.name]
         for d in dates:
             text, _ = _get_shift_text(emp.id, d.isoformat(), assignments, req_map, cell_notes)
+            if isinstance(text, tuple):
+                text = f"{text[0]} {text[1]} {text[2]}"
             row.append(text)
         row.append(emp.name)
         emp_rows.append(row)
@@ -291,7 +293,9 @@ def _build_block_table(
             col      = i + 1
             date_str = d.isoformat()
             dow      = d.weekday()
-            text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
+            text, style = _get_shift_text(emp.id, date_str, assignments, req_map, cell_notes)
+            if isinstance(text, tuple):
+                text = f"{text[0]} {text[1]} {text[2]}"
             is_h = date_str in _hols
             if style == "cell_note":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_CELL_NOTE_BG))

@@ -152,9 +152,9 @@ def _get_shift_text(
     else:
         s, e = _slot_default(b_pos, d_pos)
 
-    # セルコメントを時刻の間に挟む（ハイフン置き換え）
+    # セルコメントを時刻の間に挟む（タプルで返して呼び出し側がリッチテキスト化）
     if cell_note:
-        return f"{s} {cell_note} {e}", "cell_note"
+        return (s, cell_note, e), "cell_note"
     if note:
         return f"{s} {note} {e}", "assigned_note"
     return f"{s} - {e}", "assigned"
@@ -294,8 +294,26 @@ def export_excel(
             text, style = _get_shift_text(emp.id, date_str, assignments, req_map, cell_notes)
 
             if style == "cell_note":
-                fill = FILL_CELL_NOTE
-                font = FONT_CELL_NOTE
+                from openpyxl.cell.rich_text import CellRichText, TextBlock
+                from openpyxl.styles.fonts import Font as _XF
+                _tf = _XF(size=6,   bold=True)           # 時刻数字：6pt
+                _nf = _XF(size=4.5, bold=True, color="78350F")  # コメント：4.5pt
+                if isinstance(text, tuple):
+                    s_p, n_p, e_p = text
+                    rich = CellRichText(
+                        TextBlock(_tf, f"{s_p} "),
+                        TextBlock(_nf, n_p),
+                        TextBlock(_tf, f" {e_p}"),
+                    )
+                else:
+                    rich = CellRichText(TextBlock(_nf, text))
+                c = ws.cell(r, col)
+                c.value      = rich
+                c.fill       = FILL_CELL_NOTE
+                c.alignment  = ALIGN_C
+                c.border     = BORDER
+                ws.row_dimensions[r].height = 18
+                continue
             elif style == "ft_off":
                 fill = FILL_FT_OFF
                 font = FONT_FT_OFF
