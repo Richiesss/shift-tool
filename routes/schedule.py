@@ -2,7 +2,7 @@ from collections import defaultdict
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
 from models.schedule import ShiftAssignment
-from utils.constants import TimeSlot, Position, EmploymentType
+from utils.constants import TimeSlot, Position
 
 from utils.holidays import holiday_set
 
@@ -180,24 +180,17 @@ def index(period_id):
 
     # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
     assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot}
+    # このスロットで希望シフトを提出している従業員ID（専任外でも「希望はあるのに未アサイン」が見えるよう表示対象に含める）
+    submitted_in_slot = {eid for (eid, _ds, sv) in time_map.keys() if sv == slot}
 
-    # ポジション × スロットでメンバーを絞り込み、並び替え
-    # ルール: 1) 社員(正社員)が最上位
-    #         2) それ以降はスキルランク降順 リーダー→ベテラン→メンバー→ビギナー
-    # カテゴリ内はスタッフ管理画面の display_order 順を維持（stable sort）
-    def _emp_sort_key(e) -> tuple:
-        if e.employment_type == EmploymentType.FULL_TIME:
-            return (0, 0)          # 社員：最優先
-        # PART_TIME: スキルランク高いほど前（3-rank で昇順変換）
-        skill_rank = e.skill_for(pos).rank()  # leader=3, veteran=2, general=1, beginner=0
-        return (1, 3 - skill_rank)            # leader→0, veteran→1, general→2, beginner→3
-
-    base = [
+    # ポジション × スロットでメンバーを絞り込み
+    # 並び順はスタッフ管理画面の display_order（= employees の取得順）をそのまま維持
+    filtered_employees = [
         e for e in employees
         if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
-        and (e.primary_timeslot is None or e.primary_timeslot.value == slot or e.id in assigned_in_slot)
+        and (e.primary_timeslot is None or e.primary_timeslot.value == slot
+             or e.id in assigned_in_slot or e.id in submitted_in_slot)
     ]
-    filtered_employees = sorted(base, key=_emp_sort_key)
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 

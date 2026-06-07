@@ -46,6 +46,7 @@ def save():
         "ft_kitchen_breakfast_start", "ft_kitchen_breakfast_end",
         "ft_hall_dinner_start",       "ft_hall_dinner_end",
         "ft_kitchen_dinner_start",    "ft_kitchen_dinner_end",
+        "base_hourly_wage",           "early_morning_allowance",
     ]
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     repo.save_all_app_settings(new_settings)
@@ -62,15 +63,6 @@ def save():
     repo.save_breakfast_band_constraints(new_band)
 
     flash("設定を保存しました", "success")
-    return redirect(url_for("settings.index"))
-
-
-@bp.post("/save-wages")
-def save_wages():
-    """基本給・早朝手当を保存"""
-    global_keys = ["base_hourly_wage", "early_morning_allowance"]
-    repo.save_all_app_settings({k: request.form.get(k, "0") for k in global_keys})
-    flash("賃金設定を保存しました", "success")
     return redirect(url_for("settings.index"))
 
 

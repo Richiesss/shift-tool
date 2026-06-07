@@ -94,8 +94,6 @@ class GenerateView(QWidget):
             # 正社員両掛け持ち回避はハード制約で禁止済みのためUI設定を削除
             ("人員バランス均等化",   "balance_scale",
              "特定のスタッフに勤務が偏らないよう、全員の出勤数を均等化します。公平なシフト分配を重視する場合は「高」に設定してください。"),
-            ("深夜勤務分散",         "late_night_scale",
-             "ディナーの遅い時間帯（深夜枠）の担当が一部のスタッフに集中しないよう分散させます。"),
         ]
 
         self._config_combos: dict[str, QComboBox] = {}
@@ -355,7 +353,6 @@ class GenerateView(QWidget):
             cost_scale=scales["cost_scale"],
             pt_pref_scale=scales["pt_pref_scale"],
             balance_scale=scales["balance_scale"],
-            late_night_scale=scales["late_night_scale"],
         )
 
     def _on_go_to_edit(self):

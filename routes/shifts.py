@@ -9,7 +9,6 @@ from utils.holidays import holiday_set
 
 PAT_CATS = {
     'b_short': 'b', 'b_std': 'b', 'b_long': 'b', 'b_half': 'b',
-    'mid': 'm',
     'd_full1': 'd', 'd_full2': 'd',
     'd_std1': 'd', 'd_std2': 'd', 'd_std3': 'd',
     'd_s1': 'd', 'd_s2': 'd', 'd_s3': 'd',
@@ -93,6 +92,21 @@ def input(period_id):
         prev_idx = emp_idx - 1 if emp_idx > 0 else None
         next_idx = emp_idx + 1 if emp_idx < len(employees) - 1 else None
 
+    # 固定シフト（曜日固定パターン）によるプリフィル
+    # 希望が未提出の日のみ、登録済みの固定パターンから初期値を補完する
+    if current_emp and current_emp.fixed_patterns:
+        from utils.shift_patterns import default_pattern_from_fixed
+        for d in dates:
+            key = (current_emp.id, str(d))
+            if key in req_map:
+                continue
+            fp = current_emp.get_pattern(d.weekday())
+            if not fp:
+                continue
+            pid = default_pattern_from_fixed(fp.breakfast, fp.dinner)
+            if pid:
+                req_map[key] = ShiftRequest(employee_id=current_emp.id, date=str(d), pattern_id=pid)
+
     # 入力済み従業員数（社員は出勤前提なので常にカウント）
     filled_emp_ids = {r.employee_id for r in requests_list}
     filled_count = sum(
@@ -156,25 +170,28 @@ def save(period_id):
     for emp in target_emps:
         for d in dates:
             pid = request.form.get(f"pattern_{emp.id}_{d}")
-            if not pid:
+            # フォームに存在しない（= 未送信）日付のみスキップ。
+            # 空文字列（アルバイトの「休み」/社員の「出勤予定」）は
+            # 「希望提出済み」を表す有効な値として保存する。
+            if pid is None:
                 continue
             cs = request.form.get(f"custom_start_{emp.id}_{d}") or None
             ce = request.form.get(f"custom_end_{emp.id}_{d}") or None
             new_requests.append(ShiftRequest(
                 employee_id=emp.id,
                 date=str(d),
-                pattern_id=pid,
+                pattern_id=pid or None,
                 custom_start=cs,
                 custom_end=ce,
             ))
 
     repo.save_shift_requests(period_id, new_requests)
+    flash("希望シフトを保存しました", "success")
 
     # 1人モードなら次の従業員へ
     next_idx = request.form.get("next_emp_idx", type=int)
     if next_idx is not None:
         return redirect(url_for("shifts.input", period_id=period_id, emp_idx=next_idx))
-    flash("希望シフトを保存しました", "success")
     return redirect(url_for("shifts.input", period_id=period_id))
 
 

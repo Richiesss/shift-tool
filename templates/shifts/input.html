@@ -105,7 +105,6 @@
   .pat-leave{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
   .pat-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
   .pat-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
-  .pat-m    { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
   .pat-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
   .pat-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
 
@@ -309,8 +308,26 @@
 const _activeChip = document.querySelector('.emp-chip.active');
 _activeChip?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
 
-// フォーム送信時に離脱ガードをリセット
-document.getElementById('shift-form')?.addEventListener('submit', () => { window._formDirty = false; });
+// ── 全休確認ダイアログ ────────────────────────────────────────────
+// アルバイトは空文字列(='休み')、社員は休希望/有休が「休み」を意味する
+// （社員の空文字列は「出勤予定」なので対象外）
+const _isFullTimeForm = {{ 'true' if current_emp.employment_type.value == 'full_time' else 'false' }};
+function isAllOff() {
+  const inputs = document.querySelectorAll('#shift-form input[type=hidden][id^="hid_{{ current_emp.id }}_"]');
+  if (!inputs.length) return false;
+  return Array.from(inputs).every(inp => _isFullTimeForm
+    ? (inp.value === 'off_request' || inp.value === 'paid_leave')
+    : inp.value === '');
+}
+
+// フォーム送信時：全休なら確認ダイアログ、送信後は離脱ガードをリセット
+document.getElementById('shift-form')?.addEventListener('submit', (ev) => {
+  if (isAllOff() && !confirm('この期間、全ての日を「休み」として保存します。よろしいですか？')) {
+    ev.preventDefault();
+    return;
+  }
+  window._formDirty = false;
+});
 
 // ── パターンデータ ────────────────────────────────────────────────
 const PAT_LABELS = {
@@ -325,7 +342,7 @@ const PAT_CATS_JS = {
 // タップサイクル順：[休み, 過去履歴サジェスト(最大3), 有給, カスタム手動入力]
 const PAT_CYCLE = (() => {
   const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
-  const defs = ['d_std1', 'b_std', 'mid'];
+  const defs = ['d_std1', 'b_std'];
   const seen = new Set(['', 'paid_leave', 'custom']); // 末尾固定枠を予約
   const cycle = [''];
   for (const p of [...tops, ...defs]) {

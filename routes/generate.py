@@ -90,7 +90,6 @@ def run():
         cost_scale=_scale("cost_scale"),
         pt_pref_scale=_scale("pt_pref_scale"),
         balance_scale=_scale("balance_scale"),
-        late_night_scale=_scale("late_night_scale"),
     )
 
     # 生成中ステータスに更新してバックグラウンドで実行

@@ -31,7 +31,6 @@ class SolverConfig:
     cost_scale: float = 1.0            # 人件費最小化
     pt_pref_scale: float = 1.0         # アルバイト希望充当
     balance_scale: float = 1.0         # 人員バランス均等化
-    late_night_scale: float = 1.0      # 深夜勤務分散（アルバイトのみ）
 
 
 class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
@@ -115,7 +114,6 @@ def solve(
     優先順位（ソフト制約のペナルティ重み）:
       1. 人件費最小化（総時間削減）         weight=1000 × cost_scale
       2. 正社員両掛け持ち（朝食＋ディナー）はハード制約で禁止
-      2b. 深夜勤務分散（アルバイトのみ）  weight=500 × late_night_scale
       3a. 正社員希望を必ず通す             weight=200000（固定）
       3b. アルバイト希望を通す             weight=100 × pt_pref_scale
       4. 人員バランス均等化                 weight=10 × balance_scale
@@ -154,8 +152,7 @@ def solve(
     logger.info(f"[SOLVE START] period_id={period.id}  {period.start_date} 〜 {period.end_date}")
     logger.info(f"  日数={len(date_strs)}  有効従業員={len(active_employees)}  希望レコード={len(requests)}")
     logger.info(f"  config: cost={config.cost_scale} pt_pref={config.pt_pref_scale} "
-                f"balance={config.balance_scale} "
-                f"late_night={config.late_night_scale}")
+                f"balance={config.balance_scale}")
     ft_count = sum(1 for e in active_employees if e.employment_type == EmploymentType.FULL_TIME)
     pt_count = len(active_employees) - ft_count
     always_b = sum(1 for e in active_employees if e.always_available_breakfast)
@@ -476,18 +473,6 @@ def solve(
                     penalty_terms.append(w * var)
 
     # P2: 両時間帯掛け持ちはハード制約で禁止済み（ペナルティ不要）
-
-    # P2b: 深夜勤務分散（アルバイトのみ対象）
-    # FIX⑤: FT社員はディナーが基本業務のためペナルティ不要
-    # PT社員のディナー担当を均等分散させる
-    late_night_w = max(1, int(500 * config.late_night_scale))
-    for emp in active_employees:
-        if emp.employment_type == EmploymentType.FULL_TIME:
-            continue  # 社員はディナー出勤がデフォルト、ペナルティ対象外
-        for ds in date_strs:
-            for pos in positions:
-                v = assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
-                penalty_terms.append(late_night_w * v)
 
     # P3: アルバイトの希望充当（FIX②: FT社員は req_map を持たないため除外）
     # 社員は off_map で管理済みのため、ここではアルバイトのみ対象

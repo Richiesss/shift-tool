@@ -119,6 +119,9 @@
   .chip-hall    { background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: #cbd5e1; }
+  /* 希望提出済みだが未アサイン：グレー表示で「希望はあるが漏れている」ことを可視化 */
+  .chip-unassigned { background: #e2e8f0; color: #64748b; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
+  .assign-cell.has-unassigned-request { background-color: #f1f5f9; }
   /* 正社員の希望休：赤塗りつぶし */
   .ft-off { background-color: #FCA5A5 !important; }
   /* スタッフ個別コメント表示 */
@@ -417,10 +420,12 @@
           {% set is_ft = emp.employment_type.value == 'full_time' %}
           {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[slot] %}
           {% set req_time = time_map.get((emp.id, ds, slot), '') %}
+          {% set has_request = (emp.id, ds, slot) in time_map %}
           {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
           {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
           {% set cell_note = cell_notes.get((emp.id, ds), '') %}
-          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell {{ 'ft-off' if is_ft_off else '' }}"
+          {% set is_unassigned_request = has_request and not emp_asgn %}
+          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell {{ 'ft-off' if is_ft_off else '' }} {{ 'has-unassigned-request' if is_unassigned_request else '' }}"
               style="cursor:pointer"
               data-emp-id="{{ emp.id }}"
               data-emp-name="{{ emp.name }}"
@@ -432,7 +437,7 @@
               data-reinf-start="{{ emp_asgn.reinf_start if emp_asgn and emp_asgn.reinf_start else '' }}"
               data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
               data-shift-time="{{ display_time }}"
-              data-has-request="{{ 'true' if is_ft or time_map.get((emp.id, ds, slot)) is not none else 'false' }}"
+              data-has-request="{{ 'true' if is_ft or has_request else 'false' }}"
               data-cell-note="{{ cell_note }}"
               onclick="openAssignModal(this)">
             {% if emp_asgn %}
@@ -448,6 +453,11 @@
               </span>
               {% if t %}
               <div style="font-size:.65rem;color:#475569;line-height:1.2;margin-top:1px">{{ t }}</div>
+              {% endif %}
+            {% elif is_unassigned_request %}
+              <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
+              {% if req_time %}
+              <div style="font-size:.65rem;color:#94a3b8;line-height:1.2;margin-top:1px">{{ req_time }}</div>
               {% endif %}
             {% else %}
               <span class="chip-empty">+</span>
@@ -469,6 +479,7 @@
   <div class="d-flex gap-3 mt-2 small text-muted flex-wrap">
     <span><span class="chip-hall">H</span> ホール出勤</span>
     <span><span class="chip-kitchen">K</span> キッチン出勤</span>
+    <span><span class="chip-unassigned">希</span> 希望提出済み・未アサイン</span>
     <span class="text-secondary">— 該当なし</span>
     <span class="ms-auto">表示中：{{ '朝食' if slot == 'breakfast' else 'ディナー' }} / {{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
   </div>
