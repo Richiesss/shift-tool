@@ -1,10 +1,18 @@
 import io
+from datetime import date as _date
 from flask import Blueprint, send_file, flash, redirect, url_for
 from db import repositories as repo
 from export.excel_exporter import export_excel
 from export.pdf_exporter import export_pdf
 
 bp = Blueprint("export", __name__, url_prefix="/export")
+
+
+def _period_filename(period, ext: str) -> str:
+    """期間から「3月前半+SKY+DINING+UOMANシフト.xlsx」形式のファイル名を生成"""
+    start = _date.fromisoformat(period.start_date)
+    half  = "前半" if start.day <= 15 else "後半"
+    return f"{start.month}月{half}+SKY+DINING+UOMANシフト.{ext}"
 
 
 def _assignments_dict(period_id: int) -> dict:
@@ -30,7 +38,7 @@ def excel(period_id):
     buf = io.BytesIO()
     export_excel(buf, period, employees, assignments)
     buf.seek(0)
-    filename = f"shift_{period.start_date}_{period.end_date}.xlsx"
+    filename = _period_filename(period, "xlsx")
     return send_file(buf, as_attachment=True, download_name=filename,
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -49,6 +57,6 @@ def pdf(period_id):
     buf = io.BytesIO()
     export_pdf(buf, period, employees, assignments)
     buf.seek(0)
-    filename = f"shift_{period.start_date}_{period.end_date}.pdf"
+    filename = _period_filename(period, "pdf")
     return send_file(buf, as_attachment=True, download_name=filename,
                      mimetype="application/pdf")

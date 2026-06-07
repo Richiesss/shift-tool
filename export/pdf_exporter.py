@@ -344,7 +344,9 @@ def export_pdf(
     font_size = max(5, min(8, int(data_w / (9 * 0.6))))
 
     start_d      = date.fromisoformat(period.start_date)
+    half         = "前半" if start_d.day <= 15 else "後半"
     period_label = f"{start_d.month}月"
+    doc_title    = f"{start_d.month}月{half} SKY DINING UOMAN シフト"
 
     # ── レイアウト計算 ────────────────────────────────────────────────
     HDR_H    = 11   # 日付番号行高さ (pt)
@@ -410,4 +412,10 @@ def export_pdf(
         )
         story.append(tbl)
 
-    doc.build(story)
+    def _set_meta(canvas, doc):
+        canvas.setTitle(doc_title)
+        canvas.setAuthor("SKY DINING UOMAN")
+        canvas.setSubject("シフト表")
+        canvas.setCreator("SDU-Shift")
+
+    doc.build(story, onFirstPage=_set_meta, onLaterPages=_set_meta)
