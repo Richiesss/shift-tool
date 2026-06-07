@@ -679,6 +679,36 @@ def save_schedule_note(period_id: int, date_str: str, note: str):
     conn.close()
 
 
+def get_cell_notes(period_id: int) -> dict[tuple[int, str], str]:
+    """スタッフ個別コメントを {(employee_id, date): note} で返す"""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT employee_id, date, note FROM cell_notes WHERE period_id=? ORDER BY date",
+        (period_id,)
+    ).fetchall()
+    conn.close()
+    return {(r["employee_id"], r["date"]): r["note"] for r in rows if r["note"]}
+
+
+def save_cell_note(period_id: int, employee_id: int, date_str: str, note: str):
+    """スタッフ個別コメントを保存。空文字の場合は削除。100文字以内に制限"""
+    note = note.strip()[:100]
+    conn = get_connection()
+    if note:
+        conn.execute(
+            """INSERT INTO cell_notes (period_id, employee_id, date, note) VALUES (?,?,?,?)
+               ON CONFLICT(period_id, employee_id, date) DO UPDATE SET note=excluded.note""",
+            (period_id, employee_id, date_str, note)
+        )
+    else:
+        conn.execute(
+            "DELETE FROM cell_notes WHERE period_id=? AND employee_id=? AND date=?",
+            (period_id, employee_id, date_str)
+        )
+    conn.commit()
+    conn.close()
+
+
 # ── シフト制約 ──────────────────────────────────────────────────────────
 
 @cache.memoize(timeout=300)

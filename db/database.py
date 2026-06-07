@@ -250,6 +250,14 @@ _CREATE_TABLES = [
         action      TEXT NOT NULL,
         changed_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     )""",
+    """CREATE TABLE IF NOT EXISTS cell_notes (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        period_id   INTEGER NOT NULL REFERENCES schedule_periods(id) ON DELETE CASCADE,
+        employee_id INTEGER NOT NULL,
+        date        TEXT NOT NULL,
+        note        TEXT NOT NULL DEFAULT '',
+        UNIQUE(period_id, employee_id, date)
+    )""",
 ]
 
 _MIGRATIONS = [
@@ -283,6 +291,7 @@ _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_reservation_period       ON reservation_counts(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_schedule_notes_period    ON schedule_notes(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_assignment_log_period     ON assignment_log(period_id)",
+    "CREATE INDEX IF NOT EXISTS idx_cell_notes_period          ON cell_notes(period_id)",
 ]
 
 

@@ -121,6 +121,12 @@
   .chip-empty   { color: #cbd5e1; }
   /* 正社員の希望休：赤塗りつぶし */
   .ft-off { background-color: #FCA5A5 !important; }
+  /* スタッフ個別コメント表示 */
+  .cell-note-badge {
+    display: block; font-size: .6rem; color: #f59e0b; line-height: 1.2;
+    margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 58px;
+  }
   /* スタッフ名リンク */
   .emp-name-link {
     color: inherit; text-decoration: none; display: block;
@@ -413,6 +419,7 @@
           {% set req_time = time_map.get((emp.id, ds, slot), '') %}
           {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
           {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
+          {% set cell_note = cell_notes.get((emp.id, ds), '') %}
           <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell {{ 'ft-off' if is_ft_off else '' }}"
               style="cursor:pointer"
               data-emp-id="{{ emp.id }}"
@@ -426,6 +433,7 @@
               data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
               data-shift-time="{{ display_time }}"
               data-has-request="{{ 'true' if is_ft or time_map.get((emp.id, ds, slot)) is not none else 'false' }}"
+              data-cell-note="{{ cell_note }}"
               onclick="openAssignModal(this)">
             {% if emp_asgn %}
               {% set pos_label = 'H' if pos == 'hall' else 'K' %}
@@ -443,6 +451,11 @@
               {% endif %}
             {% else %}
               <span class="chip-empty">+</span>
+            {% endif %}
+            {% if cell_note %}
+            <span class="cell-note-badge" title="{{ cell_note }}">
+              <i class="bi bi-chat-fill" style="font-size:.55rem"></i> {{ cell_note[:8] }}{% if cell_note|length > 8 %}…{% endif %}
+            </span>
             {% endif %}
           </td>
           {% endfor %}
@@ -546,7 +559,17 @@
           </button>
         </div>
 
-        <!-- ④ 担当を外す（割当済みの場合のみ） -->
+        <!-- ④ コメント -->
+        <div class="asgn-section">
+          <div class="asgn-section-label">コメント（任意）</div>
+          <textarea id="cell-note-input" rows="2"
+                    class="form-control form-control-sm"
+                    style="background:#0f172a;border-color:#334155;color:#e2e8f0;resize:none;font-size:.82rem"
+                    placeholder="初日・オムレツ担当・休憩15:00〜 など（100文字以内）"
+                    maxlength="100"></textarea>
+        </div>
+
+        <!-- ⑤ 担当を外す（割当済みの場合のみ） -->
         <div id="remove-section" class="asgn-section" style="display:none">
           <button class="btn btn-outline-danger w-100 btn-sm" onclick="doRemove()">
             <i class="bi bi-x-circle me-1"></i>担当を外す
@@ -559,9 +582,16 @@
 </div>
 
 <script>
-const IS_CONFIRMED     = {{ 'true' if period.status == 'confirmed' else 'false' }};
-const TOTAL_SHORTAGE   = {{ total_shortage }};
+const IS_CONFIRMED      = {{ 'true' if period.status == 'confirmed' else 'false' }};
+const TOTAL_SHORTAGE    = {{ total_shortage }};
 const UNSUBMITTED_COUNT = {{ unsubmitted_count }};
+const PERIOD_ID         = {{ period.id }};
+// スタッフ個別コメントキャッシュ {empId_date: note}
+const CELL_NOTES = {
+  {% for (emp_id, date), note in cell_notes.items() %}
+  "{{ emp_id }}_{{ date }}": {{ note | tojson }},
+  {% endfor %}
+};
 
 // ── タイムライン ─────────────────────────────────────
 const TL_ASGN = {
@@ -791,7 +821,15 @@ function openAssignModal(cell) {
   document.getElementById('btn-submit').innerHTML =
     `<i class="bi bi-person-check me-1"></i>${assigned === 'true' ? '担当を変更する' : '担当として追加'}`;
 
-  if (!_modal) _modal = new bootstrap.Modal(document.getElementById('assignModal'));
+  // コメント欄初期化
+  const noteKey = `${cell.dataset.empId}_${cell.dataset.date}`;
+  document.getElementById('cell-note-input').value = CELL_NOTES[noteKey] || cell.dataset.cellNote || '';
+
+  if (!_modal) {
+    _modal = new bootstrap.Modal(document.getElementById('assignModal'));
+    // モーダルを閉じる時にコメントを保存
+    document.getElementById('assignModal').addEventListener('hide.bs.modal', _saveCellNote);
+  }
   _modal.show();
 }
 
@@ -822,8 +860,39 @@ function doRemove() {
   callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot, position: d.pos, action: 'remove' });
 }
 
+function _saveCellNote() {
+  if (!_cell) return;
+  const note    = document.getElementById('cell-note-input').value.trim();
+  const empId   = +_cell.dataset.empId;
+  const date    = _cell.dataset.date;
+  const noteKey = `${empId}_${date}`;
+  const prev    = CELL_NOTES[noteKey] || _cell.dataset.cellNote || '';
+  if (note === prev) return;  // 変更なしはスキップ
+  CELL_NOTES[noteKey] = note;
+  fetch(`/schedule/${PERIOD_ID}/cell_note`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ employee_id: empId, date, note })
+  }).then(() => {
+    // セル内のバッジを即時更新（リロードなし）
+    const badge = _cell.querySelector('.cell-note-badge');
+    if (note) {
+      const icon = '<i class="bi bi-chat-fill" style="font-size:.55rem"></i> ';
+      const text = note.length > 8 ? note.slice(0, 8) + '…' : note;
+      if (badge) { badge.innerHTML = icon + text; badge.title = note; }
+      else {
+        const s = document.createElement('span');
+        s.className = 'cell-note-badge'; s.title = note;
+        s.innerHTML = icon + text;
+        _cell.appendChild(s);
+      }
+    } else {
+      if (badge) badge.remove();
+    }
+  });
+}
+
 function callAssign(payload) {
-  const periodId = {{ period.id if period else 0 }};
+  const periodId = PERIOD_ID;
   // スクロール位置を保存してリロード後に復元
   const grid = document.querySelector('.sched-grid');
   if (grid) sessionStorage.setItem('schedScroll',

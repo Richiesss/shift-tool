@@ -201,6 +201,7 @@ def index(period_id):
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
+    cell_notes    = repo.get_cell_notes(period_id)
     submitted_ids = {r.employee_id for r in shift_requests}
     unsubmitted_count = sum(1 for e in all_employees if e.id not in submitted_ids)
 
@@ -249,6 +250,7 @@ def index(period_id):
         unsubmitted_count=unsubmitted_count,
         reservation_counts=reservation_counts,
         ft_off_dates=ft_off_dates,
+        cell_notes=cell_notes,
         today=today,
         ft_times=ft_times,
         holidays=holidays,
@@ -305,6 +307,18 @@ def assign(period_id):
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.post("/<int:period_id>/cell_note")
+def save_cell_note(period_id):
+    data = request.get_json()
+    emp_id   = data.get("employee_id")
+    date_str = data.get("date", "")
+    note     = data.get("note", "")
+    if not emp_id or not date_str:
+        return jsonify({"ok": False, "error": "パラメータが不足しています"}), 400
+    repo.save_cell_note(period_id, emp_id, date_str, note)
+    return jsonify({"ok": True})
 
 
 @bp.post("/<int:period_id>/note")
