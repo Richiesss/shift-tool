@@ -12,8 +12,8 @@ def _safe_next(url: str) -> str:
     parsed = urlparse(url)
     # scheme や netloc が含まれる（外部URL）場合はデフォルトに戻す
     if parsed.scheme or parsed.netloc:
-        return url_for("employees.index")
-    return url or url_for("employees.index")
+        return url_for("dashboard.index")
+    return url or url_for("dashboard.index")
 
 
 def _login_page(**kwargs):
@@ -27,7 +27,7 @@ def _login_page(**kwargs):
 @bp.get("/login")
 def login():
     if session.get("authenticated") and session.get("sv") == SESSION_VERSION:
-        return redirect(url_for("employees.index"))
+        return redirect(url_for("dashboard.index"))
     return _login_page()
 
 
