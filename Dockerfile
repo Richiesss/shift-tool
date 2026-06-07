@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-ipafont-gothic \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-web.txt .

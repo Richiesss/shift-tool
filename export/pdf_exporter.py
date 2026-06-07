@@ -46,32 +46,58 @@ COL_CELL_NOTE_TX = colors.HexColor("#78350F")  # セルコメント文字（濃�
 
 # ── フォント登録 ─────────────────────────────────────────────────────────
 
-def _register_font() -> str:
-    """日本語フォントを登録。利用不可の場合は Helvetica にフォールバック。"""
+def _register_fonts() -> tuple[str, str]:
+    """日本語フォント（Regular + Bold）を登録。返り値: (regular_name, bold_name)"""
     import glob
-    candidates = [
-        # Linux: IPA Gothic (.ttf, ReportLab互換)
-        "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
-        "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
-        # Windows
-        "C:/Windows/Fonts/meiryo.ttc",
-        "C:/Windows/Fonts/YuGothR.ttc",
-        "C:/Windows/Fonts/msgothic.ttc",
-        # macOS
-        "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
-        "/Library/Fonts/Osaka.ttf",
-    ]
-    # glob fallback
-    candidates += sorted(glob.glob("/usr/share/fonts/**/*.ttf", recursive=True))
 
-    for path in candidates:
+    # Bold 候補（NotoSansCJK-Bold.ttc の JP サブフォントは index=0）
+    bold_candidates = [
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",     0),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Bold.otf",   None),
+        ("/usr/local/share/fonts/NotoSansCJK-Bold.ttc",             0),
+    ]
+
+    reg_candidates = [
+        ("/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",        None),
+        ("/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",       None),
+        ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",   0),
+        ("C:/Windows/Fonts/meiryo.ttc",                              None),
+        ("C:/Windows/Fonts/YuGothR.ttc",                             None),
+        ("C:/Windows/Fonts/msgothic.ttc",                            None),
+        ("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",          None),
+        ("/Library/Fonts/Osaka.ttf",                                 None),
+    ]
+    reg_candidates += [(p, None) for p in sorted(glob.glob("/usr/share/fonts/**/*.ttf", recursive=True))]
+
+    reg_name  = "Helvetica"
+    bold_name = "Helvetica-Bold"
+
+    for path, idx in reg_candidates:
         if os.path.exists(path):
             try:
-                pdfmetrics.registerFont(TTFont("JpFont", path))
-                return "JpFont"
+                kw = {"subfontIndex": idx} if idx is not None else {}
+                pdfmetrics.registerFont(TTFont("JpFont", path, **kw))
+                reg_name = "JpFont"
+                break
             except Exception:
                 continue
-    return "Helvetica"
+
+    for path, idx in bold_candidates:
+        if os.path.exists(path):
+            try:
+                kw = {"subfontIndex": idx} if idx is not None else {}
+                pdfmetrics.registerFont(TTFont("JpFont-Bold", path, **kw))
+                bold_name = "JpFont-Bold"
+                break
+            except Exception:
+                continue
+
+    # Bold フォントが見つからなければ Regular を Bold として流用
+    if bold_name == "Helvetica-Bold" and reg_name == "JpFont":
+        pdfmetrics.registerFont(TTFont("JpFont-Bold", reg_candidates[0][0]))
+        bold_name = "JpFont-Bold"
+
+    return reg_name, bold_name
 
 
 # ── ユーティリティ ────────────────────────────────────────────────────────
@@ -189,7 +215,7 @@ COL_EVENT_BG = colors.HexColor("#FEF08A")  # 行事行（備考欄）の背景�
 
 def _build_block_table(
     block_emps, dates, assignments, req_map, col_widths,
-    font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
+    font_name, bold_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
     events_h: int = 0, notes: dict | None = None, holidays: set | None = None,
     cell_notes: dict | None = None,
 ):
@@ -239,8 +265,9 @@ def _build_block_table(
                 rowHeights=row_heights, repeatRows=0)
 
     cmds = [
-        ("FONTNAME",      (0, 0), (-1, -1), font_name),
-        ("FONTSIZE",      (0, 0), (-1, -1), font_size),
+        ("FONTNAME",      (0, 0),          (-1, -1),          font_name),
+        ("FONTNAME",      (0, EMP_START),  (-1, -1),          bold_name),   # データ行はBold
+        ("FONTSIZE",      (0, 0),          (-1, -1),          font_size),
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("GRID",          (0, 0), (-1, -1), 0.4, COL_GRID),
@@ -300,6 +327,7 @@ def _build_block_table(
             if style == "cell_note":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_CELL_NOTE_BG))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_CELL_NOTE_TX))
+                cmds.append(("FONTNAME",   (col, r), (col, r), bold_name))
                 cmds.append(("FONTSIZE",   (col, r), (col, r), 4.5))
             elif style == "ft_off":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_FT_OFF_BG))
@@ -338,7 +366,7 @@ def export_pdf(
     req_map  = {(r.employee_id, r.date): r for r in requests}
     notes    = repo.get_schedule_notes(period.id)
 
-    font_name = _register_font()
+    font_name, bold_name = _register_fonts()
 
     MARGIN = 5 * mm
     doc = SimpleDocTemplate(
@@ -421,7 +449,7 @@ def export_pdf(
     if kitchen_emps:
         tbl = _build_block_table(
             kitchen_emps, dates, assignments, req_map,
-            col_widths, font_name, font_size, n,
+            col_widths, font_name, bold_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
             events_h=EVENTS_H, notes=notes, holidays=holidays,
             cell_notes=cell_notes,
@@ -434,7 +462,7 @@ def export_pdf(
     if hall_emps:
         tbl = _build_block_table(
             hall_emps, dates, assignments, req_map,
-            col_widths, font_name, font_size, n,
+            col_widths, font_name, bold_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
             events_h=0, holidays=holidays,
             cell_notes=cell_notes,
