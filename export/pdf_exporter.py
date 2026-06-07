@@ -364,7 +364,7 @@ def export_pdf(
 
     # 最長セル "5.75-14.75"(9文字) を基準にフォントサイズを算出
     # 0.6 = 典型的な等幅フォントの文字幅係数（pt/pt）
-    font_size = max(5, min(8, int(data_w / (9 * 0.6))))
+    font_size = max(5, min(7, int(data_w / (11 * 0.6))))
 
     start_d      = date.fromisoformat(period.start_date)
     half         = "前半" if start_d.day <= 15 else "後半"
