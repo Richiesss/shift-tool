@@ -38,7 +38,7 @@ COL_TXT_SAT   = colors.HexColor("#1D4ED8")   # 土曜文字（青）
 COL_TXT_SUN   = colors.HexColor("#DC2626")   # 日曜文字（赤）
 COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
 COL_TXT_LEAVE = colors.HexColor("#166534")   # 有給文字（緑）
-COL_FT_OFF_BG = colors.HexColor("#FEE2E2")   # 正社員希望休背景（薄赤）
+COL_FT_OFF_BG = colors.HexColor("#FCA5A5")   # 正社員希望休背景（赤塗りつぶし）
 COL_FT_OFF_TX = colors.HexColor("#DC2626")   # 正社員希望休文字（赤）
 
 

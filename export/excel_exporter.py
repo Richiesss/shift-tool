@@ -28,7 +28,7 @@ FILL_WD_H    = PatternFill("solid", fgColor="E2E8F0")   # 薄グレー（平日�
 FILL_SAT_D   = PatternFill("solid", fgColor="EFF6FF")   # 極薄青（土曜データ）
 FILL_SUN_D   = PatternFill("solid", fgColor="FFF1F2")   # 極薄赤（日曜データ）
 FILL_LEAVE   = PatternFill("solid", fgColor="D1FAE5")   # 緑（有給）
-FILL_FT_OFF  = PatternFill(patternType="lightDown", fgColor="DC2626", bgColor="FFFFFF")  # 赤斜線（正社員希望休）
+FILL_FT_OFF  = PatternFill("solid", fgColor="FCA5A5")   # 赤塗りつぶし（正社員希望休）
 FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")   # 白（通常・白地）
 FILL_EVEN    = PatternFill("solid", fgColor="FFFFFF")   # 白（偶数行も白で統一）
 FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行
