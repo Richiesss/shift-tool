@@ -41,12 +41,12 @@ FONT_HDR    = Font(color="334155", bold=True, size=9)
 FONT_SAT    = Font(color="1D4ED8", bold=True, size=9)   # 土曜：青
 FONT_SUN    = Font(color="DC2626", bold=True, size=9)   # 日曜：赤
 FONT_NAME   = Font(bold=True, size=9)
-FONT_DATA   = Font(size=3, bold=True)
-FONT_NOTE   = Font(size=3, bold=True)
-FONT_LEAVE  = Font(color="166534", bold=True, size=3)   # 有給：緑
-FONT_FT_OFF   = Font(color="DC2626", bold=True, size=3)   # 正社員希望休：赤
-FONT_CELL_NOTE = Font(color="78350F", bold=True, size=3)  # セルコメント：濃黄文字
-FONT_OFF    = Font(color="9CA3AF", size=3, bold=True)
+FONT_DATA   = Font(size=6, bold=True)
+FONT_NOTE   = Font(size=6, bold=True)
+FONT_LEAVE  = Font(color="166534", bold=True, size=6)   # 有給：緑
+FONT_FT_OFF   = Font(color="DC2626", bold=True, size=6)   # 正社員希望休：赤
+FONT_CELL_NOTE = Font(color="78350F", bold=True, size=6)  # セルコメント：濃黄文字
+FONT_OFF    = Font(color="9CA3AF", size=6, bold=True)
 FONT_SUM    = Font(size=8)
 
 ALIGN_C = Alignment(horizontal="center", vertical="center", wrap_text=False)
