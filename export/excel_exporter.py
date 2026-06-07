@@ -309,7 +309,7 @@ def export_excel(
                     rich = CellRichText(TextBlock(_nf, text))
                 c = ws.cell(r, col)
                 c.value      = rich
-                c.fill       = FILL_CELL_NOTE
+                c.fill       = FILL_WHITE   # 部分背景色は Excel では不可→白地でサイズ差で区別
                 c.alignment  = ALIGN_C
                 c.border     = BORDER
                 ws.row_dimensions[r].height = 18

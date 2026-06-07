@@ -241,14 +241,59 @@ def _build_block_table(
     row_dates = [period_label] + [str(d.day) for d in dates] + [period_label]
     row_dows  = [""] + [DAY_JP[d.weekday()] + ("(祝)" if d.isoformat() in _hols else "") for d in dates] + [""]
 
-    emp_rows = []
+    # シフトテキストを事前計算（emp_rows 構築とスタイル適用で共有）
+    shift_cache: dict = {}
     for emp in block_emps:
-        row = [emp.name]
         for d in dates:
-            text, _ = _get_shift_text(emp.id, d.isoformat(), assignments, req_map, cell_notes)
-            if isinstance(text, tuple):
-                text = f"{text[0]} {text[1]} {text[2]}"
-            row.append(text)
+            shift_cache[(emp.id, d.isoformat())] = _get_shift_text(
+                emp.id, d.isoformat(), assignments, req_map, cell_notes
+            )
+
+    # コメントセル用 ParagraphStyle（時刻は bold_name で 6pt、コメントは 4.5pt）
+    _para_style = ParagraphStyle(
+        'CellBold',
+        fontName=bold_name,
+        fontSize=font_size,
+        textColor=colors.black,
+        alignment=TA_CENTER,
+        leading=max(font_size * 1.4, 7),
+        leftIndent=0, rightIndent=0, spaceBefore=0, spaceAfter=0,
+    )
+
+    def _cell_note_para(text_tuple):
+        """(s, note, e) タプルから Paragraph を生成。コメント部分のみ黄色地・4.5pt。"""
+        if isinstance(text_tuple, tuple):
+            s_p, n_p, e_p = text_tuple
+            markup = (
+                f'{s_p} '
+                f'<font name="{bold_name}" size="4.5">'
+                f'<span backColor="#FDE047"> {n_p} </span>'
+                f'</font>'
+                f' {e_p}'
+            )
+        else:
+            markup = (
+                f'<font name="{bold_name}" size="4.5">'
+                f'<span backColor="#FDE047"> {text_tuple} </span>'
+                f'</font>'
+            )
+        return Paragraph(markup, _para_style)
+
+    emp_rows = []
+    para_cells: set = set()   # Paragraph を入れたセル位置 (col, r) の集合
+    for row_idx, emp in enumerate(block_emps):
+        r = EMP_START + row_idx
+        row = [emp.name]
+        for i, d in enumerate(dates):
+            col = i + 1
+            text, style_type = shift_cache[(emp.id, d.isoformat())]
+            if style_type == "cell_note":
+                row.append(_cell_note_para(text))
+                para_cells.add((col, r))
+            elif isinstance(text, tuple):
+                row.append(f"{text[0]} {text[1]} {text[2]}")
+            else:
+                row.append(text)
         row.append(emp.name)
         emp_rows.append(row)
 
@@ -320,15 +365,10 @@ def _build_block_table(
             col      = i + 1
             date_str = d.isoformat()
             dow      = d.weekday()
-            text, style = _get_shift_text(emp.id, date_str, assignments, req_map, cell_notes)
-            if isinstance(text, tuple):
-                text = f"{text[0]} {text[1]} {text[2]}"
+            text, style = shift_cache[(emp.id, date_str)]
             is_h = date_str in _hols
-            if style == "cell_note":
-                cmds.append(("BACKGROUND", (col, r), (col, r), COL_CELL_NOTE_BG))
-                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_CELL_NOTE_TX))
-                cmds.append(("FONTNAME",   (col, r), (col, r), bold_name))
-                cmds.append(("FONTSIZE",   (col, r), (col, r), 4.5))
+            if (col, r) in para_cells:
+                pass  # Paragraph がフォント・背景を自前で制御するので何も追加しない
             elif style == "ft_off":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_FT_OFF_BG))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_FT_OFF_TX))
