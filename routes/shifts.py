@@ -120,8 +120,9 @@ def input(period_id):
     if current_emp and current_emp.employment_type != EmploymentType.FULL_TIME:
         try:
             top_patterns = [
-                (pid, cnt) for pid, cnt in repo.get_employee_pattern_history(current_emp.id)
-                if pid in PATTERN_MAP
+                (pid, cnt, cs, ce)
+                for pid, cnt, cs, ce in repo.get_employee_pattern_history(current_emp.id)
+                if pid in PATTERN_MAP and (pid != "custom" or (cs and ce))
             ]
             dow_suggestions = repo.get_employee_dow_patterns(current_emp.id)
         except Exception:

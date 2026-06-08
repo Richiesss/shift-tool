@@ -618,18 +618,23 @@ def save_breakfast_band_constraints(constraints: dict[tuple[str, str], dict]):
     conn.close()
 
 
-def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int]]:
-    """従業員の過去の希望パターン頻度を [(pattern_id, count), ...] で返す（降順）"""
+def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int, Optional[str], Optional[str]]]:
+    """従業員の過去の希望パターン頻度を [(pattern_id, count, custom_start, custom_end), ...] で返す（降順）。
+    pattern_id='custom' のカスタム手入力は (custom_start, custom_end) の組み合わせ単位で集計する
+    （それ以外のパターンは custom_start/custom_end を NULL 扱いにして pattern_id だけで集計）"""
     conn = get_connection()
     rows = conn.execute(
-        """SELECT pattern_id, COUNT(*) as cnt FROM shift_requests
+        """SELECT pattern_id,
+                  CASE WHEN pattern_id='custom' THEN custom_start ELSE NULL END AS cs,
+                  CASE WHEN pattern_id='custom' THEN custom_end   ELSE NULL END AS ce,
+                  COUNT(*) as cnt
+           FROM shift_requests
            WHERE employee_id=? AND pattern_id IS NOT NULL AND pattern_id != ''
-             AND pattern_id != 'custom'
-           GROUP BY pattern_id ORDER BY cnt DESC LIMIT 5""",
+           GROUP BY pattern_id, cs, ce ORDER BY cnt DESC LIMIT 5""",
         (emp_id,)
     ).fetchall()
     conn.close()
-    return [(r["pattern_id"], r["cnt"]) for r in rows]
+    return [(r["pattern_id"], r["cnt"], r["cs"], r["ce"]) for r in rows]
 
 
 def get_employee_dow_patterns(emp_id: int) -> dict[int, str]:

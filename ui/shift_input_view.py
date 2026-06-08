@@ -422,7 +422,9 @@ class ShiftInputView(QWidget):
             return
 
         c = theme.c
-        for pid, cnt in history:
+        for pid, cnt, cs, ce in history:
+            if pid == "custom":
+                continue  # カスタム時刻入力はこの画面の一括適用UIでは未対応のため除外
             p = PATTERN_MAP.get(pid)
             if not p:
                 continue

@@ -202,11 +202,13 @@
     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkPart('')">
       （休み）
     </button>
-    {% for pid, cnt in top_patterns[:3] %}
+    {% for pid, cnt, cs, ce in top_patterns[:3] %}
     {% set p = PATTERN_MAP.get(pid) %}
     {% if p %}
-    <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkPart('{{ pid }}')">
-      {{ p.label }}
+    {% set label = (cs ~ '〜' ~ ce) if pid == 'custom' and cs and ce else p.label %}
+    <button type="button" class="btn btn-sm btn-outline-primary"
+            onclick="bulkPart('{{ pid }}', '{{ cs or '' }}', '{{ ce or '' }}')">
+      {{ label }}
     </button>
     {% endif %}
     {% endfor %}
@@ -356,7 +358,7 @@ const PAT_CATS_JS = {
 
 // タップサイクル順：[休み, 過去履歴サジェスト(最大3), 有給, カスタム手動入力]
 const PAT_CYCLE = (() => {
-  const tops = [{% for pid, cnt in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
+  const tops = [{% for pid, cnt, cs, ce in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
   const defs = ['d_std1', 'b_std'];
   const seen = new Set(['', 'paid_leave', 'custom']); // 末尾固定枠を予約
   const cycle = [''];
@@ -369,7 +371,8 @@ const PAT_CYCLE = (() => {
 })();
 
 // ── アルバイト：パターン適用（共通パス） ─────────────────────────
-function applyPat(empId, dateStr, patId) {
+// customStart/customEnd は patId === 'custom' のサジェストから時刻を引き継ぐ場合に指定する
+function applyPat(empId, dateStr, patId, customStart, customEnd) {
   const hid = document.getElementById(`hid_${empId}_${dateStr}`);
   if (!hid) return;
   hid.value = patId;
@@ -382,7 +385,12 @@ function applyPat(empId, dateStr, patId) {
   const cust = document.getElementById(`custom_${empId}_${dateStr}`);
   if (cust) {
     cust.style.display = patId === 'custom' ? 'flex' : 'none';
-    if (patId === 'custom') cust.querySelector('input')?.focus();
+    if (patId === 'custom') {
+      const inputs = cust.querySelectorAll('input[type=time]');
+      if (customStart) inputs[0].value = customStart;
+      if (customEnd) inputs[1].value = customEnd;
+      if (!customStart && !customEnd) inputs[0]?.focus();
+    }
   }
   window._formDirty = true;
 }
@@ -394,10 +402,10 @@ function cyclePart(empId, dateStr) {
   applyPat(empId, dateStr, PAT_CYCLE[(idx + 1) % PAT_CYCLE.length]);
 }
 
-// 全日一括
-function bulkPart(patId) {
+// 全日一括（customStart/customEnd は「カスタム」サジェストの時刻引き継ぎ用）
+function bulkPart(patId, customStart, customEnd) {
   document.querySelectorAll('.pat-btn[data-mode="part"]').forEach(btn => {
-    applyPat(btn.dataset.emp, btn.dataset.date, patId);
+    applyPat(btn.dataset.emp, btn.dataset.date, patId, customStart, customEnd);
   });
 }
 
