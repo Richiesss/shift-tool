@@ -506,6 +506,19 @@ def solve(
         if r.dinner:
             req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
 
+    # 社会保険加入アルバイトは、出勤する場合は必ず8時間勤務になるようハード制約（Issue #7）
+    # 希望シフトの実勤務時間が8時間ちょうどでない (slot, date) には割当不可とする
+    SOCIAL_INSURANCE_HOURS = 8.0
+    for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
+            continue
+        for ds in date_strs:
+            for slot in slots:
+                dur = req_hours.get((emp.id, ds, slot.value))
+                if dur != SOCIAL_INSURANCE_HOURS:
+                    for pos in positions:
+                        model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+
     # ── ソフト制約（ペナルティ最小化） ──────────────────────────────────
 
     penalty_terms = []
@@ -867,6 +880,18 @@ def _solve_best_effort(
                 worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
                 worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
                 model.add(worked_b + worked_d <= 1)
+
+    # 社会保険加入アルバイトは、出勤する場合は必ず8時間勤務になるようハード制約（Issue #7）
+    SOCIAL_INSURANCE_HOURS = 8.0
+    for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
+            continue
+        for ds in date_strs:
+            for slot in slots:
+                dur = req_hours.get((emp.id, ds, slot.value))
+                if dur != SOCIAL_INSURANCE_HOURS:
+                    for pos in positions:
+                        model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
     # 日をまたいだ朝食⇄ディナーの連続勤務を禁止（休息時間確保のハード制約 / Issue #8）
     for emp in active_employees:

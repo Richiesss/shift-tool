@@ -83,6 +83,7 @@ ALL_PATTERNS: list[ShiftPattern] = [
     ShiftPattern("b_std",   "朝食 (6:30-11:30)",          "06:30", "11:30"),
     ShiftPattern("b_long",  "朝食ロング (5:45-14:45)",    "05:45", "14:45"),
     ShiftPattern("b_half",  "午前半日 (6:30-15:30)",      "06:30", "15:30"),
+    ShiftPattern("b_8h",    "社保8時間 (6:00-14:00)",     "06:00", "14:00"),
     # 通し（ディナーカバー）
     ShiftPattern("d_full1", "通し早番 (13:00-22:30)",     "13:00", "22:30"),
     ShiftPattern("d_full2", "通し遅番 (14:00-23:00)",     "14:00", "23:00"),
