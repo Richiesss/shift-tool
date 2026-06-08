@@ -231,20 +231,25 @@
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_breakfast" id="aab"
             {{ 'checked' if emp and emp.always_available_breakfast else '' }}>
-          <label class="form-check-label" for="aab">朝食：希望提出不要（毎日出勤可）
+          <label class="form-check-label" for="aab">朝食：おまかせ（希望提出不要・いつでも出勤可）
             <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
-                  data-bs-title="希望提出不要"
-                  data-bs-content="希望シフトを提出しなくても、毎朝食に出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
+                  data-bs-title="おまかせ（朝食）"
+                  data-bs-content="希望シフトを提出しなくても、朝食の時間帯はいつでも出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
           </label>
         </div>
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_dinner" id="aad"
             {{ 'checked' if emp and emp.always_available_dinner else '' }}>
-          <label class="form-check-label" for="aad">ディナー：希望提出不要（毎日出勤可）
+          <label class="form-check-label" for="aad">ディナー：おまかせ（希望提出不要・いつでも出勤可）
             <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
-                  data-bs-title="希望提出不要"
-                  data-bs-content="希望シフトを提出しなくても、毎ディナーに出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
+                  data-bs-title="おまかせ（ディナー）"
+                  data-bs-content="希望シフトを提出しなくても、ディナーの時間帯はいつでも出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
           </label>
+        </div>
+        <div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setBothOmakase()">
+            <i class="bi bi-check2-all me-1"></i>朝食・ディナーともに「おまかせ」にする
+          </button>
         </div>
       </div>
     </div>
@@ -371,6 +376,11 @@ function selectOutputPos(val) {
 }
 
 onPositionChange();
+
+function setBothOmakase() {
+  document.getElementById('aab').checked = true;
+  document.getElementById('aad').checked = true;
+}
 
 function addUnavailDate() {
   const input = document.getElementById('new-unavail-date');
