@@ -107,11 +107,17 @@ def input(period_id):
             if pid:
                 req_map[key] = ShiftRequest(employee_id=current_emp.id, date=str(d), pattern_id=pid)
 
-    # 入力済み従業員数（社員は出勤前提なので常にカウント）
+    # 入力済み従業員数
+    # ・社員は出勤前提なので常にカウント
+    # ・朝食/ディナーともに「おまかせ」（always_available_*）なスタッフは、
+    #   どの曜日もどの時間帯でアサインされても構わないと表明済みのため、
+    #   希望シフトの提出が不要＝常に「入力済み」として扱う
     filled_emp_ids = {r.employee_id for r in requests_list}
     filled_count = sum(
         1 for e in employees
-        if e.id in filled_emp_ids or e.employment_type == EmploymentType.FULL_TIME
+        if e.id in filled_emp_ids
+        or e.employment_type == EmploymentType.FULL_TIME
+        or (e.always_available_breakfast and e.always_available_dinner)
     )
 
     # アルバイトの場合のみ過去パターン提案を計算

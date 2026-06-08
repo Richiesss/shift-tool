@@ -162,7 +162,8 @@
 <div class="emp-strip" id="emp-strip">
   {% for emp in employees %}
   {% set is_active = (emp_idx is not none and loop.index0 == emp_idx) %}
-  {% set is_done = emp.id in filled_emp_ids or emp.employment_type.value == 'full_time' %}
+  {% set is_omakase_full = emp.always_available_breakfast and emp.always_available_dinner %}
+  {% set is_done = emp.id in filled_emp_ids or emp.employment_type.value == 'full_time' or is_omakase_full %}
   <a href="{{ url_for('shifts.input', period_id=period.id, emp_idx=loop.index0) }}"
      class="emp-chip{{ ' active' if is_active }}{{ ' done' if is_done }}"
 >
@@ -172,6 +173,19 @@
 </div>
 
 {% if current_emp %}
+{% set cur_omakase_full = (current_emp.employment_type.value != 'full_time'
+                           and current_emp.always_available_breakfast
+                           and current_emp.always_available_dinner) %}
+{% if cur_omakase_full %}
+<div class="p-4 text-center text-muted">
+  <i class="bi bi-check2-circle d-block mb-2" style="font-size:2rem; color:#0ea5e9"></i>
+  <div class="fw-semibold mb-1">{{ current_emp.name }}さんは「おまかせ」設定です</div>
+  <div class="small">
+    朝食・ディナーともに「いつでも出勤可」として登録されているため、<br>
+    希望シフトの提出は不要です（どの曜日も自動的に出勤可能として扱われます）。
+  </div>
+</div>
+{% else %}
 <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
   <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
   {% if next_idx is not none %}
@@ -309,6 +323,7 @@
     </button>
   </div>
 </form>
+{% endif %}
 
 {% else %}
 <div class="p-5 text-center text-muted">
