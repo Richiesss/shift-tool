@@ -130,18 +130,28 @@
       <h6 class="card-title text-muted mb-3">予約客数による増員設定
         <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
               data-bs-title="予約客数による増員"
-              data-bs-content="閾値を超えた日は自動生成・シフト表の必要人数が「最少＋増員数」に増えます。例：閾値100名・増員1名の場合、予約100名以上の日は最少人数が1名加算されます。">?</span>
+              data-bs-content="閾値を超えた日は自動生成・シフト表の必要人数が「最少＋増員数」に増えます。段階2は任意（閾値0で無効）。両方の閾値を満たす場合は、より高い段階の増員数が採用されます。例：段階1＝閾値100名・増員1名、段階2＝閾値150名・増員2名の場合、予約150名以上の日は最少人数が2名加算されます。">?</span>
       </h6>
-      {% for key, label in [
-        ('reserv_threshold_breakfast', '朝食：閾値（人）'),
-        ('reserv_extra_breakfast',     '朝食：増員数（人）'),
-        ('reserv_threshold_dinner',    'ディナー：閾値（人）'),
-        ('reserv_extra_dinner',        'ディナー：増員数（人）'),
+      {% for slot_label, th1, ex1, th2, ex2 in [
+        ('朝食',     'reserv_threshold_breakfast', 'reserv_extra_breakfast', 'reserv_threshold_breakfast2', 'reserv_extra_breakfast2'),
+        ('ディナー', 'reserv_threshold_dinner',    'reserv_extra_dinner',    'reserv_threshold_dinner2',    'reserv_extra_dinner2'),
       ] %}
-      <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
-        <label class="form-label mb-0 small fw-semibold flex-grow-1">{{ label }}</label>
-        <input type="number" name="{{ key }}" value="{{ settings.get(key, '') }}"
-               class="form-control form-control-sm" style="max-width:90px" min="0">
+      <div class="mb-3">
+        <div class="small fw-semibold text-muted mb-1">{{ slot_label }}</div>
+        {% for stage_label, th_key, ex_key in [('段階1', th1, ex1), ('段階2（任意）', th2, ex2)] %}
+        <div class="mb-2 d-flex align-items-center justify-content-between gap-2">
+          <label class="form-label mb-0 small" style="min-width:90px">{{ stage_label }}</label>
+          <div class="d-flex align-items-center gap-1">
+            <span class="text-muted small">閾値</span>
+            <input type="number" name="{{ th_key }}" value="{{ settings.get(th_key, '') }}"
+                   class="form-control form-control-sm" style="max-width:80px" min="0">
+            <span class="text-muted small">人 → 増員</span>
+            <input type="number" name="{{ ex_key }}" value="{{ settings.get(ex_key, '') }}"
+                   class="form-control form-control-sm" style="max-width:70px" min="0">
+            <span class="text-muted small">人</span>
+          </div>
+        </div>
+        {% endfor %}
       </div>
       {% endfor %}
     </div>

@@ -41,7 +41,9 @@ def save():
 
     settings_keys = [
         "reserv_threshold_breakfast", "reserv_extra_breakfast",
+        "reserv_threshold_breakfast2", "reserv_extra_breakfast2",
         "reserv_threshold_dinner", "reserv_extra_dinner",
+        "reserv_threshold_dinner2", "reserv_extra_dinner2",
         "ft_hall_breakfast_start",    "ft_hall_breakfast_end",
         "ft_kitchen_breakfast_start", "ft_kitchen_breakfast_end",
         "ft_hall_dinner_start",       "ft_hall_dinner_end",

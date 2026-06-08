@@ -5,12 +5,12 @@ from models.schedule import ShiftAssignment
 from utils.constants import TimeSlot, Position
 
 from utils.holidays import holiday_set
+from utils.reservation import tiered_extra
 
 
 def _compute_staffing(assignments, employees, dates, constraints,
                       reservation_counts=None,
-                      reserv_thresh_b=0, reserv_extra_b=0,
-                      reserv_thresh_d=0, reserv_extra_d=0) -> dict:
+                      reserv_tiers_b=None, reserv_tiers_d=None) -> dict:
     """
     各日×スロット×ポジションの人員充足状況を計算して返す。
     予約客数が閾値を超える日は最小人員を動的に加算する（ソルバーと同じロジック）。
@@ -30,6 +30,8 @@ def _compute_staffing(assignments, employees, dates, constraints,
             leader_map[key] += 1
 
     rc_map = reservation_counts or {}
+    tiers_b = reserv_tiers_b or []
+    tiers_d = reserv_tiers_d or []
     result = {}
     for d in dates:
         ds  = d.isoformat()
@@ -42,10 +44,10 @@ def _compute_staffing(assignments, employees, dates, constraints,
                 min_s = c.get("min", 0)
                 min_l = c.get("min_leader", 0)
                 # 予約客数による動的増員（ソルバーと同じ判定）
-                if slot == TimeSlot.BREAKFAST and reserv_thresh_b > 0 and b_count >= reserv_thresh_b:
-                    min_s += reserv_extra_b
-                elif slot == TimeSlot.DINNER and reserv_thresh_d > 0 and d_count >= reserv_thresh_d:
-                    min_s += reserv_extra_d
+                if slot == TimeSlot.BREAKFAST:
+                    min_s += tiered_extra(b_count, tiers_b)
+                elif slot == TimeSlot.DINNER:
+                    min_s += tiered_extra(d_count, tiers_d)
                 cnt  = count_map[(ds, slot.value, pos.value)]
                 ldrs = leader_map[(ds, slot.value, pos.value)]
                 result[(ds, slot.value, pos.value)] = {
@@ -129,18 +131,23 @@ def index(period_id):
     constraints      = repo.get_shift_constraints()
     reservation_counts = repo.get_reservation_counts(period_id)
     try:
-        reserv_thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
-        reserv_extra_b  = int(repo.get_app_setting("reserv_extra_breakfast",     "1"))
-        reserv_thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
-        reserv_extra_d  = int(repo.get_app_setting("reserv_extra_dinner",        "1"))
+        reserv_thresh_b  = int(repo.get_app_setting("reserv_threshold_breakfast",  "100"))
+        reserv_extra_b   = int(repo.get_app_setting("reserv_extra_breakfast",      "1"))
+        reserv_thresh_b2 = int(repo.get_app_setting("reserv_threshold_breakfast2", "0"))
+        reserv_extra_b2  = int(repo.get_app_setting("reserv_extra_breakfast2",     "0"))
+        reserv_thresh_d  = int(repo.get_app_setting("reserv_threshold_dinner",     "25"))
+        reserv_extra_d   = int(repo.get_app_setting("reserv_extra_dinner",         "1"))
+        reserv_thresh_d2 = int(repo.get_app_setting("reserv_threshold_dinner2",    "0"))
+        reserv_extra_d2  = int(repo.get_app_setting("reserv_extra_dinner2",        "0"))
     except Exception:
-        reserv_thresh_b = 100; reserv_extra_b = 1
-        reserv_thresh_d = 25;  reserv_extra_d = 1
+        reserv_thresh_b = 100; reserv_extra_b = 1; reserv_thresh_b2 = 0; reserv_extra_b2 = 0
+        reserv_thresh_d = 25;  reserv_extra_d = 1; reserv_thresh_d2 = 0; reserv_extra_d2 = 0
+    reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
+    reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
     staffing = _compute_staffing(
         assignments, all_employees, dates, constraints,
         reservation_counts=reservation_counts,
-        reserv_thresh_b=reserv_thresh_b, reserv_extra_b=reserv_extra_b,
-        reserv_thresh_d=reserv_thresh_d, reserv_extra_d=reserv_extra_d,
+        reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d,
     )
 
     # 人員不足を 4区分（朝食/ディナー × ホール/キッチン）ごとに集計
