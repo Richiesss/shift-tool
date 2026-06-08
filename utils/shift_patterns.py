@@ -15,6 +15,9 @@ DINNER_START    = 17.0   # 17:00
 DINNER_END      = 23.0   # 23:00
 MIN_OVERLAP_HRS = 2.0    # この時間以上重なれば「担当」とみなす
 
+# 朝食「ロング勤務」とみなす終了時刻の下限（この時刻以降まで勤務するパターンが対象）
+LONG_BREAKFAST_END_HOUR = 14.0   # 14:00
+
 
 @dataclass(frozen=True)
 class ShiftPattern:
@@ -97,6 +100,22 @@ ALL_PATTERNS: list[ShiftPattern] = [
 ]
 
 PATTERN_MAP: dict[str, ShiftPattern] = {p.id: p for p in ALL_PATTERNS}
+
+
+def is_long_breakfast_pattern(pattern_id: Optional[str],
+                              custom_start: Optional[str] = None,
+                              custom_end: Optional[str] = None) -> bool:
+    """朝食「ロング勤務」（終了時刻が LONG_BREAKFAST_END_HOUR 以降）に該当するか判定"""
+    if pattern_id == "custom":
+        if not custom_start or not custom_end:
+            return False
+        sp = ShiftPattern("_c", "カスタム", custom_start, custom_end)
+    else:
+        sp = PATTERN_MAP.get(pattern_id) if pattern_id else None
+    if not sp or not sp.covers_breakfast():
+        return False
+    end_hour = sp.end_hour()
+    return end_hour is not None and end_hour >= LONG_BREAKFAST_END_HOUR
 
 
 def default_pattern_from_fixed(breakfast: bool, dinner: bool) -> Optional[str]:

@@ -11,6 +11,7 @@ from utils.constants import (
 )
 from utils.solver_logger import logger
 from utils.reservation import tiered_extra
+from utils.shift_patterns import is_long_breakfast_pattern
 
 
 @dataclass
@@ -139,6 +140,8 @@ def solve(
     off_map: dict[tuple[int, str], bool] = {}   # 社員の休希望・有休
     # 社員のフレックス出勤（朝のみ可→ディナー不可、晩のみ可→朝食不可）
     slot_block_map: dict[tuple[int, str], TimeSlot] = {}
+    # 朝食「ロング勤務」（〜15:30頃まで）希望の (employee_id, date) 集合
+    long_breakfast_set: set[tuple[int, str]] = set()
     for r in requests:
         if r.pattern_id in ("off_request", "paid_leave"):
             off_map[(r.employee_id, r.date)] = True
@@ -151,6 +154,8 @@ def solve(
                 req_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = True
             if r.dinner:
                 req_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = True
+        if is_long_breakfast_pattern(r.pattern_id, r.custom_start, r.custom_end):
+            long_breakfast_set.add((r.employee_id, r.date))
 
     active_employees = [e for e in employees if e.is_active]
 
@@ -448,6 +453,20 @@ def solve(
                     if ldr_b_vars:
                         model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
 
+    # 5d. 朝食キッチンに「ロング勤務」（〜15:30頃まで）対象者を最低1名配置（ハード制約 / Issue #6）
+    for ds in date_strs:
+        long_candidates = [emp for emp in active_employees if (emp.id, ds) in long_breakfast_set]
+        if long_candidates:
+            long_vars = [
+                assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.KITCHEN.value]
+                for emp in long_candidates
+            ]
+            model.add(sum(long_vars) >= 1)
+        else:
+            warnings.append(
+                f"{ds} 朝食 キッチン: ロング勤務（〜15:30頃まで）希望者がいません"
+            )
+
     # 6. 正社員の両時間帯掛け持ちを物理的に禁止（ハード制約）
     # 朝食＋ディナーの合計を 1 以下に制限
     for emp in active_employees:
@@ -684,6 +703,7 @@ def solve(
             shift_constraints=shift_constraints,
             reservation_counts=reservation_counts,
             reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d,
+            long_breakfast_set=long_breakfast_set,
             period_id=period_id or (progress_callback._period_id if progress_callback else None),
         )
         _check_warnings(best_assignments, date_strs, best_warnings)
@@ -754,6 +774,7 @@ def _solve_best_effort(
     reservation_counts: dict | None = None,
     reserv_tiers_b: list[tuple[int, int]] | None = None,
     reserv_tiers_d: list[tuple[int, int]] | None = None,
+    long_breakfast_set: set[tuple[int, str]] | None = None,
     period_id: int | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
@@ -769,6 +790,8 @@ def _solve_best_effort(
         reserv_tiers_b = []
     if reserv_tiers_d is None:
         reserv_tiers_d = []
+    if long_breakfast_set is None:
+        long_breakfast_set = set()
     model = cp_model.CpModel()
 
     assign: dict = {}
@@ -879,6 +902,19 @@ def _solve_best_effort(
                     lshortfall = model.new_int_var(0, min_leader, f"lsf_{ds}_{slot.value}_{pos.value}")
                     model.add(sum(leader_vars) + lshortfall >= min_leader)
                     penalty_terms.append(LEADER_PENALTY * lshortfall)
+
+    # 朝食キッチンのロング勤務必須（ソフト化版 / Issue #6）
+    LONG_BREAKFAST_PENALTY = 700_000
+    for ds in date_strs:
+        long_candidates = [emp for emp in active_employees if (emp.id, ds) in long_breakfast_set]
+        if long_candidates:
+            long_vars = [
+                assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.KITCHEN.value]
+                for emp in long_candidates
+            ]
+            lb_shortfall = model.new_int_var(0, 1, f"lbsf_{ds}")
+            model.add(sum(long_vars) + lb_shortfall >= 1)
+            penalty_terms.append(LONG_BREAKFAST_PENALTY * lb_shortfall)
 
     # 元のソフト制約（P1: 人件費、P3: 希望充当）も追加
     DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
