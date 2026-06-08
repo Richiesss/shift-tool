@@ -173,19 +173,23 @@
 </div>
 
 {% if current_emp %}
-{% set cur_omakase_full = (current_emp.employment_type.value != 'full_time'
-                           and current_emp.always_available_breakfast
-                           and current_emp.always_available_dinner) %}
-{% if cur_omakase_full %}
-<div class="p-4 text-center text-muted">
-  <i class="bi bi-check2-circle d-block mb-2" style="font-size:2rem; color:#0ea5e9"></i>
-  <div class="fw-semibold mb-1">{{ current_emp.name }}さんは「おまかせ」設定です</div>
-  <div class="small">
-    朝食・ディナーともに「いつでも出勤可」として登録されているため、<br>
-    希望シフトの提出は不要です（どの曜日も自動的に出勤可能として扱われます）。
+{% if cur_omakase_breakfast or cur_omakase_dinner %}
+<div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+  <i class="bi bi-info-circle-fill mt-1"></i>
+  <div>
+    <div class="fw-semibold">
+      {{ current_emp.name }}さんは
+      {% if cur_omakase_breakfast and cur_omakase_dinner %}朝食・ディナーともに{% elif cur_omakase_breakfast %}朝食について{% else %}ディナーについて{% endif %}
+      「おまかせ」設定です
+    </div>
+    <div class="small">
+      おまかせ設定しているので、全日希望として割り当てています。希望シフトの提出は不要です。<br>
+      （実際に出勤する日数・曜日は、連続勤務日数の上限など他の制約を踏まえてシフト生成時に調整されます。
+      内容を変更したい場合のみ、下記を編集して保存してください。）
+    </div>
   </div>
 </div>
-{% else %}
+{% endif %}
 <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
   <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
   {% if next_idx is not none %}
@@ -323,7 +327,6 @@
     </button>
   </div>
 </form>
-{% endif %}
 
 {% else %}
 <div class="p-5 text-center text-muted">

@@ -107,6 +107,28 @@ def input(period_id):
             if pid:
                 req_map[key] = ShiftRequest(employee_id=current_emp.id, date=str(d), pattern_id=pid)
 
+    # 「おまかせ」スタッフのプリフィル
+    # 希望が未提出の日のみ、いつでも出勤可として全日「希望あり」を自動補完表示する
+    # （DBへの保存は行わず表示のみ。ソルバーは always_available_* フラグを直接参照して
+    #   常時出勤可として扱うため、この補完表示はあくまでユーザーへの可視化が目的）
+    cur_omakase_breakfast = bool(
+        current_emp and current_emp.employment_type != EmploymentType.FULL_TIME
+        and current_emp.always_available_breakfast
+    )
+    cur_omakase_dinner = bool(
+        current_emp and current_emp.employment_type != EmploymentType.FULL_TIME
+        and current_emp.always_available_dinner
+    )
+    if cur_omakase_breakfast or cur_omakase_dinner:
+        from utils.shift_patterns import default_pattern_from_fixed
+        pid = default_pattern_from_fixed(cur_omakase_breakfast, cur_omakase_dinner)
+        if pid:
+            for d in dates:
+                key = (current_emp.id, str(d))
+                if key in req_map:
+                    continue
+                req_map[key] = ShiftRequest(employee_id=current_emp.id, date=str(d), pattern_id=pid)
+
     # 入力済み従業員数
     # ・社員は出勤前提なので常にカウント
     # ・朝食/ディナーともに「おまかせ」（always_available_*）なスタッフは、
@@ -143,6 +165,8 @@ def input(period_id):
         patterns=ALL_PATTERNS,
         emp_idx=emp_idx,
         current_emp=current_emp,
+        cur_omakase_breakfast=cur_omakase_breakfast,
+        cur_omakase_dinner=cur_omakase_dinner,
         prev_idx=prev_idx,
         next_idx=next_idx,
         filled_count=filled_count,
