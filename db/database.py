@@ -157,10 +157,14 @@ _CREATE_TABLES = [
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         name            TEXT NOT NULL,
         employment_type TEXT NOT NULL CHECK(employment_type IN ('full_time','part_time')),
-        hall_skill      TEXT NOT NULL DEFAULT 'beginner'
-                      CHECK(hall_skill IN ('leader','veteran','general','beginner')),
-        kitchen_skill   TEXT NOT NULL DEFAULT 'beginner'
-                      CHECK(kitchen_skill IN ('leader','veteran','general','beginner')),
+        hall_skill_breakfast    TEXT NOT NULL DEFAULT 'beginner'
+                      CHECK(hall_skill_breakfast IN ('leader','veteran','general','beginner')),
+        hall_skill_dinner       TEXT NOT NULL DEFAULT 'beginner'
+                      CHECK(hall_skill_dinner IN ('leader','veteran','general','beginner')),
+        kitchen_skill_breakfast TEXT NOT NULL DEFAULT 'beginner'
+                      CHECK(kitchen_skill_breakfast IN ('leader','veteran','general','beginner')),
+        kitchen_skill_dinner    TEXT NOT NULL DEFAULT 'beginner'
+                      CHECK(kitchen_skill_dinner IN ('leader','veteran','general','beginner')),
         is_active       INTEGER NOT NULL DEFAULT 1
     )""",
     """CREATE TABLE IF NOT EXISTS fixed_patterns (
@@ -281,6 +285,10 @@ _MIGRATIONS = [
     ("employees",         "output_position",            "TEXT"),
     ("employees",         "hourly_wage",                "INTEGER NOT NULL DEFAULT 0"),
     ("employees",         "has_social_insurance",       "INTEGER NOT NULL DEFAULT 0"),
+    ("employees",         "hall_skill_breakfast",       "TEXT NOT NULL DEFAULT 'beginner'"),
+    ("employees",         "hall_skill_dinner",          "TEXT NOT NULL DEFAULT 'beginner'"),
+    ("employees",         "kitchen_skill_breakfast",    "TEXT NOT NULL DEFAULT 'beginner'"),
+    ("employees",         "kitchen_skill_dinner",       "TEXT NOT NULL DEFAULT 'beginner'"),
 ]
 
 _INDEXES = [
@@ -308,14 +316,29 @@ def initialize_db():
     for idx in _INDEXES:
         conn.execute(idx)
 
+    added_cols = set()
     for table, col, definition in _MIGRATIONS:
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
+            added_cols.add((table, col))
         except Exception:
             pass
 
     if conn.backend == "postgres":
         conn._conn.autocommit = False
+
+    # 朝食/ディナー別習熟度フィールド新設時、旧 hall_skill/kitchen_skill の値を初期値としてコピー
+    # （未設定のままだと自動生成が直後に infeasible になるため）
+    if ("employees", "hall_skill_breakfast") in added_cols:
+        try:
+            conn.execute(
+                "UPDATE employees SET hall_skill_breakfast = hall_skill,"
+                " hall_skill_dinner = hall_skill,"
+                " kitchen_skill_breakfast = kitchen_skill,"
+                " kitchen_skill_dinner = kitchen_skill"
+            )
+        except Exception:
+            pass
 
     # 既存データの output_position 不整合を修正:
     # primary_position が設定されているのに output_position が異なる or NULL の従業員を修正

@@ -73,13 +73,13 @@ def save_employee(emp: Employee) -> Employee:
         row = conn.execute("SELECT COALESCE(MAX(display_order), -1) AS max_order FROM employees").fetchone()
         next_order = (row["max_order"] if row else -1) + 1
         emp.id = conn.execute_insert(
-            "INSERT INTO employees (name, employment_type, hall_skill, kitchen_skill, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, hourly_wage, has_social_insurance, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, 1, next_order)
+            "INSERT INTO employees (name, employment_type, hall_skill_breakfast, hall_skill_dinner, kitchen_skill_breakfast, kitchen_skill_dinner, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, hourly_wage, has_social_insurance, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, 1, next_order)
         )
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill=?, kitchen_skill=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, hourly_wage=?, has_social_insurance=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill.value, emp.kitchen_skill.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill_breakfast=?, hall_skill_dinner=?, kitchen_skill_breakfast=?, kitchen_skill_dinner=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, hourly_wage=?, has_social_insurance=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, int(emp.is_active), emp.id)
         )
     _save_fixed_patterns(conn, emp)
     _save_fixed_unavailable_dates(conn, emp)
@@ -157,8 +157,10 @@ def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employe
     return Employee(
         id=eid, name=row["name"],
         employment_type=EmploymentType(row["employment_type"]),
-        hall_skill=SkillLevel(row["hall_skill"]),
-        kitchen_skill=SkillLevel(row["kitchen_skill"]),
+        hall_skill_breakfast=SkillLevel(row["hall_skill_breakfast"]),
+        hall_skill_dinner=SkillLevel(row["hall_skill_dinner"]),
+        kitchen_skill_breakfast=SkillLevel(row["kitchen_skill_breakfast"]),
+        kitchen_skill_dinner=SkillLevel(row["kitchen_skill_dinner"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         output_position=PrimaryPosition(op_val) if op_val else None,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
@@ -202,8 +204,10 @@ def _row_to_employee(row, conn) -> Employee:
         id=row["id"],
         name=row["name"],
         employment_type=EmploymentType(row["employment_type"]),
-        hall_skill=SkillLevel(row["hall_skill"]),
-        kitchen_skill=SkillLevel(row["kitchen_skill"]),
+        hall_skill_breakfast=SkillLevel(row["hall_skill_breakfast"]),
+        hall_skill_dinner=SkillLevel(row["hall_skill_dinner"]),
+        kitchen_skill_breakfast=SkillLevel(row["kitchen_skill_breakfast"]),
+        kitchen_skill_dinner=SkillLevel(row["kitchen_skill_dinner"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         output_position=PrimaryPosition(op_val) if op_val else None,
         can_work_both_positions=both_val,

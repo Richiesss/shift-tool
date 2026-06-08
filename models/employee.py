@@ -15,8 +15,10 @@ class Employee:
     id: Optional[int]
     name: str
     employment_type: EmploymentType
-    hall_skill: SkillLevel = SkillLevel.BEGINNER
-    kitchen_skill: SkillLevel = SkillLevel.BEGINNER
+    hall_skill_breakfast: SkillLevel = SkillLevel.BEGINNER
+    hall_skill_dinner: SkillLevel = SkillLevel.BEGINNER
+    kitchen_skill_breakfast: SkillLevel = SkillLevel.BEGINNER
+    kitchen_skill_dinner: SkillLevel = SkillLevel.BEGINNER
     primary_position: Optional[PrimaryPosition] = None   # None = 両方対応
     output_position: Optional[PrimaryPosition] = None   # PDF/Excel出力時の所属欄（None→primary_positionで代替）
     can_work_both_positions: bool = False                 # True = 兼務可
@@ -31,19 +33,21 @@ class Employee:
     fixed_unavailable_dates: list[str] = field(default_factory=list)  # YYYY-MM-DD
     is_active: bool = True
 
-    def skill_for(self, position: str) -> SkillLevel:
+    def skill_for(self, position: str, time_slot: TimeSlot) -> SkillLevel:
         from utils.constants import Position
-        if position == Position.HALL or position == "hall":
-            return self.hall_skill
-        return self.kitchen_skill
+        is_hall = position == Position.HALL or position == "hall"
+        is_breakfast = time_slot == TimeSlot.BREAKFAST or time_slot == "breakfast"
+        if is_hall:
+            return self.hall_skill_breakfast if is_breakfast else self.hall_skill_dinner
+        return self.kitchen_skill_breakfast if is_breakfast else self.kitchen_skill_dinner
 
-    def is_skilled(self, position: str) -> bool:
+    def is_skilled(self, position: str, time_slot: TimeSlot) -> bool:
         """ベテラン以上かどうか"""
-        return self.skill_for(position).rank() >= SkillLevel.VETERAN.rank()
+        return self.skill_for(position, time_slot).rank() >= SkillLevel.VETERAN.rank()
 
-    def is_leader(self, position: str) -> bool:
+    def is_leader(self, position: str, time_slot: TimeSlot) -> bool:
         """リーダーかどうか"""
-        return self.skill_for(position) == SkillLevel.LEADER
+        return self.skill_for(position, time_slot) == SkillLevel.LEADER
 
     def has_fixed_pattern(self) -> bool:
         return any(p.breakfast or p.dinner for p in self.fixed_patterns)

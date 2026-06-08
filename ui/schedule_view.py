@@ -466,7 +466,7 @@ class ScheduleView(QWidget):
                 continue
             count_map[(ds, pos_v)] += 1
             emp = next((e for e in self._employees if e.id == emp_id), None)
-            if emp and emp.is_leader(pos_v):
+            if emp and emp.is_leader(pos_v, slot):
                 leader_map[(ds, pos_v)] += 1
 
         n_cols = len(col_headers)
@@ -535,8 +535,8 @@ class ScheduleView(QWidget):
     def _fill_emp_row(self, table: QTableWidget, row: int, emp: Employee,
                       slot: TimeSlot, col_date_strs: list, other_ids: set,
                       reinf_emp_ids: set | None = None):
-        skill_b = SKILL_BADGE.get(emp.hall_skill, "")
-        skill_k = SKILL_BADGE.get(emp.kitchen_skill, "")
+        skill_b = SKILL_BADGE.get(emp.skill_for("hall", slot), "")
+        skill_k = SKILL_BADGE.get(emp.skill_for("kitchen", slot), "")
         pp_base = f"[{emp.primary_position.label()[:1]}]" if emp.primary_position else ""
         pp = f"{pp_base}[兼]" if emp.can_work_both_positions else pp_base
         if slot == TimeSlot.BREAKFAST:
@@ -583,7 +583,7 @@ class ScheduleView(QWidget):
                 can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
 
             if pos_v:
-                skill = emp.hall_skill if pos_v == "hall" else emp.kitchen_skill
+                skill = emp.skill_for(pos_v, slot)
                 badge = SKILL_BADGE.get(skill, "")
                 pos_label = "H" if pos_v == "hall" else "K"
                 prefix = "+" if is_reinf else ""
@@ -1261,9 +1261,9 @@ class PositionSelectDialog(QDialog):
             leaders = sum(
                 1 for (eid, d2, s2), val in assignments.items()
                 if d2 == ds and s2 == slot.value and val[0] == pos.value
-                and any(x.id == eid and x.is_leader(pos.value) for x in all_employees)
+                and any(x.id == eid and x.is_leader(pos.value, slot) for x in all_employees)
             )
-            emp_skill = emp.skill_for(pos.value)
+            emp_skill = emp.skill_for(pos.value, slot)
             badge = SKILL_BADGE.get(emp_skill, "")
             btn = QPushButton(
                 f"{pos.label()}  [{current}/{constraint.get('max',3)}名]  "

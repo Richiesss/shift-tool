@@ -26,7 +26,7 @@ def _compute_staffing(assignments, employees, dates, constraints,
         key = (a.date, a.time_slot.value, a.position.value)
         count_map[key] += 1
         e = emp_map.get(a.employee_id)
-        if e and e.is_leader(a.position.value):
+        if e and e.is_leader(a.position.value, a.time_slot):
             leader_map[key] += 1
 
     rc_map = reservation_counts or {}

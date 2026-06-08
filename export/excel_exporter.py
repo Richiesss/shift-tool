@@ -317,7 +317,7 @@ def export_excel(
         pos_v = asgn_val[0] if isinstance(asgn_val, tuple) else asgn_val
         count_map[(ds, slot_v, pos_v)] += 1
         emp = next((e for e in employees if e.id == emp_id), None)
-        if emp and emp.is_skilled(pos_v):
+        if emp and emp.is_skilled(pos_v, slot_v):
             skilled_map[(ds, slot_v, pos_v)] += 1
 
     SLOT_ROWS = [

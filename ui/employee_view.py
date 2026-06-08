@@ -122,7 +122,10 @@ class EmployeeView(QWidget):
             pp_label = emp.primary_position.label() if emp.primary_position else "未設定"
             pp_text  = f"{pp_label}（兼務可）" if emp.can_work_both_positions else pp_label
             pt_text = emp.primary_timeslot.short_label() + "専任" if emp.primary_timeslot else "どちらでも"
-            skill_text = f"H:{emp.hall_skill.label()} / K:{emp.kitchen_skill.label()}"
+            skill_text = (
+                f"H朝:{emp.hall_skill_breakfast.label()} / H夜:{emp.hall_skill_dinner.label()} / "
+                f"K朝:{emp.kitchen_skill_breakfast.label()} / K夜:{emp.kitchen_skill_dinner.label()}"
+            )
             name_text = emp.name if emp.is_active else f"{emp.name}（アーカイブ）"
             self.table.setItem(row, 0, QTableWidgetItem(str(emp.id)))
             self.table.setItem(row, 1, QTableWidgetItem(name_text))
@@ -288,21 +291,28 @@ class EmployeeDialog(QDialog):
         avail_layout.addWidget(self.always_avail_d_check)
         layout.addWidget(avail_group)
 
-        # 習熟度
-        skill_group = QGroupBox("習熟度（ポジション別）")
+        # 習熟度（朝食/ディナー別）
+        skill_group = QGroupBox("習熟度（ポジション・時間帯別）")
         skill_layout = QFormLayout(skill_group)
         skill_layout.setSpacing(10)
 
-        self.hall_skill_combo = QComboBox()
-        self.kitchen_skill_combo = QComboBox()
+        self.hall_skill_breakfast_combo = QComboBox()
+        self.hall_skill_dinner_combo = QComboBox()
+        self.kitchen_skill_breakfast_combo = QComboBox()
+        self.kitchen_skill_dinner_combo = QComboBox()
         for label, val in [("リーダー", SkillLevel.LEADER), ("ベテラン", SkillLevel.VETERAN),
                             ("メンバー", SkillLevel.GENERAL), ("ビギナー", SkillLevel.BEGINNER)]:
-            self.hall_skill_combo.addItem(label, val)
-            self.kitchen_skill_combo.addItem(label, val)
-        self.hall_skill_combo.setCurrentIndex(3)
-        self.kitchen_skill_combo.setCurrentIndex(3)
-        skill_layout.addRow("ホール習熟度", self.hall_skill_combo)
-        skill_layout.addRow("キッチン習熟度", self.kitchen_skill_combo)
+            self.hall_skill_breakfast_combo.addItem(label, val)
+            self.hall_skill_dinner_combo.addItem(label, val)
+            self.kitchen_skill_breakfast_combo.addItem(label, val)
+            self.kitchen_skill_dinner_combo.addItem(label, val)
+        for combo in (self.hall_skill_breakfast_combo, self.hall_skill_dinner_combo,
+                      self.kitchen_skill_breakfast_combo, self.kitchen_skill_dinner_combo):
+            combo.setCurrentIndex(3)
+        skill_layout.addRow("ホール習熟度（朝食）", self.hall_skill_breakfast_combo)
+        skill_layout.addRow("ホール習熟度（ディナー）", self.hall_skill_dinner_combo)
+        skill_layout.addRow("キッチン習熟度（朝食）", self.kitchen_skill_breakfast_combo)
+        skill_layout.addRow("キッチン習熟度（ディナー）", self.kitchen_skill_dinner_combo)
         layout.addWidget(skill_group)
 
         # アルバイト専用設定
@@ -413,10 +423,14 @@ class EmployeeDialog(QDialog):
         idx_pt = self.primary_ts_combo.findData(emp.primary_timeslot)
         self.primary_ts_combo.setCurrentIndex(idx_pt if idx_pt >= 0 else 0)
 
-        idx_h = self.hall_skill_combo.findData(emp.hall_skill)
-        self.hall_skill_combo.setCurrentIndex(idx_h)
-        idx_k = self.kitchen_skill_combo.findData(emp.kitchen_skill)
-        self.kitchen_skill_combo.setCurrentIndex(idx_k)
+        idx_hb = self.hall_skill_breakfast_combo.findData(emp.hall_skill_breakfast)
+        self.hall_skill_breakfast_combo.setCurrentIndex(idx_hb)
+        idx_hd = self.hall_skill_dinner_combo.findData(emp.hall_skill_dinner)
+        self.hall_skill_dinner_combo.setCurrentIndex(idx_hd)
+        idx_kb = self.kitchen_skill_breakfast_combo.findData(emp.kitchen_skill_breakfast)
+        self.kitchen_skill_breakfast_combo.setCurrentIndex(idx_kb)
+        idx_kd = self.kitchen_skill_dinner_combo.findData(emp.kitchen_skill_dinner)
+        self.kitchen_skill_dinner_combo.setCurrentIndex(idx_kd)
 
         for i, (cb_b, cb_d) in enumerate(self.pattern_checks):
             p = emp.get_pattern(i)
@@ -441,8 +455,10 @@ class EmployeeDialog(QDialog):
         always_avail_b       = self.always_avail_b_check.isChecked()
         always_avail_d       = self.always_avail_d_check.isChecked()
         primary_timeslot     = self.primary_ts_combo.currentData()
-        hall_skill = self.hall_skill_combo.currentData()
-        kitchen_skill = self.kitchen_skill_combo.currentData()
+        hall_skill_breakfast = self.hall_skill_breakfast_combo.currentData()
+        hall_skill_dinner = self.hall_skill_dinner_combo.currentData()
+        kitchen_skill_breakfast = self.kitchen_skill_breakfast_combo.currentData()
+        kitchen_skill_dinner = self.kitchen_skill_dinner_combo.currentData()
 
         patterns = []
         if emp_type == EmploymentType.PART_TIME:
@@ -460,8 +476,10 @@ class EmployeeDialog(QDialog):
             id=existing_id,
             name=name,
             employment_type=emp_type,
-            hall_skill=hall_skill,
-            kitchen_skill=kitchen_skill,
+            hall_skill_breakfast=hall_skill_breakfast,
+            hall_skill_dinner=hall_skill_dinner,
+            kitchen_skill_breakfast=kitchen_skill_breakfast,
+            kitchen_skill_dinner=kitchen_skill_dinner,
             primary_position=primary_position,
             can_work_both_positions=can_work_both,
             can_open=can_open,

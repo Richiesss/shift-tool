@@ -537,8 +537,10 @@ def main():
             id=None,
             name=name,
             employment_type=EmploymentType(emp_type),
-            hall_skill=SkillLevel(hall_sk),
-            kitchen_skill=SkillLevel(kit_sk),
+            hall_skill_breakfast=SkillLevel(hall_sk),
+            hall_skill_dinner=SkillLevel(hall_sk),
+            kitchen_skill_breakfast=SkillLevel(kit_sk),
+            kitchen_skill_dinner=SkillLevel(kit_sk),
         )
         saved = repo.save_employee(emp)
         emp_map[name] = saved

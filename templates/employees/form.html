@@ -150,27 +150,47 @@
         </div>
       </div>
 
-      <!-- 習熟度（ポジションに応じて表示切替） -->
+      <!-- 習熟度（ポジション・時間帯ごとに設定） -->
       <div class="row g-3" id="skill-row">
         <div class="col-12 col-md-6" id="hall-skill-block">
-          <label class="form-label fw-semibold">ホール習熟度
+          <label class="form-label fw-semibold">ホール習熟度（朝食）
             <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
                   data-bs-title="習熟度"
-                  data-bs-content="「リーダー」に設定したスタッフが、設定画面の「リーダー最少」制約の対象になります。ベテラン以下は人員数のカウントのみに使用されます。">?</span>
+                  data-bs-content="「リーダー」に設定したスタッフが、設定画面の「リーダー最少」制約の対象になります。ベテラン以下は人員数のカウントのみに使用されます。朝食・ディナーで別々に設定できます。">?</span>
           </label>
-          <select name="hall_skill" class="form-select">
+          <select name="hall_skill_breakfast" class="form-select">
             {% for sl in skill_levels %}
-            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.hall_skill == sl else '' }}>
+            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.hall_skill_breakfast == sl else '' }}>
+              {{ sl.label() }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6" id="hall-skill-dinner-block">
+          <label class="form-label fw-semibold">ホール習熟度（ディナー）</label>
+          <select name="hall_skill_dinner" class="form-select">
+            {% for sl in skill_levels %}
+            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.hall_skill_dinner == sl else '' }}>
               {{ sl.label() }}
             </option>
             {% endfor %}
           </select>
         </div>
         <div class="col-12 col-md-6" id="kitchen-skill-block">
-          <label class="form-label fw-semibold">キッチン習熟度</label>
-          <select name="kitchen_skill" class="form-select">
+          <label class="form-label fw-semibold">キッチン習熟度（朝食）</label>
+          <select name="kitchen_skill_breakfast" class="form-select">
             {% for sl in skill_levels %}
-            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.kitchen_skill == sl else '' }}>
+            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.kitchen_skill_breakfast == sl else '' }}>
+              {{ sl.label() }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6" id="kitchen-skill-dinner-block">
+          <label class="form-label fw-semibold">キッチン習熟度（ディナー）</label>
+          <select name="kitchen_skill_dinner" class="form-select">
+            {% for sl in skill_levels %}
+            <option value="{{ sl.value }}" {{ 'selected' if emp and emp.kitchen_skill_dinner == sl else '' }}>
               {{ sl.label() }}
             </option>
             {% endfor %}
@@ -325,8 +345,12 @@ function onPositionChange() {
   const pos = checked ? checked.value : '';
 
   // 習熟度表示切替
-  document.getElementById('hall-skill-block').style.display    = (pos === 'kitchen') ? 'none' : '';
-  document.getElementById('kitchen-skill-block').style.display = (pos === 'hall')    ? 'none' : '';
+  const hallDisplay    = (pos === 'kitchen') ? 'none' : '';
+  const kitchenDisplay = (pos === 'hall')    ? 'none' : '';
+  document.getElementById('hall-skill-block').style.display        = hallDisplay;
+  document.getElementById('hall-skill-dinner-block').style.display = hallDisplay;
+  document.getElementById('kitchen-skill-block').style.display        = kitchenDisplay;
+  document.getElementById('kitchen-skill-dinner-block').style.display = kitchenDisplay;
 
   // 出力ポジションブロック：両方の時のみ表示
   document.getElementById('output-pos-block').style.display = (pos === '') ? '' : 'none';

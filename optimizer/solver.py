@@ -215,7 +215,7 @@ def solve(
                         if e.primary_position.value != pos.value:
                             continue
                     avail.append(e)
-                leaders = [e for e in avail if e.is_leader(pos.value)]
+                leaders = [e for e in avail if e.is_leader(pos.value, slot)]
                 min_ldr = c.get("min_leader", 0)
                 ok_staff  = len(avail) >= base_min
                 ok_leader = len(leaders) >= min_ldr
@@ -333,7 +333,7 @@ def solve(
                 leader_vars = [
                     assign[emp.id][ds][slot.value][pos.value]
                     for emp in active_employees
-                    if emp.is_leader(pos.value)
+                    if emp.is_leader(pos.value, slot)
                 ]
                 model.add(sum(leader_vars) >= min_leader)
 
@@ -367,7 +367,7 @@ def solve(
                 # FIX⑥: FT社員もリーダーチェックに含める（can_open_req は FT 含む）
                 ldr_open_vars = [
                     assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                    for emp in can_open_req if emp.is_leader(pos.value)
+                    for emp in can_open_req if emp.is_leader(pos.value, TimeSlot.BREAKFAST)
                 ]
                 if ldr_open_vars:
                     model.add(sum(ldr_open_vars) >= min(min_open_ldr, len(ldr_open_vars)))
@@ -404,7 +404,7 @@ def solve(
                     # FIX②: FT社員のリーダーも含める（cln_vars と同じ可用性条件を適用）
                     ldr_cln_vars = [
                         assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                        for emp in cleanup_pool if emp.is_leader(pos.value)
+                        for emp in cleanup_pool if emp.is_leader(pos.value, TimeSlot.BREAKFAST)
                         if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                         or emp.always_available_breakfast
                         or (emp.employment_type == EmploymentType.FULL_TIME
@@ -421,7 +421,7 @@ def solve(
                 if min_cln_ldr > 0:
                     ldr_b_vars = [
                         assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
-                        for emp in active_employees if emp.is_leader(pos.value)
+                        for emp in active_employees if emp.is_leader(pos.value, TimeSlot.BREAKFAST)
                     ]
                     if ldr_b_vars:
                         model.add(sum(ldr_b_vars) >= min(min_cln_ldr, len(ldr_b_vars)))
@@ -837,7 +837,7 @@ def _solve_best_effort(
                 if min_leader > 0:
                     leader_vars = [
                         assign[emp.id][ds][slot.value][pos.value]
-                        for emp in active_employees if emp.is_leader(pos.value)
+                        for emp in active_employees if emp.is_leader(pos.value, slot)
                     ]
                     lshortfall = model.new_int_var(0, min_leader, f"lsf_{ds}_{slot.value}_{pos.value}")
                     model.add(sum(leader_vars) + lshortfall >= min_leader)
@@ -971,7 +971,7 @@ def _diagnose_infeasible(
                     if req_map.get((e.id, ds, slot.value), False)
                     and (e.can_work_both_positions or e.primary_position is None or e.primary_position.value == pos.value)
                 ]
-                leaders = [e for e in available if e.is_leader(pos.value)]
+                leaders = [e for e in available if e.is_leader(pos.value, slot)]
                 min_req = constraint["min"]
                 min_leader = constraint.get("min_leader", 0)
 
