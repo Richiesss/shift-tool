@@ -69,6 +69,10 @@ def _build_time_map(requests) -> dict:
             t = f"{r.custom_start}〜{r.custom_end}"
         elif r.pattern_id == "double":
             t = "6:00〜23:00"
+        elif r.pattern_id == "am_only":
+            t = "朝のみ可"
+        elif r.pattern_id == "pm_only":
+            t = "晩のみ可"
         elif r.pattern_id:
             p = PATTERN_MAP.get(r.pattern_id)
             t = f"{p.start}〜{p.end}" if (p and p.start and p.end) else ""

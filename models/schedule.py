@@ -33,6 +33,10 @@ class ShiftRequest:
                 sp = ShiftPattern("_c", "カスタム", self.custom_start, self.custom_end)
                 return sp.covers_breakfast(), sp.covers_dinner()
             return False, False
+        if self.pattern_id == "am_only":
+            return True, False
+        if self.pattern_id == "pm_only":
+            return False, True
         p = PATTERN_MAP.get(self.pattern_id)
         return (p.covers_breakfast(), p.covers_dinner()) if p else (False, False)
 

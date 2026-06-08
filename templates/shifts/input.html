@@ -103,6 +103,8 @@
   .pat-work { background: #dcfce7; color: #166534; border-color: #86efac; }
   .pat-ofr  { background: #fecaca; color: #991b1b; border-color: #f87171; }
   .pat-leave{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  .pat-am   { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .pat-pm   { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
   .pat-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
   .pat-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
   .pat-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
@@ -189,6 +191,12 @@
     <button type="button" class="btn btn-sm btn-outline-warning" onclick="bulkFull('paid_leave')">
       <i class="bi bi-calendar-check me-1"></i>有休
     </button>
+    <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('am_only')">
+      <i class="bi bi-sunrise me-1"></i>朝のみ可
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('pm_only')">
+      <i class="bi bi-sunset me-1"></i>晩のみ可
+    </button>
     {% else %}
     <span class="label">全日：</span>
     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkPart('')">
@@ -214,10 +222,17 @@
   {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
 
   {% if current_emp.employment_type.value == 'full_time' %}
-    {% set btn_cls = 'pat-work' if cur_pid == '' else 'pat-ofr' if cur_pid == 'off_request' else 'pat-leave' %}
+    {% set btn_cls = 'pat-work' if cur_pid == ''
+                else 'pat-ofr' if cur_pid == 'off_request'
+                else 'pat-leave' if cur_pid == 'paid_leave'
+                else 'pat-am' if cur_pid == 'am_only'
+                else 'pat-pm' if cur_pid == 'pm_only'
+                else 'pat-work' %}
     {% set btn_html %}
       {% if cur_pid == 'off_request' %}<i class="bi bi-x-circle me-1"></i>休希望
       {% elif cur_pid == 'paid_leave' %}<i class="bi bi-calendar-check me-1"></i>有休
+      {% elif cur_pid == 'am_only' %}<i class="bi bi-sunrise me-1"></i>朝のみ可
+      {% elif cur_pid == 'pm_only' %}<i class="bi bi-sunset me-1"></i>晩のみ可
       {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
     {% endset %}
   {% else %}
@@ -386,11 +401,13 @@ function bulkPart(patId) {
   });
 }
 
-// ── 社員：3状態サイクル ────────────────────────────────────────────
+// ── 社員：状態サイクル ────────────────────────────────────────────
 const FULL_STATES = [
   { val: '',            cls: 'pat-work', html: '<i class="bi bi-check2 me-1"></i>出勤予定' },
   { val: 'off_request', cls: 'pat-ofr',  html: '<i class="bi bi-x-circle me-1"></i>休希望' },
   { val: 'paid_leave',  cls: 'pat-leave',html: '<i class="bi bi-calendar-check me-1"></i>有休' },
+  { val: 'am_only',     cls: 'pat-am',   html: '<i class="bi bi-sunrise me-1"></i>朝のみ可' },
+  { val: 'pm_only',     cls: 'pat-pm',   html: '<i class="bi bi-sunset me-1"></i>晩のみ可' },
 ];
 
 function cycleOff(btn) {

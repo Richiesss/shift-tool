@@ -40,6 +40,10 @@ COL_TXT_OFF   = colors.HexColor("#9CA3AF")   # 休み文字
 COL_TXT_LEAVE = colors.HexColor("#166534")   # 有給文字（緑）
 COL_FT_OFF_BG = colors.HexColor("#FCA5A5")   # 正社員希望休背景（赤塗りつぶし）
 COL_FT_OFF_TX = colors.HexColor("#DC2626")   # 正社員希望休文字（赤）
+COL_AM_ONLY_BG = colors.HexColor("#DBEAFE")  # 朝のみ可背景（水色）
+COL_AM_ONLY_TX = colors.HexColor("#1E40AF")  # 朝のみ可文字（青）
+COL_PM_ONLY_BG = colors.HexColor("#FED7AA")  # 晩のみ可背景（オレンジ）
+COL_PM_ONLY_TX = colors.HexColor("#C2410C")  # 晩のみ可文字（オレンジ）
 
 
 # ── フォント登録 ─────────────────────────────────────────────────────────
@@ -117,6 +121,10 @@ def _get_shift_text(
     d_raw = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
 
     if not b_raw and not d_raw:
+        if req and req.pattern_id == "am_only":
+            return "朝のみ可", "am_only"
+        if req and req.pattern_id == "pm_only":
+            return "晩のみ可", "pm_only"
         return "-", "off"
 
     # 4タプルから位置情報を展開
@@ -290,6 +298,12 @@ def _build_block_table(
             elif style == "leave":
                 cmds.append(("BACKGROUND", (col, r), (col, r), COL_LEAVE))
                 cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_LEAVE))
+            elif style == "am_only":
+                cmds.append(("BACKGROUND", (col, r), (col, r), COL_AM_ONLY_BG))
+                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_AM_ONLY_TX))
+            elif style == "pm_only":
+                cmds.append(("BACKGROUND", (col, r), (col, r), COL_PM_ONLY_BG))
+                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_PM_ONLY_TX))
             elif style == "off":
                 if dow == 6 or is_h:
                     cmds.append(("BACKGROUND", (col, r), (col, r), COL_SUN_D))

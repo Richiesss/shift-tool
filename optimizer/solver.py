@@ -136,9 +136,15 @@ def solve(
     # 希望シフト（アルバイト用）と社員の休希望・有休を分けて管理
     req_map: dict[tuple[int, str, str], bool] = {}
     off_map: dict[tuple[int, str], bool] = {}   # 社員の休希望・有休
+    # 社員のフレックス出勤（朝のみ可→ディナー不可、晩のみ可→朝食不可）
+    slot_block_map: dict[tuple[int, str], TimeSlot] = {}
     for r in requests:
         if r.pattern_id in ("off_request", "paid_leave"):
             off_map[(r.employee_id, r.date)] = True
+        elif r.pattern_id == "am_only":
+            slot_block_map[(r.employee_id, r.date)] = TimeSlot.DINNER
+        elif r.pattern_id == "pm_only":
+            slot_block_map[(r.employee_id, r.date)] = TimeSlot.BREAKFAST
         else:
             if r.breakfast:
                 req_map[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = True
@@ -261,8 +267,10 @@ def solve(
             for slot in slots:
                 if emp.employment_type == EmploymentType.FULL_TIME:
                     # 社員：休希望・有休の日以外は常時出勤可
+                    # （朝のみ可/晩のみ可の日は該当しない時間帯への配置を禁止）
                     can_work = not off_map.get((emp.id, ds), False) \
-                               and ds not in emp.fixed_unavailable_dates
+                               and ds not in emp.fixed_unavailable_dates \
+                               and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = ds not in emp.fixed_unavailable_dates
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
@@ -352,6 +360,7 @@ def solve(
                     req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                     or (emp.employment_type == EmploymentType.FULL_TIME
                         and not off_map.get((emp.id, ds), False)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                         and ds not in emp.fixed_unavailable_dates)
                 )
             ]
@@ -396,6 +405,7 @@ def solve(
                     or emp.always_available_breakfast
                     or (emp.employment_type == EmploymentType.FULL_TIME
                         and not off_map.get((emp.id, ds), False)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                         and ds not in emp.fixed_unavailable_dates)
                 ]
                 if min_cln > 0 and cln_vars:
@@ -409,6 +419,7 @@ def solve(
                         or emp.always_available_breakfast
                         or (emp.employment_type == EmploymentType.FULL_TIME
                             and not off_map.get((emp.id, ds), False)
+                            and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                             and ds not in emp.fixed_unavailable_dates)
                     ]
                     if ldr_cln_vars:
@@ -562,6 +573,8 @@ def solve(
                         continue
                     if off_map.get((emp.id, ds), False) or ds in emp.fixed_unavailable_dates:
                         continue
+                    if slot_block_map.get((emp.id, ds)) == slot:
+                        continue
                     if emp.primary_position is None or emp.can_work_both_positions:
                         continue  # 両対応 FT は二重計上回避のためスキップ
                     if emp.primary_position.value != pos.value:
@@ -655,7 +668,9 @@ def solve(
         logger.info("  [フェーズ2] ベストエフォート求解開始")
         best_assignments, best_warnings = _solve_best_effort(
             active_employees, date_strs, slots, positions,
-            req_map, off_map, req_hours, config, shift_constraints,
+            req_map, off_map, req_hours, config,
+            slot_block_map=slot_block_map,
+            shift_constraints=shift_constraints,
             reservation_counts=reservation_counts,
             reserv_thresh_b=reserv_thresh_b, reserv_extra_b=reserv_extra_b,
             reserv_thresh_d=reserv_thresh_d, reserv_extra_d=reserv_extra_d,
@@ -724,6 +739,7 @@ def _extract_assignments(solver, assign, active_employees, date_strs, slots, pos
 def _solve_best_effort(
     active_employees, date_strs, slots, positions,
     req_map, off_map, req_hours, config: SolverConfig | None = None,
+    slot_block_map: dict | None = None,
     shift_constraints: dict | None = None,
     reservation_counts: dict | None = None,
     reserv_thresh_b: int = 0, reserv_extra_b: int = 0,
@@ -737,6 +753,8 @@ def _solve_best_effort(
     if shift_constraints is None:
         from db import repositories as repo
         shift_constraints = repo.get_shift_constraints()
+    if slot_block_map is None:
+        slot_block_map = {}
     model = cp_model.CpModel()
 
     assign: dict = {}
@@ -765,7 +783,8 @@ def _solve_best_effort(
             for slot in slots:
                 if emp.employment_type == EmploymentType.FULL_TIME:
                     can_work = not off_map.get((emp.id, ds), False) \
-                               and ds not in emp.fixed_unavailable_dates
+                               and ds not in emp.fixed_unavailable_dates \
+                               and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = ds not in emp.fixed_unavailable_dates
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:

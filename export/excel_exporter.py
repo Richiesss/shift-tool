@@ -29,6 +29,8 @@ FILL_SAT_D   = PatternFill("solid", fgColor="EFF6FF")   # 極薄青（土曜デ�
 FILL_SUN_D   = PatternFill("solid", fgColor="FFF1F2")   # 極薄赤（日曜データ）
 FILL_LEAVE   = PatternFill("solid", fgColor="D1FAE5")   # 緑（有給）
 FILL_FT_OFF  = PatternFill("solid", fgColor="FCA5A5")   # 赤塗りつぶし（正社員希望休）
+FILL_AM_ONLY = PatternFill("solid", fgColor="DBEAFE")   # 水色（朝のみ可）
+FILL_PM_ONLY = PatternFill("solid", fgColor="FED7AA")   # オレンジ（晩のみ可）
 FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")   # 白（通常・白地）
 FILL_EVEN    = PatternFill("solid", fgColor="FFFFFF")   # 白（偶数行も白で統一）
 FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行
@@ -44,6 +46,8 @@ FONT_DATA   = Font(size=9)
 FONT_NOTE   = Font(size=8, bold=True)
 FONT_LEAVE  = Font(color="166534", bold=True, size=9)   # 有給：緑
 FONT_FT_OFF = Font(color="DC2626", bold=True, size=9)   # 正社員希望休：赤
+FONT_AM_ONLY = Font(color="1E40AF", bold=True, size=9)  # 朝のみ可：青
+FONT_PM_ONLY = Font(color="C2410C", bold=True, size=9)  # 晩のみ可：オレンジ
 FONT_OFF    = Font(color="9CA3AF", size=9)
 FONT_SUM    = Font(size=8)
 
@@ -109,6 +113,10 @@ def _get_shift_text(
     d_raw = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
 
     if not b_raw and not d_raw:
+        if req and req.pattern_id == "am_only":
+            return "朝のみ可", "am_only"
+        if req and req.pattern_id == "pm_only":
+            return "晩のみ可", "pm_only"
         return "-", "off"
 
     # 4タプルから位置情報を展開
@@ -290,6 +298,12 @@ def export_excel(
             elif style == "leave":
                 fill = FILL_LEAVE
                 font = FONT_LEAVE
+            elif style == "am_only":
+                fill = FILL_AM_ONLY
+                font = FONT_AM_ONLY
+            elif style == "pm_only":
+                fill = FILL_PM_ONLY
+                font = FONT_PM_ONLY
             elif style == "off":
                 fill = FILL_SUN_D if (dow == 6 or is_h) else (FILL_SAT_D if dow == 5 else base_fill)
                 font = FONT_OFF
