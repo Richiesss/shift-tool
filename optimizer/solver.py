@@ -476,6 +476,18 @@ def solve(
                 worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
                 model.add(worked_b + worked_d <= 1)
 
+    # 6b. 日をまたいだ朝食⇄ディナーの連続勤務を禁止（休息時間確保のハード制約 / Issue #8）
+    # 「前日ディナー→当日朝食」（休息 約7時間で不足）「前日朝食→当日ディナー」の
+    # いずれも、同一従業員に連続させない
+    for emp in active_employees:
+        for ds, ds_next in zip(date_strs, date_strs[1:]):
+            worked_d_prev = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
+            worked_b_prev = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+            worked_b_next = sum(assign[emp.id][ds_next][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+            worked_d_next = sum(assign[emp.id][ds_next][TimeSlot.DINNER.value][p.value] for p in positions)
+            model.add(worked_d_prev + worked_b_next <= 1)
+            model.add(worked_b_prev + worked_d_next <= 1)
+
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
     req_hours: dict[tuple[int, str, str], float] = {}
@@ -855,6 +867,16 @@ def _solve_best_effort(
                 worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
                 worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
                 model.add(worked_b + worked_d <= 1)
+
+    # 日をまたいだ朝食⇄ディナーの連続勤務を禁止（休息時間確保のハード制約 / Issue #8）
+    for emp in active_employees:
+        for ds, ds_next in zip(date_strs, date_strs[1:]):
+            worked_d_prev = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
+            worked_b_prev = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+            worked_b_next = sum(assign[emp.id][ds_next][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+            worked_d_next = sum(assign[emp.id][ds_next][TimeSlot.DINNER.value][p.value] for p in positions)
+            model.add(worked_d_prev + worked_b_next <= 1)
+            model.add(worked_b_prev + worked_d_next <= 1)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
