@@ -587,7 +587,13 @@ def solve(
 
     # P3c: 社会保険加入アルバイト優先配置
     # 未加入PTが割り当てられたときにペナルティを与え、加入済みPTを優先する
-    SI_PREF_PENALTY = 300
+    # ※ 社会保険加入PTは Issue #7 のハード制約で出勤時必ず8時間勤務になる。
+    #   そのため P1（人件費＝実勤務時間最小化、weight=1000×時間×10×cost_scale）の下では
+    #   非加入PT（5〜6時間勤務）を選ぶ方が最大 (8-5)*10000=30000 ほど目的関数上「安く」なり、
+    #   従来の重み300ではこの差を覆せず優先配置が機能していなかった。
+    #   コスト差を確実に上回りつつ、人員/リーダー不足ペナルティ(800000〜1000000)は
+    #   上回らない値として設定する。
+    SI_PREF_PENALTY = 50_000
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME:
             continue
@@ -1044,14 +1050,15 @@ def _solve_best_effort(
                     model.add(worked >= 1).only_enforce_if(not_worked.negated())
                     penalty_terms.append(PT_PENALTY * not_worked)
 
-    # 社会保険加入アルバイト優先（ベストエフォートフェーズでも同様）
+    # 社会保険加入アルバイト優先（ベストエフォートフェーズでも同様。weight は本フェーズと統一）
+    SI_PREF_PENALTY = 50_000
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME or emp.has_social_insurance:
             continue
         for ds in date_strs:
             for slot in slots:
                 for pos in positions:
-                    penalty_terms.append(300 * assign[emp.id][ds][slot.value][pos.value])
+                    penalty_terms.append(SI_PREF_PENALTY * assign[emp.id][ds][slot.value][pos.value])
 
     # FIX⑥: ベストエフォートにも P5 スロット分業のソフト誘導を追加
     BE_BREAKFAST_FT_COST = 500_000
