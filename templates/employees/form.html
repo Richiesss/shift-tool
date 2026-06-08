@@ -228,13 +228,15 @@
             {{ 'checked' if emp and emp.can_cleanup else '' }}>
           <label class="form-check-label" for="cc">朝食片付け対応可（〜11:30）</label>
         </div>
+        {% if emp and emp.employment_type.value == 'part_time' or not emp %}
+        <div id="omakase-fields" class="d-flex flex-column gap-2">
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_breakfast" id="aab"
             {{ 'checked' if emp and emp.always_available_breakfast else '' }}>
           <label class="form-check-label" for="aab">朝食：おまかせ（希望提出不要・いつでも出勤可）
             <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
                   data-bs-title="おまかせ（朝食）"
-                  data-bs-content="希望シフトを提出しなくても、朝食の時間帯はいつでも出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
+                  data-bs-content="希望シフトを提出しなくても、朝食の時間帯はいつでも出勤可能なアルバイト・パートスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。※正社員は休み希望の日以外もともと常に出勤可能として扱われるため、このチェックを付けても効果はありません。">?</span>
           </label>
         </div>
         <div class="form-check">
@@ -243,7 +245,7 @@
           <label class="form-check-label" for="aad">ディナー：おまかせ（希望提出不要・いつでも出勤可）
             <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
                   data-bs-title="おまかせ（ディナー）"
-                  data-bs-content="希望シフトを提出しなくても、ディナーの時間帯はいつでも出勤可能なスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。正社員に多く使用します。">?</span>
+                  data-bs-content="希望シフトを提出しなくても、ディナーの時間帯はいつでも出勤可能なアルバイト・パートスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。※正社員は休み希望の日以外もともと常に出勤可能として扱われるため、このチェックを付けても効果はありません。">?</span>
           </label>
         </div>
         <div>
@@ -251,6 +253,13 @@
             <i class="bi bi-check2-all me-1"></i>朝食・ディナーともに「おまかせ」にする
           </button>
         </div>
+        </div>
+        {% else %}
+        <div class="text-muted small">
+          <i class="bi bi-info-circle me-1"></i>
+          正社員は休み希望（有休・固定休）の日以外、もともと常にいつでも出勤可能として扱われるため、「おまかせ」設定はありません。
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
