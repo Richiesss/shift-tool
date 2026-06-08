@@ -488,6 +488,34 @@ def solve(
             model.add(worked_d_prev + worked_b_next <= 1)
             model.add(worked_b_prev + worked_d_next <= 1)
 
+    # ── 出勤日変数 worked_day[emp][date]（朝食 or ディナーいずれかに割当があれば1） ──
+    # Issue #4・#5 で共用
+    worked_day: dict[int, dict[str, object]] = {}
+    for emp in active_employees:
+        worked_day[emp.id] = {}
+        for ds in date_strs:
+            wd = model.new_bool_var(f"wd_{emp.id}_{ds}")
+            worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+            worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
+            model.add(wd == worked_b + worked_d)
+            worked_day[emp.id][ds] = wd
+
+    # 6c. 連続勤務日数を6日までに制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
+    CONSECUTIVE_WINDOW = 7
+    MAX_CONSECUTIVE_DAYS = 6
+    for emp in active_employees:
+        for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
+            window = date_strs[i:i + CONSECUTIVE_WINDOW]
+            model.add(sum(worked_day[emp.id][d] for d in window) <= MAX_CONSECUTIVE_DAYS)
+
+    # 6d. 正社員は期間内（半月=2週間）で希望休含め最低5日の休みを取得（ハード制約 / Issue #4）
+    MIN_DAYS_OFF = 5
+    if len(date_strs) > MIN_DAYS_OFF:
+        max_work_days = len(date_strs) - MIN_DAYS_OFF
+        for emp in active_employees:
+            if emp.employment_type == EmploymentType.FULL_TIME:
+                model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
+
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
     req_hours: dict[tuple[int, str, str], float] = {}
@@ -902,6 +930,34 @@ def _solve_best_effort(
             worked_d_next = sum(assign[emp.id][ds_next][TimeSlot.DINNER.value][p.value] for p in positions)
             model.add(worked_d_prev + worked_b_next <= 1)
             model.add(worked_b_prev + worked_d_next <= 1)
+
+    # ── 出勤日変数 worked_day[emp][date]（朝食 or ディナーいずれかに割当があれば1） ──
+    # Issue #4・#5 で共用
+    worked_day: dict[int, dict[str, object]] = {}
+    for emp in active_employees:
+        worked_day[emp.id] = {}
+        for ds in date_strs:
+            wd = model.new_bool_var(f"be_wd_{emp.id}_{ds}")
+            worked_b = sum(assign[emp.id][ds][TimeSlot.BREAKFAST.value][p.value] for p in positions)
+            worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
+            model.add(wd == worked_b + worked_d)
+            worked_day[emp.id][ds] = wd
+
+    # 連続勤務日数を6日までに制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
+    CONSECUTIVE_WINDOW = 7
+    MAX_CONSECUTIVE_DAYS = 6
+    for emp in active_employees:
+        for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
+            window = date_strs[i:i + CONSECUTIVE_WINDOW]
+            model.add(sum(worked_day[emp.id][d] for d in window) <= MAX_CONSECUTIVE_DAYS)
+
+    # 正社員は期間内（半月=2週間）で希望休含め最低5日の休みを取得（ハード制約 / Issue #4）
+    MIN_DAYS_OFF = 5
+    if len(date_strs) > MIN_DAYS_OFF:
+        max_work_days = len(date_strs) - MIN_DAYS_OFF
+        for emp in active_employees:
+            if emp.employment_type == EmploymentType.FULL_TIME:
+                model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
