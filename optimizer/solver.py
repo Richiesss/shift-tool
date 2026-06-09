@@ -748,7 +748,7 @@ def solve(
     else:
         logger.error(f"  [INFEASIBLE/UNKNOWN] status={status_name} → フェーズ2へ移行")
         # 実行不可能 → 制約違反の診断メッセージを収集
-        errs = _diagnose_infeasible(active_employees, date_strs, req_map)
+        errs = _diagnose_infeasible(active_employees, date_strs, req_map, off_map)
         for e in errs:
             logger.error(f"  [診断] {e}")
 
@@ -1244,12 +1244,14 @@ def _diagnose_infeasible(
     employees: list[Employee],
     date_strs: list[str],
     req_map: dict,
+    off_map: dict | None = None,
 ) -> list[str]:
     """実行不可能の原因を診断してエラーメッセージを返す"""
     errors = []
-    from collections import defaultdict
     from db import repositories as repo
     shift_constraints = repo.get_shift_constraints()
+    if off_map is None:
+        off_map = {}
 
     for ds in date_strs:
         d = date.fromisoformat(ds)
@@ -1263,12 +1265,22 @@ def _diagnose_infeasible(
                 if not constraint:
                     continue
 
-                # 所属ポジションを考慮した希望者数
-                available = [
-                    e for e in employees
-                    if req_map.get((e.id, ds, slot.value), False)
-                    and (e.can_work_both_positions or e.primary_position is None or e.primary_position.value == pos.value)
-                ]
+                available = []
+                for e in employees:
+                    # ポジション互換チェック
+                    if not (e.can_work_both_positions or e.primary_position is None
+                            or e.primary_position.value == pos.value):
+                        continue
+                    if e.employment_type == EmploymentType.FULL_TIME:
+                        # 正社員: off_map と固定休日のみで可否判断
+                        if off_map.get((e.id, ds), False) or ds in e.fixed_unavailable_dates:
+                            continue
+                        available.append(e)
+                    else:
+                        # アルバイト: req_map で可否判断
+                        if req_map.get((e.id, ds, slot.value), False):
+                            available.append(e)
+
                 leaders = [e for e in available if e.is_leader(pos.value, slot)]
                 min_req = constraint["min"]
                 min_leader = constraint.get("min_leader", 0)
@@ -1276,12 +1288,13 @@ def _diagnose_infeasible(
                 if len(available) < min_req:
                     errors.append(
                         f"❌ {label} {slot.short_label()} {pos.label()}: "
-                        f"希望者が{len(available)}名（必要: {min_req}名以上）"
+                        f"出勤可能者が{len(available)}名（必要: {min_req}名以上）"
                     )
                 elif len(leaders) < min_leader:
+                    lnames = ", ".join(e.name for e in leaders) or "なし"
                     errors.append(
                         f"❌ {label} {slot.short_label()} {pos.label()}: "
-                        f"リーダーが{len(leaders)}名（必要: {min_leader}名以上）"
+                        f"リーダーが{len(leaders)}名（必要: {min_leader}名以上、候補: {lnames}）"
                     )
 
     if not errors:
