@@ -729,6 +729,8 @@ def solve(
         except Exception:
             pass
         result_assignments = _extract_assignments(solver, assign, active_employees, date_strs, slots, positions)
+        _log_employee_analysis(result_assignments, active_employees, date_strs, slots, positions,
+                               req_map, req_hours, shift_constraints)
         _log_assignment_summary(result_assignments, date_strs)
         _check_warnings(result_assignments, date_strs, warnings)
         if warnings:
@@ -765,6 +767,8 @@ def solve(
             long_breakfast_set=long_breakfast_set,
             period_id=period_id or (progress_callback._period_id if progress_callback else None),
         )
+        _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
+                               req_map, req_hours, shift_constraints)
         _check_warnings(best_assignments, date_strs, best_warnings)
         _log_assignment_summary(best_assignments, date_strs)
         if best_warnings:
@@ -780,6 +784,117 @@ def solve(
             errors=errs,         # どこが不足しているかを表示
             solve_time_sec=time.time() - t0,
         )
+
+
+def _log_employee_analysis(assignments, active_employees, date_strs, slots, positions,
+                            req_map, req_hours, shift_constraints):
+    """スタッフ別の割当状況・ペナルティ根拠・リーダー/SI診断を詳細ログ出力"""
+    from collections import defaultdict
+    SOCIAL_INSURANCE_HOURS = 8.0
+    SI_PREF_PENALTY = 50_000
+    DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
+
+    assigned_b = defaultdict(int)
+    assigned_d = defaultdict(int)
+    for a in assignments:
+        if a.time_slot == TimeSlot.BREAKFAST:
+            assigned_b[a.employee_id] += 1
+        else:
+            assigned_d[a.employee_id] += 1
+
+    # ── リーダー要件チェック ────────────────────────────────────────────
+    logger.info("  [リーダー要件チェック]")
+    any_leader_issue = False
+    for slot in slots:
+        for pos in positions:
+            c = shift_constraints.get((slot, pos), {})
+            min_ldr = c.get("min_leader", 0)
+            if min_ldr <= 0:
+                continue
+            candidates = [e for e in active_employees if e.is_leader(pos.value, slot)]
+            names = ", ".join(e.name for e in candidates[:5]) or "なし"
+            status = "OK" if candidates else "❌ リーダー候補ゼロ→毎日INFEASIBLE"
+            logger.info(f"    {slot.value}/{pos.value}: 必要{min_ldr}名  候補{len(candidates)}名({names})  {status}")
+            if not candidates:
+                any_leader_issue = True
+    if any_leader_issue:
+        logger.warning("  ⚠️  リーダースキル設定済スタッフが1名もいません。"
+                       "スタッフ編集画面でスキルレベルを「リーダー」に設定してください。")
+
+    # ── PT スタッフ別詳細 ───────────────────────────────────────────────
+    pt_emps = [e for e in active_employees if e.employment_type != EmploymentType.FULL_TIME]
+    if not pt_emps:
+        return
+
+    logger.info("  [PT別割当・ペナルティ内訳]")
+    hdr = f"    {'名前':<14} {'SI':2} {'リーダー能力':<18} {'希望朝':>5} {'希望夜':>5} {'8h適':>4} {'割当朝':>5} {'割当夜':>5} {'SI未加入ペナ':>10}  備考"
+    logger.info(hdr)
+
+    si_assigned = 0; si_req_8h = 0; si_emps_count = 0
+    non_si_assigned = 0; non_si_emps_count = 0
+
+    for emp in sorted(pt_emps, key=lambda e: (not e.has_social_insurance, e.name)):
+        # 希望提出日数
+        req_b_days = [ds for ds in date_strs if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))]
+        req_d_days = [ds for ds in date_strs if req_map.get((emp.id, ds, TimeSlot.DINNER.value))]
+        # SI加入者: 8h互換パターン数（割当可能な日数）
+        h8_count = 0
+        h8_blocked = []
+        if emp.has_social_insurance:
+            for ds in date_strs:
+                for slot in slots:
+                    if req_map.get((emp.id, ds, slot.value)):
+                        h = req_hours.get((emp.id, ds, slot.value), DEFAULT_SLOT_HOURS[slot])
+                        if h == SOCIAL_INSURANCE_HOURS:
+                            h8_count += 1
+                        else:
+                            h8_blocked.append(f"{ds}({h}h)")
+        # リーダー能力
+        ldr = []
+        for slot in slots:
+            for pos in positions:
+                if emp.is_leader(pos.value, slot):
+                    ldr.append(f"{pos.value[0].upper()}/{slot.value[0].upper()}")
+        ldr_str = ",".join(ldr) if ldr else "-"
+        # 割当数
+        ab = assigned_b[emp.id]; ad = assigned_d[emp.id]
+        total_assigned = ab + ad
+        # SI未加入ペナルティ額（実際に割当された分）
+        si_pen = SI_PREF_PENALTY * total_assigned if not emp.has_social_insurance else 0
+        si_str = "○" if emp.has_social_insurance else "×"
+        h8_str = str(h8_count) if emp.has_social_insurance else "-"
+        si_pen_str = f"{si_pen:,}" if si_pen else "-"
+        # 備考
+        notes = []
+        if emp.has_social_insurance:
+            if not req_b_days and not req_d_days:
+                notes.append("希望未提出→全日ブロック")
+            elif h8_count == 0 and (req_b_days or req_d_days):
+                notes.append("8h希望ゼロ→全日ブロック")
+            elif h8_blocked:
+                notes.append(f"8h非該当{len(h8_blocked)}日ブロック")
+            si_assigned += total_assigned
+            si_req_8h += h8_count
+            si_emps_count += 1
+        else:
+            non_si_assigned += total_assigned
+            non_si_emps_count += 1
+        notes_str = "; ".join(notes)
+        logger.info(f"    {emp.name:<14} {si_str:2} {ldr_str:<18} {len(req_b_days):>5} {len(req_d_days):>5} "
+                    f"{h8_str:>4} {ab:>5} {ad:>5} {si_pen_str:>10}  {notes_str}")
+
+    # ── SI 集計サマリー ──────────────────────────────────────────────────
+    logger.info(f"  [SI割当集計]")
+    logger.info(f"    社保加入PT {si_emps_count}名: 8h適合希望={si_req_8h}件  割当合計={si_assigned}回")
+    logger.info(f"    社保未加入PT {non_si_emps_count}名:                   割当合計={non_si_assigned}回  "
+                f"(ペナルティ計{SI_PREF_PENALTY * non_si_assigned:,})")
+    if si_emps_count and non_si_emps_count:
+        avg_si = si_assigned / si_emps_count
+        avg_non = non_si_assigned / non_si_emps_count
+        logger.info(f"    → 加入者平均{avg_si:.1f}回 / 未加入者平均{avg_non:.1f}回")
+        if si_req_8h == 0 and si_emps_count > 0:
+            logger.warning("    ⚠️  社保加入PT全員が8h希望を提出していません。"
+                           "8時間のシフトパターンを提出するか、おまかせ+固定パターンで8hを設定してください。")
 
 
 def _log_assignment_summary(assignments, date_strs):
