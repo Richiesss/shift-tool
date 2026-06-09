@@ -175,6 +175,29 @@ def solve(
                   "dinner":    sum(1 for k in req_map if k[2] == TimeSlot.DINNER.value)}
     logger.info(f"  req_map: 朝食希望={req_counts['breakfast']}件  ディナー希望={req_counts['dinner']}件")
 
+    # ── ログ: 全従業員DB情報ダンプ ───────────────────────────────────────────
+    logger.info("-" * 60)
+    logger.info("[従業員DBダンプ] 本番DBから読み込んだ全従業員情報")
+    logger.info(f"  {'ID':>4} {'名前':<12} {'雇用':>5} {'H/B':>6} {'H/D':>6} {'K/B':>6} {'K/D':>6} "
+                f"{'主担当':>8} {'両P':>3} {'おまB':>4} {'おまD':>4} {'社保':>3} {'時給':>5}")
+    logger.info(f"  {'-'*4} {'-'*12} {'-'*5} {'-'*6} {'-'*6} {'-'*6} {'-'*6} "
+                f"{'-'*8} {'-'*3} {'-'*4} {'-'*4} {'-'*3} {'-'*5}")
+    for e in active_employees:
+        hb = e.hall_skill_breakfast.value if hasattr(e, 'hall_skill_breakfast') else '?'
+        hd = e.hall_skill_dinner.value if hasattr(e, 'hall_skill_dinner') else '?'
+        kb = e.kitchen_skill_breakfast.value if hasattr(e, 'kitchen_skill_breakfast') else '?'
+        kd = e.kitchen_skill_dinner.value if hasattr(e, 'kitchen_skill_dinner') else '?'
+        pp = e.primary_position.value if e.primary_position else '-'
+        both = '○' if e.can_work_both_positions else '×'
+        omab = '○' if e.always_available_breakfast else '×'
+        omad = '○' if e.always_available_dinner else '×'
+        si = '○' if e.has_social_insurance else '×'
+        wage = getattr(e, 'hourly_wage', 0) or 0
+        emp_type = 'FT' if e.employment_type == EmploymentType.FULL_TIME else 'PT'
+        logger.info(f"  {e.id:>4} {e.name:<12} {emp_type:>5} {hb:>6} {hd:>6} {kb:>6} {kd:>6} "
+                    f"{pp:>8} {both:>3} {omab:>4} {omad:>4} {si:>3} {wage:>5}")
+    logger.info("-" * 60)
+
     # DB から制約・予約客数・アプリ設定を読み込む
     from db import repositories as repo
     shift_constraints      = repo.get_shift_constraints()
