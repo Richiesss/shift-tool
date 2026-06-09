@@ -573,18 +573,33 @@ def solve(
 
     # P3: アルバイトの希望充当（FIX②: FT社員は req_map を持たないため除外）
     # 社員は off_map で管理済みのため、ここではアルバイトのみ対象
-    PT_NOT_WORKED_PENALTY = max(1, int(100 * config.pt_pref_scale))
+    #
+    # 明示的希望 vs おまかせの扱い:
+    # - 明示的希望: 「この日に入りたい」という意思表示 → 強いペナルティで必ず優先
+    # - おまかせ: 「どの日でも可」という意思表示 → 特定の日への希望ではないためペナルティ免除
+    #             余剰スロットを埋める役割に徹し、明示的希望者を押しのけない
+    #
+    # ※ 旧重み(100)は SI_PREF_PENALTY(50000)の1/500 しかなく、
+    #   「明示的希望者を割当なくしてもSI優先の方が安い」状態になっていた。
+    #   200,000 に引き上げてP1コスト+SI_PREFの合計を上回らせ、明示的希望を最優先する。
+    EXPLICIT_PREF_PENALTY = max(1, int(200_000 * config.pt_pref_scale))
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME:
             continue  # 社員は希望提出しない（off_map で管理）
         for ds in date_strs:
             for slot in slots:
-                if req_map.get((emp.id, ds, slot.value)):
-                    worked = sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
-                    not_worked = model.new_bool_var(f"nw_{emp.id}_{ds}_{slot.value}")
-                    model.add(worked == 0).only_enforce_if(not_worked)
-                    model.add(worked >= 1).only_enforce_if(not_worked.negated())
-                    penalty_terms.append(PT_NOT_WORKED_PENALTY * not_worked)
+                if not req_map.get((emp.id, ds, slot.value)):
+                    continue
+                # おまかせフラグが立っているスタッフは特定の日への希望ではないためペナルティ免除
+                is_omakase = (slot == TimeSlot.BREAKFAST and emp.always_available_breakfast) or \
+                             (slot == TimeSlot.DINNER and emp.always_available_dinner)
+                if is_omakase:
+                    continue
+                worked = sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
+                not_worked = model.new_bool_var(f"nw_{emp.id}_{ds}_{slot.value}")
+                model.add(worked == 0).only_enforce_if(not_worked)
+                model.add(worked >= 1).only_enforce_if(not_worked.negated())
+                penalty_terms.append(EXPLICIT_PREF_PENALTY * not_worked)
 
     # P3b: primary_timeslot 専任制約は P5 のハード制約でカバー済みのため削除（FIX⑦）
 
@@ -864,11 +879,16 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
         total_assigned = ab + ad
         # SI未加入ペナルティ額（実際に割当された分）
         si_pen = SI_PREF_PENALTY * total_assigned if not emp.has_social_insurance else 0
+        omakase_b = emp.always_available_breakfast and emp.employment_type != EmploymentType.FULL_TIME
+        omakase_d = emp.always_available_dinner and emp.employment_type != EmploymentType.FULL_TIME
+        omakase_str = ("朝" if omakase_b else "") + ("夜" if omakase_d else "")
         si_str = "○" if emp.has_social_insurance else "×"
         h8_str = str(h8_count) if emp.has_social_insurance else "-"
         si_pen_str = f"{si_pen:,}" if si_pen else "-"
         # 備考
         notes = []
+        if omakase_str:
+            notes.append(f"おまかせ({omakase_str})→明示希望者優先")
         if emp.has_social_insurance:
             if not req_b_days and not req_d_days:
                 notes.append("希望未提出→全日ブロック")
@@ -1156,18 +1176,24 @@ def _solve_best_effort(
                     penalty_terms.append(w * var)
 
     # アルバイト希望充当（FIX②同様: FT除外）
-    PT_PENALTY = max(1, int(100 * config.pt_pref_scale))
+    # おまかせスタッフはペナルティ免除（フェーズ1と同じ方針）
+    EXPLICIT_PREF_PENALTY = max(1, int(200_000 * config.pt_pref_scale))
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME:
             continue
         for ds in date_strs:
             for slot in slots:
-                if req_map.get((emp.id, ds, slot.value)):
-                    worked = sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
-                    not_worked = model.new_bool_var(f"nw_be_{emp.id}_{ds}_{slot.value}")
-                    model.add(worked == 0).only_enforce_if(not_worked)
-                    model.add(worked >= 1).only_enforce_if(not_worked.negated())
-                    penalty_terms.append(PT_PENALTY * not_worked)
+                if not req_map.get((emp.id, ds, slot.value)):
+                    continue
+                is_omakase = (slot == TimeSlot.BREAKFAST and emp.always_available_breakfast) or \
+                             (slot == TimeSlot.DINNER and emp.always_available_dinner)
+                if is_omakase:
+                    continue
+                worked = sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
+                not_worked = model.new_bool_var(f"nw_be_{emp.id}_{ds}_{slot.value}")
+                model.add(worked == 0).only_enforce_if(not_worked)
+                model.add(worked >= 1).only_enforce_if(not_worked.negated())
+                penalty_terms.append(EXPLICIT_PREF_PENALTY * not_worked)
 
     # 社会保険加入アルバイト優先（ベストエフォートフェーズでも同様。weight は本フェーズと統一）
     SI_PREF_PENALTY = 50_000
