@@ -534,16 +534,19 @@ def solve(
         if r.dinner:
             req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
 
-    # 社会保険加入アルバイトは、出勤する場合は必ず8時間勤務になるようハード制約（Issue #7）
-    # 希望シフトの実勤務時間が8時間ちょうどでない (slot, date) には割当不可とする
-    SOCIAL_INSURANCE_HOURS = 8.0
+    # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
+    # duration_hours() は休憩考慮なしの総拘束時間を返す。
+    # 実働8h + 法定休憩1h = 総拘束9h 以上のパターンのみ割当可とする。
+    # 例: 5:45〜14:45（b_long = 9h） → 実働8h → 割当可
+    #     6:30〜11:30（b_std  = 5h） → 実働4h → 割当不可
+    SOCIAL_INSURANCE_MIN_HOURS = 9.0   # 実働8h + 休憩1h
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
             continue
         for ds in date_strs:
             for slot in slots:
                 dur = req_hours.get((emp.id, ds, slot.value))
-                if dur != SOCIAL_INSURANCE_HOURS:
+                if dur is None or dur < SOCIAL_INSURANCE_MIN_HOURS:
                     for pos in positions:
                         model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
@@ -790,7 +793,7 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
                             req_map, req_hours, shift_constraints):
     """スタッフ別の割当状況・ペナルティ根拠・リーダー/SI診断を詳細ログ出力"""
     from collections import defaultdict
-    SOCIAL_INSURANCE_HOURS = 8.0
+    SOCIAL_INSURANCE_MIN_HOURS = 9.0   # 実働8h + 休憩1h（duration_hours は休憩考慮なし総拘束時間）
     SI_PREF_PENALTY = 50_000
     DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
 
@@ -845,7 +848,7 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
                 for slot in slots:
                     if req_map.get((emp.id, ds, slot.value)):
                         h = req_hours.get((emp.id, ds, slot.value), DEFAULT_SLOT_HOURS[slot])
-                        if h == SOCIAL_INSURANCE_HOURS:
+                        if h >= SOCIAL_INSURANCE_MIN_HOURS:
                             h8_count += 1
                         else:
                             h8_blocked.append(f"{ds}({h}h)")
@@ -1030,15 +1033,16 @@ def _solve_best_effort(
                 worked_d = sum(assign[emp.id][ds][TimeSlot.DINNER.value][p.value] for p in positions)
                 model.add(worked_b + worked_d <= 1)
 
-    # 社会保険加入アルバイトは、出勤する場合は必ず8時間勤務になるようハード制約（Issue #7）
-    SOCIAL_INSURANCE_HOURS = 8.0
+    # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
+    # 総拘束9h以上（実働8h + 休憩1h）のパターンのみ割当可
+    SOCIAL_INSURANCE_MIN_HOURS = 9.0
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
             continue
         for ds in date_strs:
             for slot in slots:
                 dur = req_hours.get((emp.id, ds, slot.value))
-                if dur != SOCIAL_INSURANCE_HOURS:
+                if dur is None or dur < SOCIAL_INSURANCE_MIN_HOURS:
                     for pos in positions:
                         model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
