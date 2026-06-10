@@ -287,7 +287,7 @@
             data-emp="{{ current_emp.id }}"
             data-date="{{ d }}"
             data-mode="part"
-            onclick="cyclePart('{{ current_emp.id }}', '{{ d }}')">
+            onclick="cyclePart('{{ current_emp.id }}', '{{ d }}', {{ dow }})">
       {{ btn_html }}
     </button>
     <button type="button" class="pat-expand"
@@ -374,19 +374,30 @@ const PAT_CATS_JS = {
   {% for pid, cat in PAT_CATS.items() %}{{ pid|tojson }}: {{ cat|tojson }},{% endfor %}
 };
 
-// タップサイクル順：[休み, 過去履歴サジェスト(最大3), 有給, カスタム手動入力]
-const PAT_CYCLE = (() => {
-  const tops = [{% for pid, cnt, cs, ce in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
-  const defs = ['d_std1', 'b_std'];
+// 曜日別の最頻パターン（{python_weekday(0=月..6=日): pattern_id}、2回以上提出歴がある曜日のみ）
+const DOW_SUGGESTIONS = {
+  {% for dow, pid in dow_suggestions.items() %}{{ dow }}: {{ pid|tojson }},{% endfor %}
+};
+
+// タップサイクル順：[休み, この曜日でよく使うパターン, 過去履歴サジェスト(最大3), 有給, カスタム手動入力]
+// 曜日（0=月..6=日）ごとに用意し、その曜日の入力履歴を優先表示する
+const TOP_PATTERNS = [{% for pid, cnt, cs, ce in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
+const PAT_DEFAULTS = ['d_std1', 'b_std'];
+const PAT_CYCLE_BY_DOW = {};
+for (let dow = 0; dow < 7; dow++) {
   const seen = new Set(['', 'paid_leave', 'custom']); // 末尾固定枠を予約
   const cycle = [''];
-  for (const p of [...tops, ...defs]) {
+  const dowPid = DOW_SUGGESTIONS[dow];
+  if (dowPid && !seen.has(dowPid) && PAT_LABELS[dowPid]) {
+    seen.add(dowPid); cycle.push(dowPid);
+  }
+  for (const p of [...TOP_PATTERNS, ...PAT_DEFAULTS]) {
     if (!seen.has(p) && PAT_LABELS[p]) { seen.add(p); cycle.push(p); if (cycle.length >= 4) break; }
   }
   cycle.push('paid_leave'); // 有給（固定）
   cycle.push('custom');     // カスタム手動入力（固定）
-  return cycle;
-})();
+  PAT_CYCLE_BY_DOW[dow] = cycle;
+}
 
 // ── アルバイト：パターン適用（共通パス） ─────────────────────────
 // customStart/customEnd は patId === 'custom' のサジェストから時刻を引き継ぐ場合に指定する
@@ -413,11 +424,12 @@ function applyPat(empId, dateStr, patId, customStart, customEnd) {
   window._formDirty = true;
 }
 
-// タップサイクル
-function cyclePart(empId, dateStr) {
+// タップサイクル（曜日ごとのサイクルを使用）
+function cyclePart(empId, dateStr, dow) {
+  const cycle = PAT_CYCLE_BY_DOW[dow] ?? PAT_CYCLE_BY_DOW[0];
   const cur = document.getElementById(`hid_${empId}_${dateStr}`)?.value ?? '';
-  const idx = PAT_CYCLE.indexOf(cur);
-  applyPat(empId, dateStr, PAT_CYCLE[(idx + 1) % PAT_CYCLE.length]);
+  const idx = cycle.indexOf(cur);
+  applyPat(empId, dateStr, cycle[(idx + 1) % cycle.length]);
 }
 
 // 全日一括（customStart/customEnd は「カスタム」サジェストの時刻引き継ぎ用）
