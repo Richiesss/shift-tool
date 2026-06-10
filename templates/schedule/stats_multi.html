@@ -16,7 +16,6 @@
   .stat-table th, .stat-table td { white-space: nowrap; }
   .stat-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .cost-col { color: #fbbf24; font-weight: 700; }
-  .hours-col { color: #34d399; }
   .chart-wrap { position: relative; height: 220px; }
 </style>
 {% endblock %}
@@ -58,6 +57,7 @@
   <div class="alert alert-info small">期間を選択してください。</div>
   {% else %}
 
+  {% if any_wage %}
   <!-- 集計テーブル -->
   <div class="card mb-3">
     <div class="card-body p-0">
@@ -66,44 +66,17 @@
           <thead class="table-dark">
             <tr>
               <th>名前</th>
-              {% if sel_periods|length > 1 %}
-              {% for p in sel_periods %}
-              <th class="text-center hours-col" title="{{ p.start_date }}〜{{ p.end_date }}">
-                {{ p.start_date[5:] }}〜
-              </th>
-              {% endfor %}
-              {% endif %}
-              <th class="text-center hours-col">推計時間</th>
-              {% if any_wage %}
               <th class="text-center cost-col">推計人件費</th>
-              {% endif %}
             </tr>
           </thead>
           <tbody>
-            {% set total_hours  = namespace(v=0.0) %}
-            {% set total_cost   = namespace(v=0.0) %}
+            {% set total_cost = namespace(v=0.0) %}
             {% for emp in employees %}
             {% set d = stats_data.get(emp.id, {}) %}
-            {% set shifts = d.get('shifts', 0) %}
-            {% set hours  = d.get('hours', 0.0) %}
-            {% set cost   = d.get('cost', 0.0) %}
-            {% set total_hours.v  = total_hours.v  + hours %}
-            {% set total_cost.v   = total_cost.v   + cost %}
+            {% set cost = d.get('cost', 0.0) %}
+            {% set total_cost.v = total_cost.v + cost %}
             <tr>
               <td class="fw-semibold">{{ emp.name }}</td>
-              {% if sel_periods|length > 1 %}
-              {% for p in sel_periods %}
-              {% set bp = d.get('by_period', {}).get(p.id, {}) %}
-              <td class="num text-center hours-col">
-                {% if bp.get('hours', 0) > 0 %}{{ "%.1f"|format(bp.hours) }}h
-                {% else %}<span class="text-muted">—</span>{% endif %}
-              </td>
-              {% endfor %}
-              {% endif %}
-              <td class="num text-center hours-col">
-                {% if hours > 0 %}{{ "%.1f"|format(hours) }}h{% else %}—{% endif %}
-              </td>
-              {% if any_wage %}
               <td class="num text-center">
                 {% if emp.employment_type.value == 'full_time' %}
                 <span class="text-muted small">対象外</span>
@@ -113,35 +86,20 @@
                 <span class="text-muted small">時給未設定</span>
                 {% else %}—{% endif %}
               </td>
-              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
           <tfoot class="table-dark fw-bold">
             <tr>
               <td>合計</td>
-              {% if sel_periods|length > 1 %}
-              {% for p in sel_periods %}
-              <td class="num text-center hours-col">
-                {% set p_total = namespace(v=0.0) %}
-                {% for emp in employees %}
-                {% set bp = stats_data.get(emp.id, {}).get('by_period', {}).get(p.id, {}) %}
-                {% set p_total.v = p_total.v + bp.get('hours', 0.0) %}
-                {% endfor %}
-                {{ "%.1f"|format(p_total.v) }}h
-              </td>
-              {% endfor %}
-              {% endif %}
-              <td class="num text-center hours-col">{{ "%.1f"|format(total_hours.v) }}h</td>
-              {% if any_wage %}
               <td class="num text-center cost-col">¥{{ "{:,.0f}".format(total_cost.v) }}</td>
-              {% endif %}
             </tr>
           </tfoot>
         </table>
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- 36協定チェック -->
   <div class="card mb-3 {% if overtime_alerts %}border-warning{% endif %}">
@@ -301,18 +259,7 @@
   </div>
   {% endif %}
 
-  <!-- 勤務時間グラフ -->
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="small fw-semibold text-muted mb-3">スタッフ別推計勤務時間</div>
-      <div class="chart-wrap">
-        <canvas id="hoursChart"></canvas>
-      </div>
-    </div>
-  </div>
-
   <p class="text-muted small px-1">
-    ※ 推計時間はシフト希望のパターン時刻をもとに算出します。<br>
     ※ 人件費は（基本給＋個人昇給額）×時間（朝食は早朝手当加算）の概算です。休憩・交通費等は含みません。<br>
     ※ 基本給・早朝手当・昇給額は設定画面の「人件費設定」で変更できます。
   </p>
@@ -328,10 +275,6 @@ const EMPLOYEES = {{ employees | map(attribute='name') | list | tojson }};
 const STATS     = {{ stats_data | tojson }};
 const EMP_IDS   = {{ employees | map(attribute='id') | list | tojson }};
 
-const hours = EMP_IDS.map(id => {
-  const d = STATS[String(id)];
-  return d ? parseFloat(d.hours.toFixed(1)) : 0;
-});
 const costs = EMP_IDS.map(id => {
   const d = STATS[String(id)];
   return d ? Math.round(d.cost) : 0;
@@ -369,7 +312,6 @@ function mkChart(id, label, data, color) {
   });
 }
 
-mkChart('hoursChart', '推計勤務時間 (h)', hours, '#34d399');
 mkChart('costChart',  '推計人件費 (¥)',  costs, '#fbbf24');
 </script>
 {% endblock %}
