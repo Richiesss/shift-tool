@@ -374,25 +374,24 @@ const PAT_CATS_JS = {
   {% for pid, cat in PAT_CATS.items() %}{{ pid|tojson }}: {{ cat|tojson }},{% endfor %}
 };
 
-// 曜日別の最頻パターン（{python_weekday(0=月..6=日): pattern_id}、2回以上提出歴がある曜日のみ）
+// 曜日別の頻出パターン（{python_weekday(0=月..6=日): [pattern_id, ...]}、頻度降順・2回以上提出歴があるもののみ）
 const DOW_SUGGESTIONS = {
-  {% for dow, pid in dow_suggestions.items() %}{{ dow }}: {{ pid|tojson }},{% endfor %}
+  {% for dow, pids in dow_suggestions.items() %}{{ dow }}: {{ pids|tojson }},{% endfor %}
 };
 
-// タップサイクル順：[休み, この曜日でよく使うパターン, 過去履歴サジェスト(最大3), 有給, カスタム手動入力]
-// 曜日（0=月..6=日）ごとに用意し、その曜日の入力履歴を優先表示する
+// タップサイクル順：[休み, この曜日の頻出パターン(頻度順), 過去履歴サジェスト, 有給, カスタム手動入力]
+// 曜日（0=月..6=日）ごとに用意し、その曜日の入力履歴を頻出順に優先表示する（最大3候補）
 const TOP_PATTERNS = [{% for pid, cnt, cs, ce in top_patterns[:3] %}{{ pid|tojson }},{% endfor %}];
 const PAT_DEFAULTS = ['d_std1', 'b_std'];
+const SUGGESTION_SLOTS = 3;
 const PAT_CYCLE_BY_DOW = {};
 for (let dow = 0; dow < 7; dow++) {
   const seen = new Set(['', 'paid_leave', 'custom']); // 末尾固定枠を予約
   const cycle = [''];
-  const dowPid = DOW_SUGGESTIONS[dow];
-  if (dowPid && !seen.has(dowPid) && PAT_LABELS[dowPid]) {
-    seen.add(dowPid); cycle.push(dowPid);
-  }
-  for (const p of [...TOP_PATTERNS, ...PAT_DEFAULTS]) {
-    if (!seen.has(p) && PAT_LABELS[p]) { seen.add(p); cycle.push(p); if (cycle.length >= 4) break; }
+  const dowPids = DOW_SUGGESTIONS[dow] || [];
+  for (const p of [...dowPids, ...TOP_PATTERNS, ...PAT_DEFAULTS]) {
+    if (cycle.length > SUGGESTION_SLOTS) break;
+    if (!seen.has(p) && PAT_LABELS[p]) { seen.add(p); cycle.push(p); }
   }
   cycle.push('paid_leave'); // 有給（固定）
   cycle.push('custom');     // カスタム手動入力（固定）

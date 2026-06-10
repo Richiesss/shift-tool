@@ -648,8 +648,8 @@ def get_employee_pattern_history(emp_id: int) -> list[tuple[str, int, Optional[s
     return [(r["pattern_id"], r["cnt"], r["cs"], r["ce"]) for r in rows]
 
 
-def get_employee_dow_patterns(emp_id: int) -> dict[int, str]:
-    """従業員の曜日別最頻パターンを {python_weekday(0=月..6=日): pattern_id} で返す。
+def get_employee_dow_patterns(emp_id: int) -> dict[int, list[str]]:
+    """従業員の曜日別の頻出パターンを {python_weekday(0=月..6=日): [pattern_id, ...]}（頻度降順）で返す。
     2回以上出現したパターンのみ提案対象とする。"""
     conn = get_connection()
     rows = conn.execute(
@@ -677,11 +677,9 @@ def get_employee_dow_patterns(emp_id: int) -> dict[int, str]:
         dow_counts[py_dow][pid] = dow_counts[py_dow].get(pid, 0) + cnt
     result = {}
     for dow, patterns in dow_counts.items():
-        if not patterns:
-            continue
-        best_pid = max(patterns, key=patterns.get)
-        if patterns[best_pid] >= 2:
-            result[dow] = best_pid
+        pids = [pid for pid, cnt in sorted(patterns.items(), key=lambda x: -x[1]) if cnt >= 2]
+        if pids:
+            result[dow] = pids
     return result
 
 
