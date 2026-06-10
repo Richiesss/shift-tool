@@ -328,6 +328,23 @@
   </div>
 </form>
 
+<!-- 全休確認モーダル -->
+<div class="modal fade" id="allOffModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:14px">
+      <div class="modal-body p-4 text-center">
+        <i class="bi bi-question-circle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
+        <div class="fw-semibold mb-1">全て休みで保存しますか？</div>
+        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">この期間、全ての日を「休み」として保存します。</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">戻る</button>
+          <button type="button" class="btn btn-warning flex-grow-1" id="all-off-proceed-btn">保存する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% else %}
 <div class="p-5 text-center text-muted">
   <i class="bi bi-person-x d-block mb-2" style="font-size:2rem"></i>
@@ -355,13 +372,21 @@ function isAllOff() {
     : inp.value === '');
 }
 
-// フォーム送信時：全休なら確認ダイアログ、送信後は離脱ガードをリセット
+// フォーム送信時：全休なら確認モーダルを表示、送信後は離脱ガードをリセット
 document.getElementById('shift-form')?.addEventListener('submit', (ev) => {
-  if (isAllOff() && !confirm('この期間、全ての日を「休み」として保存します。よろしいですか？')) {
+  if (isAllOff()) {
     ev.preventDefault();
+    new bootstrap.Modal(document.getElementById('allOffModal')).show();
     return;
   }
   window._formDirty = false;
+});
+
+// 「保存する」（全休確認モーダル）
+document.getElementById('all-off-proceed-btn')?.addEventListener('click', () => {
+  bootstrap.Modal.getInstance(document.getElementById('allOffModal'))?.hide();
+  window._formDirty = false;
+  document.getElementById('shift-form').submit();
 });
 
 // ── パターンデータ ────────────────────────────────────────────────

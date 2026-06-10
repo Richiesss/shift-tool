@@ -18,7 +18,7 @@ def _safe_next(url: str) -> str:
 
 def _login_page(**kwargs):
     """キャッシュ無効ヘッダー付きでログインページを返す"""
-    resp = make_response(render_template("auth/login.html", pw_len=len(APP_PASSWORD), **kwargs))
+    resp = make_response(render_template("auth/login.html", **kwargs))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     return resp

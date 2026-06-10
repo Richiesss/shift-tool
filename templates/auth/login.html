@@ -34,7 +34,6 @@
     .btn-login:hover { background: #0284c7; }
     .btn-login:disabled { background: #334155; cursor: not-allowed; }
     .alert { border-radius: 10px; font-size: .85rem; }
-    .debug-info { font-size: .7rem; color: #475569; margin-top: 1rem; text-align: center; }
   </style>
 </head>
 <body>
@@ -69,10 +68,6 @@
       <span id="btnText">ログイン</span>
     </button>
   </form>
-
-  <div class="debug-info">
-    パスワード設定: {{ '✓ あり (%d文字)' % pw_len if pw_len else '✗ 未設定（誰でもアクセス可）' }}
-  </div>
 </div>
 
 <script>

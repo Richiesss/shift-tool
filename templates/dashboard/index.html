@@ -224,7 +224,6 @@
         <div class="slot-row">
       {% endif %}
           {% set cnt = today_staff.get((slot_v, pos_v), 0) %}
-          {% set is_s = (slot_v, pos_v) | string in today_short | map('string') | list %}
           <div class="slot-cell {{ 'short' if today_short and (slot_v+'/'+pos_l+'（') in today_short|join('') else '' }}">
             <span class="pos-lbl">{{ pos_l }}</span>
             <span class="pos-cnt">{{ cnt }}<small>名</small></span>

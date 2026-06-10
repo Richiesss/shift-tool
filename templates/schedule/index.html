@@ -206,26 +206,28 @@
   <div class="ms-auto d-flex gap-1">
     {% if period %}
     {% if period.status == 'confirmed' %}
-    <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
+    <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm" title="Excel出力" aria-label="Excel出力">
       <i class="bi bi-file-earmark-spreadsheet"></i>
     </a>
-    <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm">
+    <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm" title="PDF出力" aria-label="PDF出力">
       <i class="bi bi-file-earmark-pdf"></i>
     </a>
     {% else %}
     <button class="btn btn-outline-secondary btn-sm" style="opacity:.45;cursor:not-allowed"
+            title="Excel出力" aria-label="Excel出力"
             onclick="showToast('エクスポートするには先に「確定」ボタンを押してください', 'warning')">
       <i class="bi bi-file-earmark-spreadsheet"></i>
     </button>
     <button class="btn btn-outline-secondary btn-sm" style="opacity:.45;cursor:not-allowed"
+            title="PDF出力" aria-label="PDF出力"
             onclick="showToast('エクスポートするには先に「確定」ボタンを押してください', 'warning')">
       <i class="bi bi-file-earmark-pdf"></i>
     </button>
     {% endif %}
-    <a href="{{ url_for('schedule.stats_multi') }}" class="btn btn-outline-light btn-sm">
+    <a href="{{ url_for('schedule.stats_multi') }}" class="btn btn-outline-light btn-sm" title="統計" aria-label="統計">
       <i class="bi bi-bar-chart-fill"></i>
     </a>
-    <button class="btn btn-outline-light btn-sm" onclick="openHistory({{ period.id }})">
+    <button class="btn btn-outline-light btn-sm" onclick="openHistory({{ period.id }})" title="変更履歴" aria-label="変更履歴">
       <i class="bi bi-clock-history"></i>
     </button>
     {% endif %}

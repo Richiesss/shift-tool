@@ -16,6 +16,15 @@
         <span class="text-muted small">モデルを構築しています…</span>
       </p>
 
+      <!-- 生成完了時の注意事項（ある場合のみ表示） -->
+      <div id="warn-box" class="alert alert-warning text-start small py-2 mb-3" style="display:none"></div>
+
+      <!-- 注意事項確認後にシフト表へ進むボタン -->
+      <a id="goto-btn" href="{{ url_for('schedule.index', period_id=period.id) }}"
+         class="btn btn-success btn-sm mb-2" style="display:none">
+        <i class="bi bi-arrow-right-circle me-1"></i>シフト表へ進む
+      </a>
+
       <!-- フェーズ表示 -->
       <div class="d-flex justify-content-between align-items-center small mb-1">
         <span id="phase-label" class="fw-semibold text-primary">
@@ -185,6 +194,13 @@
     }
   }
 
+  // ── HTMLエスケープ ────────────────────────────────────────────────────
+  function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
   // ── 完了・エラー処理 ───────────────────────────────────────────────────
   function finish(ok, warnOrErr) {
     stopLogPolling();
@@ -199,9 +215,25 @@
       phaseLabel.classList.remove('text-primary', 'text-warning');
       phaseLabel.classList.add('text-success');
       elapsedLabel.textContent = '完了';
-      statusMsg.innerHTML =
-        '<span class="text-success fw-semibold">シフト表に移動します…</span>';
-      setTimeout(() => { window.location.href = scheduleUrl; }, 800);
+
+      const warnings = Array.isArray(warnOrErr) ? warnOrErr : [];
+      const gotoBtn = document.getElementById('goto-btn');
+      if (warnings.length > 0) {
+        statusMsg.innerHTML =
+          '<span class="text-success fw-semibold">生成完了 — 下記の注意事項をご確認ください</span>';
+        const warnBox = document.getElementById('warn-box');
+        warnBox.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>注意事項' +
+          '<ul class="mb-0 ps-3 mt-1">' +
+          warnings.map(w => '<li>' + escapeHtml(w) + '</li>').join('') +
+          '</ul>';
+        warnBox.style.display = '';
+        gotoBtn.style.display = '';
+        setTimeout(() => { window.location.href = scheduleUrl; }, 6000);
+      } else {
+        statusMsg.innerHTML =
+          '<span class="text-success fw-semibold">シフト表に移動します…</span>';
+        setTimeout(() => { window.location.href = scheduleUrl; }, 800);
+      }
     } else {
       const msg = typeof warnOrErr === 'string' ? warnOrErr : '';
       bar.classList.add('bg-danger');
