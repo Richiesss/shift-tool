@@ -104,6 +104,11 @@ class Connection:
             cur = self._conn.cursor()
             cur.execute("SET statement_timeout = 15000")
             cur.close()
+            # SET はトランザクション内で発行されるため、ここで確定させておく
+            # （直後に autocommit を切り替える initialize_db 等が
+            #   "set_session cannot be used inside a transaction" で
+            #   失敗するのを防ぐ）
+            self._conn.commit()
         except Exception:
             try:
                 self._conn.rollback()
