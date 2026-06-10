@@ -16,3 +16,22 @@ def tiered_extra(count: int, tiers: list[tuple[int, int]]) -> int:
         if threshold > 0 and count >= threshold:
             extra = max(extra, amount)
     return extra
+
+
+def effective_min_max(constraint: dict, extra: int) -> tuple[int, int]:
+    """
+    シフト制約 {"min": int, "max": int, ...} と予約客数による増員数 extra から、
+    その日・スロット・ポジションの実効的な最低人数・最大人数を返す。
+
+    増員がない（客数が少ない）日は max を min と同じ値に制限し、
+    設定上の max まで余分に人員を配置できないようにする。
+    増員がある日は設定上の max と (min+extra) の大きい方を上限とする。
+    """
+    base_min = constraint.get("min", 0)
+    base_max = constraint.get("max", 0)
+    if extra:
+        base_min += extra
+        base_max = max(base_max, base_min)
+    else:
+        base_max = base_min
+    return base_min, base_max

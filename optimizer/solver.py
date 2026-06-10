@@ -10,7 +10,7 @@ from utils.constants import (
     LATE_NIGHT_START
 )
 from utils.solver_logger import logger
-from utils.reservation import tiered_extra
+from utils.reservation import tiered_extra, effective_min_max
 from utils.shift_patterns import is_long_breakfast_pattern
 
 
@@ -346,19 +346,14 @@ def solve(
                 constraint = shift_constraints.get(key)
                 if not constraint:
                     continue
-                base_min = constraint["min"]
-                base_max = constraint["max"]
                 # 予約超過時の増員
                 if slot == TimeSlot.BREAKFAST:
                     extra = tiered_extra(b_count, reserv_tiers_b)
-                    if extra:
-                        base_min += extra
-                        base_max  = max(base_max, base_min)
                 elif slot == TimeSlot.DINNER:
                     extra = tiered_extra(d_count, reserv_tiers_d)
-                    if extra:
-                        base_min += extra
-                        base_max  = max(base_max, base_min)
+                else:
+                    extra = 0
+                base_min, base_max = effective_min_max(constraint, extra)
                 staff_vars = [
                     assign[emp.id][ds][slot.value][pos.value]
                     for emp in active_employees
@@ -1141,18 +1136,13 @@ def _solve_best_effort(
                 constraint = shift_constraints.get((slot, pos))
                 if not constraint:
                     continue
-                min_req = constraint["min"]
-                max_req = constraint["max"]
                 if slot == TimeSlot.BREAKFAST:
                     extra = tiered_extra(b_count, reserv_tiers_b)
-                    if extra:
-                        min_req += extra
-                        max_req = max(max_req, min_req)
                 elif slot == TimeSlot.DINNER:
                     extra = tiered_extra(d_count, reserv_tiers_d)
-                    if extra:
-                        min_req += extra
-                        max_req = max(max_req, min_req)
+                else:
+                    extra = 0
+                min_req, max_req = effective_min_max(constraint, extra)
                 staff_vars = [assign[emp.id][ds][slot.value][pos.value] for emp in active_employees]
 
                 # 最大は引き続き絶対制約
