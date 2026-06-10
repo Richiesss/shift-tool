@@ -7,7 +7,6 @@ from models.employee import Employee
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import (
     TimeSlot, Position, SkillLevel, EmploymentType, PrimaryPosition,
-    LATE_NIGHT_START
 )
 from utils.solver_logger import logger
 from utils.reservation import tiered_extra, effective_min_max
@@ -217,6 +216,13 @@ def solve(
         reserv_thresh_d = 25;  reserv_extra_d = 1; reserv_thresh_d2 = 0; reserv_extra_d2 = 0
     reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
     reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
+
+    try:
+        max_consecutive_days = int(repo.get_app_setting("max_consecutive_days", "6"))
+        min_days_off         = int(repo.get_app_setting("min_days_off", "5"))
+    except Exception:
+        max_consecutive_days = 6
+        min_days_off = 5
 
     # ── ログ: 制約設定 & 充足前チェック ──────────────────────────────────
     logger.info("  [制約設定]")
@@ -518,18 +524,16 @@ def solve(
             model.add(wd == worked_b + worked_d)
             worked_day[emp.id][ds] = wd
 
-    # 6c. 連続勤務日数を6日までに制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
+    # 6c. 連続勤務日数を制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
     CONSECUTIVE_WINDOW = 7
-    MAX_CONSECUTIVE_DAYS = 6
     for emp in active_employees:
         for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
             window = date_strs[i:i + CONSECUTIVE_WINDOW]
-            model.add(sum(worked_day[emp.id][d] for d in window) <= MAX_CONSECUTIVE_DAYS)
+            model.add(sum(worked_day[emp.id][d] for d in window) <= max_consecutive_days)
 
-    # 6d. 正社員は期間内（半月=2週間）で希望休含め最低5日の休みを取得（ハード制約 / Issue #4）
-    MIN_DAYS_OFF = 5
-    if len(date_strs) > MIN_DAYS_OFF:
-        max_work_days = len(date_strs) - MIN_DAYS_OFF
+    # 6d. 正社員は期間内（半月=2週間）で希望休含め最低日数の休みを取得（ハード制約 / Issue #4）
+    if len(date_strs) > min_days_off:
+        max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
             if emp.employment_type == EmploymentType.FULL_TIME:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
@@ -802,6 +806,8 @@ def solve(
             reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d,
             long_breakfast_set=long_breakfast_set,
             period_id=period_id or (progress_callback._period_id if progress_callback else None),
+            max_consecutive_days=max_consecutive_days,
+            min_days_off=min_days_off,
         )
         _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints)
@@ -991,6 +997,8 @@ def _solve_best_effort(
     reserv_tiers_d: list[tuple[int, int]] | None = None,
     long_breakfast_set: set[tuple[int, str]] | None = None,
     period_id: int | None = None,
+    max_consecutive_days: int = 6,
+    min_days_off: int = 5,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     import time
@@ -1106,18 +1114,16 @@ def _solve_best_effort(
             model.add(wd == worked_b + worked_d)
             worked_day[emp.id][ds] = wd
 
-    # 連続勤務日数を6日までに制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
+    # 連続勤務日数を制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
     CONSECUTIVE_WINDOW = 7
-    MAX_CONSECUTIVE_DAYS = 6
     for emp in active_employees:
         for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
             window = date_strs[i:i + CONSECUTIVE_WINDOW]
-            model.add(sum(worked_day[emp.id][d] for d in window) <= MAX_CONSECUTIVE_DAYS)
+            model.add(sum(worked_day[emp.id][d] for d in window) <= max_consecutive_days)
 
-    # 正社員は期間内（半月=2週間）で希望休含め最低5日の休みを取得（ハード制約 / Issue #4）
-    MIN_DAYS_OFF = 5
-    if len(date_strs) > MIN_DAYS_OFF:
-        max_work_days = len(date_strs) - MIN_DAYS_OFF
+    # 正社員は期間内（半月=2週間）で希望休含め最低日数の休みを取得（ハード制約 / Issue #4）
+    if len(date_strs) > min_days_off:
+        max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
             if emp.employment_type == EmploymentType.FULL_TIME:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)

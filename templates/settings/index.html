@@ -86,6 +86,33 @@
     </div>
   </div>
 
+  <!-- 勤務日数ルール -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">勤務日数ルール
+        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+              data-bs-title="勤務日数ルール"
+              data-bs-content="連続勤務日数の上限：1人のスタッフが連続して出勤できる日数の上限です。最低休日数：作成期間中に各スタッフへ最低限割り当てる休日の日数です。">?</span>
+      </h6>
+      <div class="row g-3">
+        <div class="col-auto">
+          <label class="form-label small fw-semibold mb-1">連続勤務日数の上限</label>
+          <div class="d-flex align-items-center gap-1">
+            <input type="number" name="max_consecutive_days" value="{{ settings.get('max_consecutive_days', '6') }}" class="form-control form-control-sm" min="1" style="width:70px">
+            <span class="text-muted small">日</span>
+          </div>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small fw-semibold mb-1">期間内の最低休日数</label>
+          <div class="d-flex align-items-center gap-1">
+            <input type="number" name="min_days_off" value="{{ settings.get('min_days_off', '5') }}" class="form-control form-control-sm" min="0" style="width:70px">
+            <span class="text-muted small">日</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 社員 デフォルト勤務時間 -->
   <div class="card mb-3">
     <div class="card-body">
@@ -186,10 +213,22 @@
           <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
         </div>
       </div>
+      <div>
+        <label class="form-label small fw-semibold mb-1">早朝手当の対象時間帯</label>
+        <div class="d-flex align-items-center gap-1">
+          <input type="time" name="early_allowance_start"
+                 value="{{ settings.get('early_allowance_start', '05:30') }}"
+                 class="form-control form-control-sm" style="width:110px">
+          <span class="text-muted small">〜</span>
+          <input type="time" name="early_allowance_end"
+                 value="{{ settings.get('early_allowance_end', '09:00') }}"
+                 class="form-control form-control-sm" style="width:110px">
+        </div>
+      </div>
     </div>
 
     <div class="text-muted small mt-3">
-      実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 朝食）。社員は対象外。<br>
+      実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 上記時間帯と重複する勤務時間）。社員は対象外。<br>
       個人昇給額はスタッフ管理画面で個別に設定します。
     </div>
   </div>

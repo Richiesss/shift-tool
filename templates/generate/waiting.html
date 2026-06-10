@@ -82,8 +82,8 @@
 <script>
 (function () {
   // ── 定数 ──────────────────────────────────────────────────────────────
-  const MAX_SEC_P1 = 25.0;   // フェーズ1の最大秒数
-  const MAX_SEC_P2 = 60.0;   // フェーズ2の最大秒数
+  const MAX_SEC_P1 = 25.0;   // フェーズ1の最大秒数（optimizer/solver.py の max_time_in_seconds と一致させる）
+  const MAX_SEC_P2 = 45.0;   // フェーズ2の最大秒数（optimizer/solver.py の MAX_TIME_P2 と一致させる）
   const TIMEOUT_SEC = 240;   // これを超えたら異常とみなす（CPU競合考慮で余裕を持たせる）
   const scheduleUrl = "{{ url_for('schedule.index', period_id=period.id) }}";
 

@@ -49,6 +49,8 @@ def save():
         "ft_hall_dinner_start",       "ft_hall_dinner_end",
         "ft_kitchen_dinner_start",    "ft_kitchen_dinner_end",
         "base_hourly_wage",           "early_morning_allowance",
+        "early_allowance_start",      "early_allowance_end",
+        "max_consecutive_days",       "min_days_off",
     ]
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     repo.save_all_app_settings(new_settings)

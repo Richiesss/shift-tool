@@ -70,15 +70,4 @@ SHIFT_CONSTRAINTS = {
     (TimeSlot.DINNER, Position.KITCHEN):    {"min": 3, "max": 3, "min_leader": 2},
 }
 
-# 法令関連定数
-LATE_NIGHT_START = 22  # 深夜割増開始時刻（時）
-STANDARD_WEEKLY_HOURS = 40  # 週の法定労働時間
-FULL_TIME_MONTHLY_HOURS = 160  # 正社員の月間所定労働時間（仮）
-
-# 休憩時間（時間）
-BREAK_RULES = [
-    (6, 0.75),   # 6時間超 → 45分
-    (8, 1.0),    # 8時間超 → 60分
-]
-
 DAY_OF_WEEK_LABELS = ["月", "火", "水", "木", "金", "土", "日"]

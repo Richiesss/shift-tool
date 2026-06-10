@@ -846,16 +846,16 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
 
     settings = {r["key"]: r["value"] for r in setting_rows}
 
-    EARLY_START = 5.5   # 5:30
-    EARLY_END   = 9.0   # 9:00
-
-    def _early_overlap(start_h: float, end_h: float) -> float:
-        """5:30〜9:00 と重複する時間数を返す"""
-        return max(0.0, min(end_h, EARLY_END) - max(start_h, EARLY_START))
-
     def _parse_hm(t: str) -> float:
         h, m = map(int, t.split(":"))
         return h + m / 60.0
+
+    EARLY_START = _parse_hm(settings.get("early_allowance_start", "05:30"))
+    EARLY_END   = _parse_hm(settings.get("early_allowance_end",   "09:00"))
+
+    def _early_overlap(start_h: float, end_h: float) -> float:
+        """早朝手当の対象時間帯と重複する時間数を返す"""
+        return max(0.0, min(end_h, EARLY_END) - max(start_h, EARLY_START))
 
     def _ft_times(slot: str, pos: str) -> tuple[float, float]:
         s = settings.get(f"ft_{pos}_{slot}_start", "06:00" if slot == "breakfast" else "17:00")
@@ -937,7 +937,7 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
             raise_amt    = wage_map.get(eid, 0)
             base_rate    = base_wage + raise_amt
             normal_hrs   = hrs - early_hrs
-            # 早朝時間帯（5:30〜9:00）のみ早朝手当を加算
+            # 早朝手当の対象時間帯（設定可能）と重複する時間のみ早朝手当を加算
             cost = early_hrs * (base_rate + early_allow) + normal_hrs * base_rate
 
         if eid not in result:
