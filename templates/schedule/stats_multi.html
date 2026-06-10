@@ -206,6 +206,89 @@
   </div>
   {% endif %}
 
+  <!-- シフトの公平性 -->
+  <div class="card mb-3">
+    <div class="card-body p-0">
+      <div class="small fw-semibold text-muted px-3 pt-3 pb-2">
+        <i class="bi bi-people-fill me-1"></i>シフトの公平性
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm stat-table mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>名前</th>
+              <th class="text-center">希望採用率</th>
+              <th class="text-center">最大連続勤務</th>
+              <th class="text-center">総休日数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for emp in employees %}
+            {% set f = fairness_stats.get(emp.id, {}) %}
+            <tr>
+              <td class="fw-semibold">{{ emp.name }}</td>
+              <td class="num text-center">
+                {% if f.fulfillment_rate is not none %}
+                {{ "%.0f"|format(f.fulfillment_rate * 100) }}%
+                <span class="text-muted small">（{{ f.req_matched }}/{{ f.req_total }}）</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="num text-center {{ 'text-danger fw-bold' if f.max_consecutive > max_consecutive_setting else '' }}">
+                {{ f.max_consecutive }}日
+                {% if f.max_consecutive > max_consecutive_setting %}
+                <i class="bi bi-exclamation-triangle-fill ms-1" title="設定値（{{ max_consecutive_setting }}日）を超過"></i>
+                {% endif %}
+              </td>
+              <td class="num text-center">
+                {{ f.days_off }}<span class="text-muted small"> / {{ f.total_days }}日</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted small mb-0 px-3 pb-3 pt-2">
+        ※ 希望採用率＝休み希望・出勤希望（朝食/ディナー）が実際の割当と一致した割合。希望未提出の方は「—」。<br>
+        ※ 最大連続勤務日数が設定値（{{ max_consecutive_setting }}日）を超える場合は警告表示しています。
+      </p>
+    </div>
+  </div>
+
+  <!-- 人員不足の発生頻度 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="small fw-semibold text-muted mb-2">
+        <i class="bi bi-exclamation-diamond-fill me-1"></i>人員不足の発生頻度
+      </div>
+      {% if shortage_summary and shortage_summary[0].total_days > 0 %}
+      {% for s in shortage_summary %}
+      <div class="mb-3">
+        <div class="d-flex justify-content-between small mb-1">
+          <span class="fw-semibold">{{ s.slot }}・{{ s.pos }}</span>
+          <span class="text-muted">
+            人員不足 {{ s.short_staff_days }}/{{ s.total_days }}日
+            {% if s.short_leader_days > 0 %}
+            ／ うちリーダー不足 {{ s.short_leader_days }}日
+            {% endif %}
+          </span>
+        </div>
+        <div class="progress" style="height:6px">
+          <div class="progress-bar {{ 'bg-danger' if s.short_staff_days > 0 else 'bg-success' }}"
+               style="width: {{ (s.short_staff_days / s.total_days * 100) }}%"></div>
+        </div>
+      </div>
+      {% endfor %}
+      <p class="text-muted small mb-0 mt-1">
+        ※ 選択期間（合計{{ shortage_summary[0].total_days }}日）のうち、各区分で必要人数を満たせなかった日数の割合です。多い区分から順に表示しています。
+      </p>
+      {% else %}
+      <p class="text-muted small mb-0">対象期間がありません。</p>
+      {% endif %}
+    </div>
+  </div>
+
   {% if any_wage %}
   <!-- 人件費グラフ -->
   <div class="card mb-3">

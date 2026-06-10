@@ -87,6 +87,128 @@ def _build_time_map(requests) -> dict:
             time_map[(r.employee_id, r.date, TimeSlot.DINNER.value)] = t
     return time_map
 
+
+def _max_consecutive_days(date_strs) -> int:
+    """日付文字列(YYYY-MM-DD)の集合から最大連続勤務日数を求める"""
+    from datetime import date as _date_cls
+    if not date_strs:
+        return 0
+    sorted_dates = sorted(_date_cls.fromisoformat(ds) for ds in date_strs)
+    best = run = 1
+    for prev, cur in zip(sorted_dates, sorted_dates[1:]):
+        if (cur - prev).days == 1:
+            run += 1
+            best = max(best, run)
+        else:
+            run = 1
+    return best
+
+
+def _compute_fairness_stats(sel_periods, employees) -> dict:
+    """
+    各従業員の「希望シフト採用率」「最大連続勤務日数」「総休日数」を集計する。
+
+    希望シフト採用率＝（休み希望/有休が休みになった件数 ＋ 出勤希望のスロットが
+    実際に割り当てられた件数）÷ 希望件数の総数。
+
+    返り値: {emp_id: {"req_total", "req_matched", "fulfillment_rate"(0〜1 or None),
+                       "max_consecutive", "days_off", "total_days"}}
+    """
+    emp_ids = {e.id for e in employees}
+    work_dates: dict[int, set] = defaultdict(set)
+    req_total: dict[int, int] = defaultdict(int)
+    req_matched: dict[int, int] = defaultdict(int)
+    total_days = 0
+
+    for period in sel_periods:
+        dates = period.date_range()
+        total_days += len(dates)
+
+        assignments = repo.get_assignments(period.id)
+        asgn_set = {(a.employee_id, a.date, a.time_slot.value) for a in assignments}
+        for a in assignments:
+            work_dates[a.employee_id].add(a.date)
+
+        for r in repo.get_shift_requests(period.id):
+            if r.employee_id not in emp_ids:
+                continue
+            if r.pattern_id in ("off_request", "paid_leave"):
+                req_total[r.employee_id] += 1
+                worked = (r.employee_id, r.date, "breakfast") in asgn_set \
+                    or (r.employee_id, r.date, "dinner") in asgn_set
+                if not worked:
+                    req_matched[r.employee_id] += 1
+            else:
+                if r.breakfast:
+                    req_total[r.employee_id] += 1
+                    if (r.employee_id, r.date, "breakfast") in asgn_set:
+                        req_matched[r.employee_id] += 1
+                if r.dinner:
+                    req_total[r.employee_id] += 1
+                    if (r.employee_id, r.date, "dinner") in asgn_set:
+                        req_matched[r.employee_id] += 1
+
+    result = {}
+    for e in employees:
+        worked = work_dates.get(e.id, set())
+        rt = req_total.get(e.id, 0)
+        rm = req_matched.get(e.id, 0)
+        result[e.id] = {
+            "req_total":        rt,
+            "req_matched":      rm,
+            "fulfillment_rate": (rm / rt) if rt > 0 else None,
+            "max_consecutive":  _max_consecutive_days(worked),
+            "days_off":         total_days - len(worked),
+            "total_days":       total_days,
+        }
+    return result
+
+
+def _compute_shortage_summary(sel_periods, employees, constraints,
+                               reserv_tiers_b, reserv_tiers_d) -> list[dict]:
+    """複数期間にわたる人員不足（朝食/ディナー × ホール/キッチン）の発生日数を集計する"""
+    _COMBOS = [
+        ('breakfast', '朝食',    'hall',    'ホール'),
+        ('breakfast', '朝食',    'kitchen', 'キッチン'),
+        ('dinner',    'ディナー', 'hall',    'ホール'),
+        ('dinner',    'ディナー', 'kitchen', 'キッチン'),
+    ]
+    totals = {(sv, pv): {"short_staff": 0, "short_leader": 0} for sv, _, pv, _ in _COMBOS}
+    total_days = 0
+
+    for period in sel_periods:
+        dates = period.date_range()
+        total_days += len(dates)
+        assignments        = repo.get_assignments(period.id)
+        reservation_counts = repo.get_reservation_counts(period.id)
+        staffing = _compute_staffing(
+            assignments, employees, dates, constraints,
+            reservation_counts=reservation_counts,
+            reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d,
+        )
+        for d in dates:
+            ds = d.isoformat()
+            for sv, _, pv, _ in _COMBOS:
+                st = staffing.get((ds, sv, pv), {})
+                if st.get('short_staff'):
+                    totals[(sv, pv)]["short_staff"] += 1
+                if st.get('short_leader'):
+                    totals[(sv, pv)]["short_leader"] += 1
+
+    result = [
+        {
+            "slot":              sl,
+            "pos":               pl,
+            "short_staff_days":  totals[(sv, pv)]["short_staff"],
+            "short_leader_days": totals[(sv, pv)]["short_leader"],
+            "total_days":        total_days,
+        }
+        for sv, sl, pv, pl in _COMBOS
+    ]
+    result.sort(key=lambda x: -(x["short_staff_days"] + x["short_leader_days"]))
+    return result
+
+
 bp = Blueprint("schedule", __name__, url_prefix="/schedule")
 
 
@@ -409,6 +531,33 @@ def stats_multi():
         total_labor_cost / customer_counts["total"] if customer_counts["total"] > 0 else None
     )
 
+    # 希望シフトの公平性（採用率・最大連続勤務日数・総休日数）
+    fairness_stats = _compute_fairness_stats(sel_periods, employees)
+    try:
+        max_consecutive_setting = int(repo.get_app_setting("max_consecutive_days", "6"))
+    except Exception:
+        max_consecutive_setting = 6
+
+    # 人員不足の発生頻度（朝食/ディナー × ホール/キッチン）
+    constraints = repo.get_shift_constraints()
+    try:
+        reserv_thresh_b  = int(repo.get_app_setting("reserv_threshold_breakfast",  "100"))
+        reserv_extra_b   = int(repo.get_app_setting("reserv_extra_breakfast",      "1"))
+        reserv_thresh_b2 = int(repo.get_app_setting("reserv_threshold_breakfast2", "0"))
+        reserv_extra_b2  = int(repo.get_app_setting("reserv_extra_breakfast2",     "0"))
+        reserv_thresh_d  = int(repo.get_app_setting("reserv_threshold_dinner",     "25"))
+        reserv_extra_d   = int(repo.get_app_setting("reserv_extra_dinner",         "1"))
+        reserv_thresh_d2 = int(repo.get_app_setting("reserv_threshold_dinner2",    "0"))
+        reserv_extra_d2  = int(repo.get_app_setting("reserv_extra_dinner2",        "0"))
+    except Exception:
+        reserv_thresh_b = 100; reserv_extra_b = 1; reserv_thresh_b2 = 0; reserv_extra_b2 = 0
+        reserv_thresh_d = 25;  reserv_extra_d = 1; reserv_thresh_d2 = 0; reserv_extra_d2 = 0
+    reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
+    reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
+    shortage_summary = _compute_shortage_summary(
+        sel_periods, employees, constraints, reserv_tiers_b, reserv_tiers_d
+    )
+
     return render_template(
         "schedule/stats_multi.html",
         all_periods=all_periods,
@@ -422,6 +571,9 @@ def stats_multi():
         customer_counts=customer_counts,
         total_labor_cost=total_labor_cost,
         cost_per_customer=cost_per_customer,
+        fairness_stats=fairness_stats,
+        max_consecutive_setting=max_consecutive_setting,
+        shortage_summary=shortage_summary,
     )
 
 
