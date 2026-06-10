@@ -122,7 +122,6 @@ def index(period_id):
         asgn_map.setdefault(a.date, {}).setdefault(a.time_slot.value, []).append(a)
 
     from datetime import date as _date
-    slot  = request.args.get("slot", "breakfast")
     pos   = request.args.get("pos",  "hall")
     today = _date.today().isoformat()
     notes = repo.get_schedule_notes(period_id)
@@ -192,19 +191,24 @@ def index(period_id):
     ]
     total_shortage = sum(g['short_count'] for g in shortage_groups)
 
-    # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
-    assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot}
-    # このスロットで希望シフトを提出している従業員ID（専任外でも「希望はあるのに未アサイン」が見えるよう表示対象に含める）
-    submitted_in_slot = {eid for (eid, _ds, sv) in time_map.keys() if sv == slot}
-
-    # ポジション × スロットでメンバーを絞り込み
+    # ポジションでメンバーを絞り込み（朝食/ディナーは1画面に両方表示するため、スロットごとのリストを用意する）
     # 並び順は employees の取得順（社員 → 専任 → 兼任、各カテゴリ内は display_order）をそのまま維持
-    filtered_employees = [
-        e for e in employees
-        if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
-        and (e.primary_timeslot is None or e.primary_timeslot.value == slot
-             or e.id in assigned_in_slot or e.id in submitted_in_slot)
-    ]
+    def _filter_employees_for_slot(slot_val):
+        # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
+        assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot_val}
+        # このスロットで希望シフトを提出している従業員ID（専任外でも「希望はあるのに未アサイン」が見えるよう表示対象に含める）
+        submitted_in_slot = {eid for (eid, _ds, sv) in time_map.keys() if sv == slot_val}
+        return [
+            e for e in employees
+            if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
+            and (e.primary_timeslot is None or e.primary_timeslot.value == slot_val
+                 or e.id in assigned_in_slot or e.id in submitted_in_slot)
+        ]
+
+    employees_by_slot = {
+        "breakfast": _filter_employees_for_slot("breakfast"),
+        "dinner":    _filter_employees_for_slot("dinner"),
+    }
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
@@ -242,11 +246,10 @@ def index(period_id):
         "schedule/index.html",
         period=period,
         periods=periods,
-        employees=filtered_employees,
+        employees_by_slot=employees_by_slot,
         emp_map=emp_map,
         dates=dates,
         asgn_map=asgn_map,
-        slot=slot,
         pos=pos,
         notes=notes,
         time_map=time_map,

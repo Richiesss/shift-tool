@@ -262,24 +262,20 @@
       </form>
       {% endif %}
     </div>
-    <!-- 2行目：朝食/ディナー ＋ ホール/キッチン -->
+    <!-- 2行目：ホール/キッチン -->
     <div class="d-flex gap-2 align-items-center flex-wrap">
       <div class="btn-group btn-group-sm">
-        <a href="?slot=breakfast&pos={{ pos }}" class="btn {{ 'btn-primary' if slot == 'breakfast' else 'btn-outline-secondary' }}">朝食</a>
-        <a href="?slot=dinner&pos={{ pos }}"    class="btn {{ 'btn-primary' if slot == 'dinner'    else 'btn-outline-secondary' }}">ディナー</a>
-      </div>
-      <div class="btn-group btn-group-sm">
-        <a href="?slot={{ slot }}&pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
+        <a href="?pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
           <i class="bi bi-people me-1"></i>ホール
         </a>
-        <a href="?slot={{ slot }}&pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
+        <a href="?pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
           <i class="bi bi-egg-fried me-1"></i>キッチン
         </a>
       </div>
     </div>
   </div>
 
-  {% if not employees %}
+  {% if not employees_by_slot.breakfast and not employees_by_slot.dinner %}
   <div class="alert alert-info mx-0 mb-3">
     <i class="bi bi-info-circle me-2"></i>
     表示するスタッフがいません。
@@ -343,8 +339,12 @@
     {% endfor %}
   </div>
 
-  <!-- シフトグリッド -->
-  <div class="sched-grid">
+  {% for sk, slabel in [('breakfast', '朝食'), ('dinner', 'ディナー')] %}
+  <!-- シフトグリッド（{{ slabel }}） -->
+  <div class="fw-semibold mb-1 {{ '' if loop.first else 'mt-4' }}" style="font-size:.85rem;color:#94a3b8">
+    <i class="bi {{ 'bi-sunrise' if sk == 'breakfast' else 'bi-moon-stars' }} me-1"></i>{{ slabel }}
+  </div>
+  <div class="sched-grid" data-slot="{{ sk }}">
     <table class="table table-bordered table-sm mb-0">
       <thead>
         <tr>
@@ -353,7 +353,7 @@
           {% set dow = d.weekday() %}
           {% set ds_h = d.isoformat() %}
           {% set is_holiday = ds_h in holidays %}
-          {% set st = staffing.get((ds_h, slot, pos), {}) %}
+          {% set st = staffing.get((ds_h, sk, pos), {}) %}
           {% set hdr_cls = 'short-staff' if st.get('short_staff') else 'short-leader' if st.get('short_leader') else '' %}
           {% set is_today = ds_h == today %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
@@ -378,7 +378,7 @@
           {% set dow = d.weekday() %}
           {% set is_holiday = ds in holidays %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
-          {% set res_count = reservation_counts.get(ds, {}).get(slot, 0) %}
+          {% set res_count = reservation_counts.get(ds, {}).get(sk, 0) %}
           <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.75rem">
             {% if res_count %}
             <span style="color:#94a3b8">{{ res_count }}名</span>
@@ -404,7 +404,7 @@
           </td>
           {% endfor %}
         </tr>
-        {% for emp in employees %}
+        {% for emp in employees_by_slot[sk] %}
         <tr>
           <td class="emp-col">
             <a href="{{ url_for('employees.edit', emp_id=emp.id) }}"
@@ -414,13 +414,13 @@
           {% set ds = d|string %}
           {% set dow = d.weekday() %}
           {% set is_holiday = ds in holidays %}
-          {% set day_assignments = asgn_map.get(ds, {}).get(slot, []) %}
+          {% set day_assignments = asgn_map.get(ds, {}).get(sk, []) %}
           {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
           {# 社員はポジション別デフォルトスロット時間を使用（設定画面で変更可） #}
           {% set is_ft = emp.employment_type.value == 'full_time' %}
-          {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[slot] %}
-          {% set req_time = time_map.get((emp.id, ds, slot), '') %}
-          {% set has_request = (emp.id, ds, slot) in time_map %}
+          {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[sk] %}
+          {% set req_time = time_map.get((emp.id, ds, sk), '') %}
+          {% set has_request = (emp.id, ds, sk) in time_map %}
           {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
           {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
           {% set cell_note = cell_notes.get((emp.id, ds), '') %}
@@ -430,7 +430,7 @@
               data-emp-id="{{ emp.id }}"
               data-emp-name="{{ emp.name }}"
               data-date="{{ ds }}"
-              data-slot="{{ slot }}"
+              data-slot="{{ sk }}"
               data-pos="{{ emp_asgn.position.value if emp_asgn else '' }}"
               data-assigned="{{ 'true' if emp_asgn else 'false' }}"
               data-reinf="{{ 'true' if emp_asgn and emp_asgn.is_reinforcement else 'false' }}"
@@ -474,6 +474,7 @@
       </tbody>
     </table>
   </div>
+  {% endfor %}
 
   <!-- 凡例 -->
   <div class="d-flex gap-3 mt-2 small text-muted flex-wrap">
@@ -481,7 +482,7 @@
     <span><span class="chip-kitchen">K</span> キッチン出勤</span>
     <span><span class="chip-unassigned">希</span> 希望提出済み・未アサイン</span>
     <span class="text-secondary">— 該当なし</span>
-    <span class="ms-auto">表示中：{{ '朝食' if slot == 'breakfast' else 'ディナー' }} / {{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
+    <span class="ms-auto">表示中：{{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
   </div>
   {% endif %}
 </div>
@@ -628,16 +629,15 @@ const TL_ASGN = {
   {% endfor %}
 };
 
-// スクロール復元 or 今日の列へ自動スクロール
-(function() {
-  const grid = document.querySelector('.sched-grid');
-  if (!grid) return;
-  const saved = sessionStorage.getItem('schedScroll');
+// スクロール復元 or 今日の列へ自動スクロール（朝食・ディナー両グリッド）
+document.querySelectorAll('.sched-grid').forEach(grid => {
+  const key = 'schedScroll_' + grid.dataset.slot;
+  const saved = sessionStorage.getItem(key);
   if (saved) {
     const { top, left } = JSON.parse(saved);
     grid.scrollTop = top;
     grid.scrollLeft = left;
-    sessionStorage.removeItem('schedScroll');
+    sessionStorage.removeItem(key);
   } else {
     const todayTh = grid.querySelector('thead th.today-col');
     if (todayTh) {
@@ -646,7 +646,7 @@ const TL_ASGN = {
       grid.scrollLeft = Math.max(0, todayTh.offsetLeft - empColW - 8);
     }
   }
-})();
+});
 
 function toggleSg(id) {
   const body    = document.getElementById(id);
@@ -904,10 +904,11 @@ function _saveCellNote() {
 
 function callAssign(payload) {
   const periodId = PERIOD_ID;
-  // スクロール位置を保存してリロード後に復元
-  const grid = document.querySelector('.sched-grid');
-  if (grid) sessionStorage.setItem('schedScroll',
-    JSON.stringify({ top: grid.scrollTop, left: grid.scrollLeft }));
+  // スクロール位置を保存してリロード後に復元（朝食・ディナー両グリッド）
+  document.querySelectorAll('.sched-grid').forEach(grid => {
+    sessionStorage.setItem('schedScroll_' + grid.dataset.slot,
+      JSON.stringify({ top: grid.scrollTop, left: grid.scrollLeft }));
+  });
   fetch(`/schedule/${periodId}/assign`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
