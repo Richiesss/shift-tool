@@ -58,6 +58,17 @@ def get_employee(employee_id: int) -> Optional[Employee]:
 
 
 def save_employee(emp: Employee) -> Employee:
+    # 主担当ポジションが片方のみ（兼務不可）の場合、担当外ポジションのスキル欄は
+    # 編集画面で非表示となり修正できないため、不整合データが残らないよう
+    # 担当外ポジションのスキルを beginner に正規化する
+    if emp.primary_position is not None and not emp.can_work_both_positions:
+        if emp.primary_position == PrimaryPosition.HALL:
+            emp.kitchen_skill_breakfast = SkillLevel.BEGINNER
+            emp.kitchen_skill_dinner = SkillLevel.BEGINNER
+        elif emp.primary_position == PrimaryPosition.KITCHEN:
+            emp.hall_skill_breakfast = SkillLevel.BEGINNER
+            emp.hall_skill_dinner = SkillLevel.BEGINNER
+
     conn = get_connection()
     pp   = emp.primary_position.value if emp.primary_position else None
     op   = emp.output_position.value  if emp.output_position  else None
