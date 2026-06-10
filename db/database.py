@@ -31,7 +31,18 @@ def _get_pg_pool():
             url = DATABASE_URL
             if url.startswith("postgres://"):
                 url = "postgresql://" + url[len("postgres://"):]
-            _pg_pool = psycopg2.pool.ThreadedConnectionPool(1, 5, url)
+            # statement_timeout: クエリが何らかの理由でハング/ロック待ちになっても
+            # gunicorn の worker timeout（120秒）より先にDB側で打ち切る
+            # keepalives: プール内で再利用される接続が裏側で切断されていた場合に
+            # 早期に検知し、OperationalError として再接続できるようにする
+            _pg_pool = psycopg2.pool.ThreadedConnectionPool(
+                1, 5, url,
+                options="-c statement_timeout=15000",
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=3,
+            )
     return _pg_pool
 
 
@@ -102,6 +113,20 @@ class Connection:
             cur = self._conn.cursor(cursor_factory=self._factory)
             cur.execute(sql, params)
             return cur
+        except psycopg2.Error:
+            # クエリエラー（statement_timeout含む）でトランザクションが
+            # 中断状態のままプールに戻らないようロールバックしてから再送出
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+            raise
+
+    def rollback(self):
+        try:
+            self._conn.rollback()
+        except Exception:
+            pass
 
     def execute(self, sql: str, params=()):
         if self.backend == "postgres":

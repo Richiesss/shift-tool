@@ -277,6 +277,14 @@ def predict_customer_counts(target_dates: list[date], special_days: set[str] | N
 
 @cache.memoize(timeout=300)
 def predict_customer_counts_cached(target_date_strs: tuple[str, ...], special_days: tuple[str, ...]) -> dict:
-    """predict_customer_counts() のキャッシュ付きラッパー（モデル再学習のコスト軽減のため5分間キャッシュ）"""
+    """predict_customer_counts() のキャッシュ付きラッパー（モデル再学習のコスト軽減のため5分間キャッシュ）
+
+    β機能のため、DBエラー等で予測に失敗してもページ全体を巻き込まないよう
+    例外を握りつぶし「データ不足」扱いの結果を返す。
+    """
     target_dates = [date.fromisoformat(ds) for ds in target_date_strs]
-    return predict_customer_counts(target_dates, set(special_days))
+    try:
+        return predict_customer_counts(target_dates, set(special_days))
+    except Exception:
+        empty_slot = {"predicted": None, "low": None, "high": None, "n_samples": 0, "method": "no_data"}
+        return {ds: {"breakfast": dict(empty_slot), "dinner": dict(empty_slot)} for ds in target_date_strs}

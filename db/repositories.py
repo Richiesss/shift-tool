@@ -615,37 +615,48 @@ def get_forecast_training_data() -> list[dict]:
 
 
 def get_weather_cache(dates: list[str]) -> dict[str, dict]:
-    """指定日付群の気象キャッシュを {date_str: {"temp_max", "temp_min", "precipitation", "weather_code"}} で返す"""
+    """指定日付群の気象キャッシュを {date_str: {"temp_max", "temp_min", "precipitation", "weather_code"}} で返す
+    （β機能のためDBエラー時は空辞書を返し、呼び出し元の処理を妨げない）"""
     if not dates:
         return {}
     conn = get_connection()
-    ph = ",".join(["?"] * len(dates))
-    rows = conn.execute(
-        f"SELECT * FROM weather_cache WHERE date IN ({ph})", dates
-    ).fetchall()
-    conn.close()
-    return {
-        r["date"]: {
-            "temp_max": r["temp_max"], "temp_min": r["temp_min"],
-            "precipitation": r["precipitation"], "weather_code": r["weather_code"],
+    try:
+        ph = ",".join(["?"] * len(dates))
+        rows = conn.execute(
+            f"SELECT * FROM weather_cache WHERE date IN ({ph})", dates
+        ).fetchall()
+        return {
+            r["date"]: {
+                "temp_max": r["temp_max"], "temp_min": r["temp_min"],
+                "precipitation": r["precipitation"], "weather_code": r["weather_code"],
+            }
+            for r in rows
         }
-        for r in rows
-    }
+    except Exception:
+        conn.rollback()
+        return {}
+    finally:
+        conn.close()
 
 
 def save_weather_cache(entries: dict[str, dict]):
-    """気象データ（{date_str: {"temp_max","temp_min","precipitation","weather_code"}}）を一括キャッシュ保存"""
+    """気象データ（{date_str: {"temp_max","temp_min","precipitation","weather_code"}}）を一括キャッシュ保存
+    （β機能のためDBエラー時は黙って諦め、呼び出し元の処理を妨げない）"""
     conn = get_connection()
-    for date_str, vals in entries.items():
-        conn.execute(
-            """INSERT INTO weather_cache (date, temp_max, temp_min, precipitation, weather_code) VALUES (?,?,?,?,?)
-               ON CONFLICT(date) DO UPDATE SET
-                   temp_max=excluded.temp_max, temp_min=excluded.temp_min,
-                   precipitation=excluded.precipitation, weather_code=excluded.weather_code""",
-            (date_str, vals.get("temp_max"), vals.get("temp_min"), vals.get("precipitation"), vals.get("weather_code"))
-        )
-    conn.commit()
-    conn.close()
+    try:
+        for date_str, vals in entries.items():
+            conn.execute(
+                """INSERT INTO weather_cache (date, temp_max, temp_min, precipitation, weather_code) VALUES (?,?,?,?,?)
+                   ON CONFLICT(date) DO UPDATE SET
+                       temp_max=excluded.temp_max, temp_min=excluded.temp_min,
+                       precipitation=excluded.precipitation, weather_code=excluded.weather_code""",
+                (date_str, vals.get("temp_max"), vals.get("temp_min"), vals.get("precipitation"), vals.get("weather_code"))
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        conn.close()
 
 
 # ── アプリ設定 ────────────────────────────────────────────────────────────
