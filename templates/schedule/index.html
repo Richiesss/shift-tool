@@ -360,10 +360,19 @@
           {% set hdr_cls = 'short-staff' if (st_b.get('short_staff') or st_d.get('short_staff')) else 'short-leader' if (st_b.get('short_leader') or st_d.get('short_leader')) else '' %}
           {% set is_today = ds_h == today %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
+          {% set w = weather_map.get(ds_h) %}
           <th class="text-center {{ day_cls }} {{ hdr_cls }} {{ 'today-col' if is_today else '' }}"
               style="cursor:pointer" onclick="openTimeline('{{ ds_h }}')">
             {{ '★ ' if is_today else '' }}{{ d.strftime('%m/%d') }}<br>
             <small>{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
+            {% if w %}
+            {% set wicon, wlabel = weather_icon_label(w.weather_code) %}
+            <div class="small" title="{{ wlabel }}">
+              <i class="bi {{ wicon }}"></i>
+              {% if w.temp_max is not none %}<span class="text-danger">{{ w.temp_max | round | int }}°</span>{% endif %}
+              {% if w.temp_min is not none %}/<span class="text-primary">{{ w.temp_min | round | int }}°</span>{% endif %}
+            </div>
+            {% endif %}
             <div class="d-flex gap-1 justify-content-center flex-wrap mt-1">
               {% set badge_b = 'count-short' if st_b.short_staff else 'count-leader' if st_b.short_leader else 'count-ok' %}
               <span class="count-badge {{ badge_b }}" title="朝食">

@@ -33,6 +33,49 @@ _OPEN_METEO_ARCHIVE  = "https://archive-api.open-meteo.com/v1/archive"
 _OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 _DAILY_FIELDS = "temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode"
 
+# Open-Meteo の天気コード（WMO Weather interpretation codes）→ (Bootstrap Icon, 日本語ラベル)
+WEATHER_CODE_MAP = {
+    0:  ("bi-sun",                       "快晴"),
+    1:  ("bi-brightness-high",           "晴れ"),
+    2:  ("bi-cloud-sun",                 "晴れ時々曇り"),
+    3:  ("bi-clouds",                    "曇り"),
+    45: ("bi-cloud-fog2",                "霧"),
+    48: ("bi-cloud-fog2",                "霧（霜）"),
+    51: ("bi-cloud-drizzle",             "小雨"),
+    53: ("bi-cloud-drizzle",             "霧雨"),
+    55: ("bi-cloud-drizzle-fill",        "強い霧雨"),
+    56: ("bi-cloud-sleet",               "着氷性の霧雨"),
+    57: ("bi-cloud-sleet-fill",          "強い着氷性の霧雨"),
+    61: ("bi-cloud-rain",                "小雨"),
+    63: ("bi-cloud-rain",                "雨"),
+    65: ("bi-cloud-rain-heavy",          "大雨"),
+    66: ("bi-cloud-sleet",               "着氷性の雨"),
+    67: ("bi-cloud-sleet-fill",          "強い着氷性の雨"),
+    71: ("bi-cloud-snow",                "小雪"),
+    73: ("bi-cloud-snow",                "雪"),
+    75: ("bi-cloud-snow-fill",           "大雪"),
+    77: ("bi-cloud-snow",                "霧雪"),
+    80: ("bi-cloud-rain",                "にわか雨"),
+    81: ("bi-cloud-rain-heavy",          "強いにわか雨"),
+    82: ("bi-cloud-rain-heavy-fill",     "激しいにわか雨"),
+    85: ("bi-cloud-snow",                "にわか雪"),
+    86: ("bi-cloud-snow-fill",           "強いにわか雪"),
+    95: ("bi-cloud-lightning",           "雷雨"),
+    96: ("bi-cloud-lightning-rain",      "雷雨（ひょう）"),
+    99: ("bi-cloud-lightning-rain-fill", "雷雨（激しいひょう）"),
+}
+_UNKNOWN_WEATHER = ("bi-question-circle", "不明")
+
+
+def weather_icon_label(code) -> tuple[str, str]:
+    """WMO天気コードから (Bootstrap Iconクラス, 日本語ラベル) を返す（不明な場合はクエスチョンアイコン）"""
+    if code is None:
+        return _UNKNOWN_WEATHER
+    try:
+        return WEATHER_CODE_MAP.get(int(code), _UNKNOWN_WEATHER)
+    except (TypeError, ValueError):
+        return _UNKNOWN_WEATHER
+
 METHOD_LABELS = {
     "ml":            "機械学習モデル",
     "weekday":       "同じ曜日区分の実績平均",
@@ -160,6 +203,24 @@ def _get_weather_map(dates: list[date], lat: float | None, lon: float | None) ->
         fetched.update(_fetch_weather_range(lat, lon, min(future), max(future), archive=False))
 
     return fetched
+
+
+@cache.memoize(timeout=1800)
+def get_weather_map_cached(date_strs: tuple[str, ...]) -> dict[str, dict]:
+    """シフト表画面用の気象情報を {date_str: {"temp_max","temp_min","precipitation","weather_code"}} で返す（30分キャッシュ）
+
+    店舗の緯度・経度（store_lat/store_lon）が未設定の場合は{}を返す。
+    """
+    lat_s = repo.get_app_setting("store_lat", "")
+    lon_s = repo.get_app_setting("store_lon", "")
+    try:
+        lat = float(lat_s) if lat_s else None
+        lon = float(lon_s) if lon_s else None
+    except ValueError:
+        lat, lon = None, None
+
+    dates = [date.fromisoformat(ds) for ds in date_strs]
+    return _get_weather_map(dates, lat, lon)
 
 
 def _weather_means(history: list[dict], weather_map: dict[str, dict]) -> dict[str, float]:

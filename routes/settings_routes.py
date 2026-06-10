@@ -1,7 +1,9 @@
 import io, json
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify
+from cache import cache
 from db import repositories as repo
+from optimizer import forecast
 from utils.constants import TimeSlot, Position
 
 bp = Blueprint("settings", __name__, url_prefix="/settings")
@@ -56,6 +58,10 @@ def save():
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     new_settings["customer_forecast_enabled"] = "1" if request.form.get("customer_forecast_enabled") else "0"
     repo.save_all_app_settings(new_settings)
+
+    # 緯度・経度を変更したら気象キャッシュ・客数予測キャッシュを破棄して即時反映する
+    cache.delete_memoized(forecast.get_weather_map_cached)
+    cache.delete_memoized(forecast.predict_customer_counts_cached)
 
     band_constraints = repo.get_breakfast_band_constraints()
     new_band = {}

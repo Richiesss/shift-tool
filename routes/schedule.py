@@ -4,6 +4,7 @@ from db import repositories as repo
 from models.schedule import ShiftAssignment
 from utils.constants import TimeSlot, Position
 
+from optimizer import forecast
 from utils.holidays import holiday_set
 from utils.reservation import tiered_extra
 
@@ -232,6 +233,9 @@ def index(period_id):
 
     holidays = holiday_set(dates)
 
+    # シフト表ヘッダーに表示する気象情報（店舗の緯度経度が未設定なら空）
+    weather_map = forecast.get_weather_map_cached(tuple(d.isoformat() for d in dates))
+
     # 社員デフォルト勤務時間（ポジション別・設定画面で変更可能）
     def _ft_time(pos_key, slot_key):
         s = repo.get_app_setting(f"ft_{pos_key}_{slot_key}_start",
@@ -270,6 +274,8 @@ def index(period_id):
         today=today,
         ft_times=ft_times,
         holidays=holidays,
+        weather_map=weather_map,
+        weather_icon_label=forecast.weather_icon_label,
         TimeSlot=TimeSlot,
         Position=Position,
     )
