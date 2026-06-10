@@ -209,6 +209,11 @@ def index(period_id):
         "breakfast": _filter_employees_for_slot("breakfast"),
         "dinner":    _filter_employees_for_slot("dinner"),
     }
+    # 朝食/ディナーを1つの表にまとめるため、どちらかのスロットに該当する従業員を統合した一覧と、
+    # 各従業員がどのスロットに該当するか（セルを実セルとして描画するか「該当なし」にするか）を渡す
+    slot_ids = {sk: {e.id for e in lst} for sk, lst in employees_by_slot.items()}
+    _combined_ids = slot_ids["breakfast"] | slot_ids["dinner"]
+    employees_combined = [e for e in employees if e.id in _combined_ids]
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
@@ -246,7 +251,8 @@ def index(period_id):
         "schedule/index.html",
         period=period,
         periods=periods,
-        employees_by_slot=employees_by_slot,
+        employees_combined=employees_combined,
+        slot_ids=slot_ids,
         emp_map=emp_map,
         dates=dates,
         asgn_map=asgn_map,

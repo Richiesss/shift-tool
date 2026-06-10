@@ -121,7 +121,11 @@
   .chip-empty   { color: #cbd5e1; }
   /* 希望提出済みだが未アサイン：グレー表示で「希望はあるが漏れている」ことを可視化 */
   .chip-unassigned { background: #e2e8f0; color: #64748b; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
-  .assign-cell.has-unassigned-request { background-color: #f1f5f9; }
+  /* 1セル内に朝食・ディナーを上下に並べて表示 */
+  .cell-half { display: block; padding: 1px 2px; cursor: pointer; }
+  .cell-half + .cell-half { border-top: 1px dashed #cbd5e1; margin-top: 1px; padding-top: 2px; }
+  .cell-half-na { color: #cbd5e1; cursor: default; font-size: .7rem; }
+  .cell-half.has-unassigned-request { background-color: #f1f5f9; }
   /* 正社員の希望休：赤塗りつぶし */
   .ft-off { background-color: #FCA5A5 !important; }
   /* スタッフ個別コメント表示 */
@@ -275,7 +279,7 @@
     </div>
   </div>
 
-  {% if not employees_by_slot.breakfast and not employees_by_slot.dinner %}
+  {% if not employees_combined %}
   <div class="alert alert-info mx-0 mb-3">
     <i class="bi bi-info-circle me-2"></i>
     表示するスタッフがいません。
@@ -339,12 +343,8 @@
     {% endfor %}
   </div>
 
-  {% for sk, slabel in [('breakfast', '朝食'), ('dinner', 'ディナー')] %}
-  <!-- シフトグリッド（{{ slabel }}） -->
-  <div class="fw-semibold mb-1 {{ '' if loop.first else 'mt-4' }}" style="font-size:.85rem;color:#94a3b8">
-    <i class="bi {{ 'bi-sunrise' if sk == 'breakfast' else 'bi-moon-stars' }} me-1"></i>{{ slabel }}
-  </div>
-  <div class="sched-grid" data-slot="{{ sk }}">
+  <!-- シフトグリッド（朝食・ディナーを1つの表にまとめて表示） -->
+  <div class="sched-grid">
     <table class="table table-bordered table-sm mb-0">
       <thead>
         <tr>
@@ -353,18 +353,25 @@
           {% set dow = d.weekday() %}
           {% set ds_h = d.isoformat() %}
           {% set is_holiday = ds_h in holidays %}
-          {% set st = staffing.get((ds_h, sk, pos), {}) %}
-          {% set hdr_cls = 'short-staff' if st.get('short_staff') else 'short-leader' if st.get('short_leader') else '' %}
+          {% set st_b = staffing.get((ds_h, 'breakfast', pos), {}) %}
+          {% set st_d = staffing.get((ds_h, 'dinner', pos), {}) %}
+          {% set hdr_cls = 'short-staff' if (st_b.get('short_staff') or st_d.get('short_staff')) else 'short-leader' if (st_b.get('short_leader') or st_d.get('short_leader')) else '' %}
           {% set is_today = ds_h == today %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           <th class="text-center {{ day_cls }} {{ hdr_cls }} {{ 'today-col' if is_today else '' }}"
               style="cursor:pointer" onclick="openTimeline('{{ ds_h }}')">
             {{ '★ ' if is_today else '' }}{{ d.strftime('%m/%d') }}<br>
             <small>{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
-            {% if st %}
-            {% set badge_cls = 'count-short' if st.short_staff else 'count-leader' if st.short_leader else 'count-ok' %}
-            <span class="count-badge {{ badge_cls }}">{{ st.count }}/{{ st.min }}</span>
-            {% endif %}
+            <div class="d-flex gap-1 justify-content-center flex-wrap mt-1">
+              {% set badge_b = 'count-short' if st_b.short_staff else 'count-leader' if st_b.short_leader else 'count-ok' %}
+              <span class="count-badge {{ badge_b }}" title="朝食">
+                <i class="bi bi-sunrise"></i> {{ st_b.count }}/{{ st_b.min }}
+              </span>
+              {% set badge_d = 'count-short' if st_d.short_staff else 'count-leader' if st_d.short_leader else 'count-ok' %}
+              <span class="count-badge {{ badge_d }}" title="ディナー">
+                <i class="bi bi-moon-stars"></i> {{ st_d.count }}/{{ st_d.min }}
+              </span>
+            </div>
           </th>
           {% endfor %}
         </tr>
@@ -378,13 +385,11 @@
           {% set dow = d.weekday() %}
           {% set is_holiday = ds in holidays %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
-          {% set res_count = reservation_counts.get(ds, {}).get(sk, 0) %}
-          <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.75rem">
-            {% if res_count %}
-            <span style="color:#94a3b8">{{ res_count }}名</span>
-            {% else %}
-            <span style="color:#475569">—</span>
-            {% endif %}
+          {% set res_b = reservation_counts.get(ds, {}).get('breakfast', 0) %}
+          {% set res_d = reservation_counts.get(ds, {}).get('dinner', 0) %}
+          <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.7rem;line-height:1.3;color:#94a3b8">
+            <div><i class="bi bi-sunrise"></i> {{ res_b if res_b else '—' }}</div>
+            <div><i class="bi bi-moon-stars"></i> {{ res_d if res_d else '—' }}</div>
           </td>
           {% endfor %}
         </tr>
@@ -404,7 +409,7 @@
           </td>
           {% endfor %}
         </tr>
-        {% for emp in employees_by_slot[sk] %}
+        {% for emp in employees_combined %}
         <tr>
           <td class="emp-col">
             <a href="{{ url_for('employees.edit', emp_id=emp.id) }}"
@@ -414,54 +419,61 @@
           {% set ds = d|string %}
           {% set dow = d.weekday() %}
           {% set is_holiday = ds in holidays %}
-          {% set day_assignments = asgn_map.get(ds, {}).get(sk, []) %}
-          {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
-          {# 社員はポジション別デフォルトスロット時間を使用（設定画面で変更可） #}
           {% set is_ft = emp.employment_type.value == 'full_time' %}
-          {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[sk] %}
-          {% set req_time = time_map.get((emp.id, ds, sk), '') %}
-          {% set has_request = (emp.id, ds, sk) in time_map %}
-          {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
           {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
           {% set cell_note = cell_notes.get((emp.id, ds), '') %}
-          {% set is_unassigned_request = has_request and not emp_asgn %}
-          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} assign-cell {{ 'ft-off' if is_ft_off else '' }} {{ 'has-unassigned-request' if is_unassigned_request else '' }}"
-              style="cursor:pointer"
-              data-emp-id="{{ emp.id }}"
-              data-emp-name="{{ emp.name }}"
-              data-date="{{ ds }}"
-              data-slot="{{ sk }}"
-              data-pos="{{ emp_asgn.position.value if emp_asgn else '' }}"
-              data-assigned="{{ 'true' if emp_asgn else 'false' }}"
-              data-reinf="{{ 'true' if emp_asgn and emp_asgn.is_reinforcement else 'false' }}"
-              data-reinf-start="{{ emp_asgn.reinf_start if emp_asgn and emp_asgn.reinf_start else '' }}"
-              data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
-              data-shift-time="{{ display_time }}"
-              data-has-request="{{ 'true' if is_ft or has_request else 'false' }}"
-              data-cell-note="{{ cell_note }}"
-              onclick="openAssignModal(this)">
-            {% if emp_asgn %}
-              {% set pos_label = 'H' if pos == 'hall' else 'K' %}
-              {% set chip_cls = 'chip-hall' if pos == 'hall' else 'chip-kitchen' %}
-              {% if emp_asgn.is_reinforcement and emp_asgn.reinf_start and emp_asgn.reinf_end %}
-                {% set t = emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end %}
+          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} {{ 'ft-off' if is_ft_off else '' }}">
+            {% for sk in ['breakfast', 'dinner'] %}
+            {% if emp.id in slot_ids[sk] %}
+            {% set day_assignments = asgn_map.get(ds, {}).get(sk, []) %}
+            {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
+            {# 社員はポジション別デフォルトスロット時間を使用（設定画面で変更可） #}
+            {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[sk] %}
+            {% set req_time = time_map.get((emp.id, ds, sk), '') %}
+            {% set has_request = (emp.id, ds, sk) in time_map %}
+            {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
+            {% set is_unassigned_request = has_request and not emp_asgn %}
+            <div class="cell-half {{ 'has-unassigned-request' if is_unassigned_request else '' }}"
+                 data-emp-id="{{ emp.id }}"
+                 data-emp-name="{{ emp.name }}"
+                 data-date="{{ ds }}"
+                 data-slot="{{ sk }}"
+                 data-pos="{{ emp_asgn.position.value if emp_asgn else '' }}"
+                 data-assigned="{{ 'true' if emp_asgn else 'false' }}"
+                 data-reinf="{{ 'true' if emp_asgn and emp_asgn.is_reinforcement else 'false' }}"
+                 data-reinf-start="{{ emp_asgn.reinf_start if emp_asgn and emp_asgn.reinf_start else '' }}"
+                 data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
+                 data-shift-time="{{ display_time }}"
+                 data-has-request="{{ 'true' if is_ft or has_request else 'false' }}"
+                 data-cell-note="{{ cell_note }}"
+                 onclick="openAssignModal(this)">
+              {% if emp_asgn %}
+                {% set pos_label = 'H' if pos == 'hall' else 'K' %}
+                {% set chip_cls = 'chip-hall' if pos == 'hall' else 'chip-kitchen' %}
+                {% if emp_asgn.is_reinforcement and emp_asgn.reinf_start and emp_asgn.reinf_end %}
+                  {% set t = emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end %}
+                {% else %}
+                  {% set t = display_time %}
+                {% endif %}
+                <span class="{{ chip_cls }}{% if emp_asgn.is_reinforcement %} opacity-75{% endif %}">
+                  {{ pos_label }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% endif %}
+                </span>
+                {% if t %}
+                <div style="font-size:.6rem;color:#475569;line-height:1.15">{{ t }}</div>
+                {% endif %}
+              {% elif is_unassigned_request %}
+                <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
+                {% if req_time %}
+                <div style="font-size:.6rem;color:#94a3b8;line-height:1.15">{{ req_time }}</div>
+                {% endif %}
               {% else %}
-                {% set t = display_time %}
+                <span class="chip-empty">+</span>
               {% endif %}
-              <span class="{{ chip_cls }}{% if emp_asgn.is_reinforcement %} opacity-75{% endif %}">
-                {{ pos_label }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% endif %}
-              </span>
-              {% if t %}
-              <div style="font-size:.65rem;color:#475569;line-height:1.2;margin-top:1px">{{ t }}</div>
-              {% endif %}
-            {% elif is_unassigned_request %}
-              <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
-              {% if req_time %}
-              <div style="font-size:.65rem;color:#94a3b8;line-height:1.2;margin-top:1px">{{ req_time }}</div>
-              {% endif %}
+            </div>
             {% else %}
-              <span class="chip-empty">+</span>
+            <div class="cell-half cell-half-na">—</div>
             {% endif %}
+            {% endfor %}
             {% if cell_note %}
             <span class="cell-note-badge" title="{{ cell_note }}">
               <i class="bi bi-chat-fill" style="font-size:.55rem"></i> {{ cell_note[:8] }}{% if cell_note|length > 8 %}…{% endif %}
@@ -474,10 +486,10 @@
       </tbody>
     </table>
   </div>
-  {% endfor %}
 
   <!-- 凡例 -->
   <div class="d-flex gap-3 mt-2 small text-muted flex-wrap">
+    <span><i class="bi bi-sunrise me-1"></i>上段＝朝食　<i class="bi bi-moon-stars ms-2 me-1"></i>下段＝ディナー</span>
     <span><span class="chip-hall">H</span> ホール出勤</span>
     <span><span class="chip-kitchen">K</span> キッチン出勤</span>
     <span><span class="chip-unassigned">希</span> 希望提出済み・未アサイン</span>
@@ -629,24 +641,26 @@ const TL_ASGN = {
   {% endfor %}
 };
 
-// スクロール復元 or 今日の列へ自動スクロール（朝食・ディナー両グリッド）
-document.querySelectorAll('.sched-grid').forEach(grid => {
-  const key = 'schedScroll_' + grid.dataset.slot;
-  const saved = sessionStorage.getItem(key);
-  if (saved) {
-    const { top, left } = JSON.parse(saved);
-    grid.scrollTop = top;
-    grid.scrollLeft = left;
-    sessionStorage.removeItem(key);
-  } else {
-    const todayTh = grid.querySelector('thead th.today-col');
-    if (todayTh) {
-      // 名前列（sticky）の幅分だけ余白を引く
-      const empColW = grid.querySelector('thead th.emp-col')?.offsetWidth || 90;
-      grid.scrollLeft = Math.max(0, todayTh.offsetLeft - empColW - 8);
+// スクロール復元 or 今日の列へ自動スクロール
+{
+  const grid = document.querySelector('.sched-grid');
+  if (grid) {
+    const saved = sessionStorage.getItem('schedScroll');
+    if (saved) {
+      const { top, left } = JSON.parse(saved);
+      grid.scrollTop = top;
+      grid.scrollLeft = left;
+      sessionStorage.removeItem('schedScroll');
+    } else {
+      const todayTh = grid.querySelector('thead th.today-col');
+      if (todayTh) {
+        // 名前列（sticky）の幅分だけ余白を引く
+        const empColW = grid.querySelector('thead th.emp-col')?.offsetWidth || 90;
+        grid.scrollLeft = Math.max(0, todayTh.offsetLeft - empColW - 8);
+      }
     }
   }
-});
+}
 
 function toggleSg(id) {
   const body    = document.getElementById(id);
@@ -880,12 +894,13 @@ function _saveCellNote() {
   const prev    = CELL_NOTES[noteKey] || _cell.dataset.cellNote || '';
   if (note === prev) return;  // 変更なしはスキップ
   CELL_NOTES[noteKey] = note;
+  const td = _cell.closest('td');
   fetch(`/schedule/${PERIOD_ID}/cell_note`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ employee_id: empId, date, note })
   }).then(() => {
     // セル内のバッジを即時更新（リロードなし）
-    const badge = _cell.querySelector('.cell-note-badge');
+    const badge = td.querySelector('.cell-note-badge');
     if (note) {
       const icon = '<i class="bi bi-chat-fill" style="font-size:.55rem"></i> ';
       const text = note.length > 8 ? note.slice(0, 8) + '…' : note;
@@ -894,7 +909,7 @@ function _saveCellNote() {
         const s = document.createElement('span');
         s.className = 'cell-note-badge'; s.title = note;
         s.innerHTML = icon + text;
-        _cell.appendChild(s);
+        td.appendChild(s);
       }
     } else {
       if (badge) badge.remove();
@@ -904,11 +919,12 @@ function _saveCellNote() {
 
 function callAssign(payload) {
   const periodId = PERIOD_ID;
-  // スクロール位置を保存してリロード後に復元（朝食・ディナー両グリッド）
-  document.querySelectorAll('.sched-grid').forEach(grid => {
-    sessionStorage.setItem('schedScroll_' + grid.dataset.slot,
+  // スクロール位置を保存してリロード後に復元
+  const grid = document.querySelector('.sched-grid');
+  if (grid) {
+    sessionStorage.setItem('schedScroll',
       JSON.stringify({ top: grid.scrollTop, left: grid.scrollLeft }));
-  });
+  }
   fetch(`/schedule/${periodId}/assign`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
