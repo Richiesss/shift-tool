@@ -137,20 +137,21 @@ def _fetch_weather_range(lat: float, lon: float, start: date, end: date, archive
 
 
 def _get_weather_map(dates: list[date], lat: float | None, lon: float | None) -> dict[str, dict]:
-    """指定日付群の気象データを {date_str: {...}} で返す（DBキャッシュ＋Open-Meteo）"""
+    """指定日付群の気象データを {date_str: {...}} で返す（Open-Meteoから直接取得）
+
+    weather_cache テーブルへの読み書きは行わない（DB側のロック等で
+    リクエストがハングする事象が発生したため）。Open-Meteo呼び出しは
+    timeoutで保護されており、結果は predict_customer_counts_cached の
+    5分キャッシュにより呼び出し頻度が抑えられる。
+    """
     if lat is None or lon is None or not dates:
         return {}
 
     date_strs = sorted({d.isoformat() for d in dates})
-    cached = repo.get_weather_cache(date_strs)
-    missing = [ds for ds in date_strs if ds not in cached]
-    if not missing:
-        return cached
-
+    target_dates = [date.fromisoformat(ds) for ds in date_strs]
     today = date.today()
-    missing_dates = [date.fromisoformat(ds) for ds in missing]
-    past   = [d for d in missing_dates if d < today]
-    future = [d for d in missing_dates if d >= today]
+    past   = [d for d in target_dates if d < today]
+    future = [d for d in target_dates if d >= today]
 
     fetched: dict[str, dict] = {}
     if past:
@@ -158,10 +159,7 @@ def _get_weather_map(dates: list[date], lat: float | None, lon: float | None) ->
     if future:
         fetched.update(_fetch_weather_range(lat, lon, min(future), max(future), archive=False))
 
-    if fetched:
-        repo.save_weather_cache(fetched)
-    cached.update(fetched)
-    return cached
+    return fetched
 
 
 def _weather_means(history: list[dict], weather_map: dict[str, dict]) -> dict[str, float]:
