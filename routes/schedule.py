@@ -107,6 +107,9 @@ def index(period_id):
 
     periods = repo.get_all_periods()
     employees = repo.get_all_employees(active_only=True)
+    # 表示順: スタッフ管理画面の display_order を維持しつつ、
+    # 社員 → 専任スタッフ → ホール・キッチン兼任スタッフ の順にグループ化する
+    employees = sorted(employees, key=lambda e: e.staff_category_rank())
     # emp_map はアーカイブ済みスタッフも含める
     # （アーカイブ前に生成されたシフトで参照される可能性があるため）
     emp_map = {e.id: e for e in repo.get_all_employees(active_only=False)}
@@ -195,7 +198,7 @@ def index(period_id):
     submitted_in_slot = {eid for (eid, _ds, sv) in time_map.keys() if sv == slot}
 
     # ポジション × スロットでメンバーを絞り込み
-    # 並び順はスタッフ管理画面の display_order（= employees の取得順）をそのまま維持
+    # 並び順は employees の取得順（社員 → 専任 → 兼任、各カテゴリ内は display_order）をそのまま維持
     filtered_employees = [
         e for e in employees
         if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)

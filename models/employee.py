@@ -57,3 +57,11 @@ class Employee:
             if p.day_of_week == day_of_week:
                 return p
         return None
+
+    def staff_category_rank(self) -> int:
+        """シフト表での表示順カテゴリ: 0=社員, 1=専任スタッフ, 2=ホール・キッチン兼任スタッフ"""
+        if self.employment_type == EmploymentType.FULL_TIME:
+            return 0
+        if self.primary_position is not None and not self.can_work_both_positions:
+            return 1
+        return 2
