@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}過去客数データ入力 - SDU-Shift{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="fw-semibold"><i class="bi bi-clock-history me-2"></i>過去客数データ入力（β）</div>
+    <div style="font-size:.72rem;color:#94a3b8;line-height:1.2">
+      {{ ym }} の客数実績
+    </div>
+  </div>
+  <button form="history-form" type="submit" class="btn btn-primary btn-sm ms-auto"
+          data-loading="保存中…">
+    <i class="bi bi-floppy-fill"></i> 保存
+  </button>
+</div>
+<div class="content">
+
+  <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+       style="background:#1e293b;border-left:4px solid #38bdf8">
+    <i class="bi bi-info-circle text-info mt-1" style="flex-shrink:0"></i>
+    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6">
+      運用開始前の紙の集計表などにある客数実績を入力すると、客数予測（β）の精度向上に利用されます。<br>
+      Excelなどで「朝食・ディナー」の2列を選択してコピーし、入力したい開始日の朝食欄をクリックして貼り付けると、複数日分をまとめて入力できます。
+    </div>
+  </div>
+
+  <!-- 月セレクター -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <a href="{{ url_for('customers.history', ym=prev_ym) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-chevron-left"></i> 前月
+    </a>
+    <div class="fw-semibold">{{ ym }}</div>
+    <a href="{{ url_for('customers.history', ym=next_ym) }}" class="btn btn-outline-secondary btn-sm">
+      次月 <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+
+  <form id="history-form" method="post" action="{{ url_for('customers.save_history') }}" data-dirty-form>
+    <input type="hidden" name="ym" value="{{ ym }}">
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>日付</th>
+              <th class="text-center">朝食</th>
+              <th class="text-center">ディナー</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in dates %}
+            {% set ds = d|string %}
+            {% set cnt = data.get(ds, {}) %}
+            {% set dow = d.weekday() %}
+            {% set is_holiday = ds in holidays %}
+            <tr class="{{ 'table-danger' if (dow == 6 or is_holiday) else 'table-primary' if dow == 5 else '' }}">
+              <td>
+                {{ d.strftime('%m/%d') }}
+                <small class="text-muted">{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
+              </td>
+              <td>
+                <input type="number" id="b_{{ ds }}" name="b_{{ ds }}"
+                       value="{{ cnt.get('breakfast', '') }}"
+                       class="form-control form-control-sm text-center" min="0" style="width:80px"
+                       onpaste="handleHistoryPaste(event, {{ loop.index0 }}, 0)">
+              </td>
+              <td>
+                <input type="number" id="d_{{ ds }}" name="d_{{ ds }}"
+                       value="{{ cnt.get('dinner', '') }}"
+                       class="form-control form-control-sm text-center" min="0" style="width:80px"
+                       onpaste="handleHistoryPaste(event, {{ loop.index0 }}, 1)">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const HISTORY_DATES = {{ (dates | map('string') | list) | tojson }};
+
+function handleHistoryPaste(e, rowIdx, col) {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text) return;
+  let rows = text.replace(/\r/g, '').split('\n');
+  if (rows.length > 1 && rows[rows.length - 1] === '') rows.pop();
+  if (rows.length === 1 && !rows[0].includes('\t')) return; // 単一値はデフォルトの貼り付けに任せる
+  e.preventDefault();
+  rows.forEach((rowText, rOffset) => {
+    rowText.split('\t').forEach((val, cOffset) => {
+      const di = rowIdx + rOffset;
+      const ci = col + cOffset;
+      if (di >= HISTORY_DATES.length || ci > 1) return;
+      const input = document.getElementById((ci === 0 ? 'b_' : 'd_') + HISTORY_DATES[di]);
+      if (!input) return;
+      const num = val.trim().replace(/,/g, '');
+      input.value = num === '' ? '' : (parseInt(num, 10) || 0);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+}
+</script>
+{% endblock %}

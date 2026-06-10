@@ -51,8 +51,10 @@ def save():
         "base_hourly_wage",           "early_morning_allowance",
         "early_allowance_start",      "early_allowance_end",
         "max_consecutive_days",       "min_days_off",
+        "store_lat",                  "store_lon",
     ]
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
+    new_settings["customer_forecast_enabled"] = "1" if request.form.get("customer_forecast_enabled") else "0"
     repo.save_all_app_settings(new_settings)
 
     band_constraints = repo.get_breakfast_band_constraints()

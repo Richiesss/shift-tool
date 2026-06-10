@@ -262,6 +262,18 @@ _CREATE_TABLES = [
         note        TEXT NOT NULL DEFAULT '',
         UNIQUE(period_id, employee_id, date)
     )""",
+    """CREATE TABLE IF NOT EXISTS customer_count_history (
+        date      TEXT PRIMARY KEY,
+        breakfast INTEGER NOT NULL DEFAULT 0,
+        dinner    INTEGER NOT NULL DEFAULT 0
+    )""",
+    """CREATE TABLE IF NOT EXISTS weather_cache (
+        date          TEXT PRIMARY KEY,
+        temp_max      REAL,
+        temp_min      REAL,
+        precipitation REAL,
+        weather_code  INTEGER
+    )""",
 ]
 
 _MIGRATIONS = [
@@ -289,6 +301,7 @@ _MIGRATIONS = [
     ("employees",         "hall_skill_dinner",          "TEXT NOT NULL DEFAULT 'beginner'"),
     ("employees",         "kitchen_skill_breakfast",    "TEXT NOT NULL DEFAULT 'beginner'"),
     ("employees",         "kitchen_skill_dinner",       "TEXT NOT NULL DEFAULT 'beginner'"),
+    ("reservation_counts", "is_special_day",            "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _INDEXES = [

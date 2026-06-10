@@ -31,24 +31,45 @@
   {% endif %}
 
   <!-- 期間セレクター -->
-  <select class="form-select form-select-sm mb-3" style="max-width:220px"
-    onchange="location.href='/customers/'+this.value">
-    {% for p in periods %}
-    <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
-      {{ p.start_date }} 〜 {{ p.end_date }}
-    </option>
-    {% endfor %}
-  </select>
+  <div class="d-flex align-items-center justify-content-between gap-2 mb-3 flex-wrap">
+    <select class="form-select form-select-sm" style="max-width:220px"
+      onchange="location.href='/customers/'+this.value">
+      {% for p in periods %}
+      <option value="{{ p.id }}" {{ 'selected' if p.id == period.id else '' }}>
+        {{ p.start_date }} 〜 {{ p.end_date }}
+      </option>
+      {% endfor %}
+    </select>
+    <a href="{{ url_for('customers.history') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-clock-history me-1"></i>過去客数データ入力（β）
+    </a>
+  </div>
+
+  {% if forecast_enabled %}
+  <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+       style="background:#1e293b;border-left:4px solid #38bdf8">
+    <i class="bi bi-graph-up-arrow text-info mt-1" style="flex-shrink:0"></i>
+    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6;flex:1">
+      未入力の日には客数予測（β）を表示しています。<br>
+      <button type="button" class="btn btn-info btn-sm mt-1" onclick="applyForecast()">
+        <i class="bi bi-magic me-1"></i>予測値を未入力欄に反映
+      </button>
+    </div>
+  </div>
+  {% endif %}
 
   <form id="cust-form" method="post" action="{{ url_for('customers.save', period_id=period.id) }}" data-dirty-form>
     <div class="card">
       <div class="table-responsive">
-        <table class="table table-bordered table-sm mb-0">
+        <table class="table table-bordered table-sm mb-0" id="cust-table">
           <thead class="table-dark">
             <tr>
               <th>日付</th>
               <th class="text-center">朝食</th>
               <th class="text-center">ディナー</th>
+              {% if forecast_enabled %}
+              <th class="text-center" style="width:64px" title="特殊なイベント等で客数が大きく変動する日（予測モデルの学習・特徴量に使用）">特殊日</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -59,7 +80,16 @@
             {% set is_holiday = ds in holidays %}
             {% set b_val = cnt.get('breakfast', 0) %}
             {% set d_val = cnt.get('dinner', 0) %}
-            <tr class="{{ 'table-danger' if (dow == 6 or is_holiday) else 'table-primary' if dow == 5 else '' }}">
+            {% set has_data = ds in counts %}
+            {% set fc = forecast.get(ds, {}) %}
+            {% set fc_b = fc.get('breakfast', {}) %}
+            {% set fc_d = fc.get('dinner', {}) %}
+            <tr class="{{ 'table-danger' if (dow == 6 or is_holiday) else 'table-primary' if dow == 5 else '' }}"
+                {% if forecast_enabled %}
+                data-has-data="{{ '1' if has_data else '0' }}"
+                data-fc-b="{{ fc_b.predicted if fc_b.predicted is not none else '' }}"
+                data-fc-d="{{ fc_d.predicted if fc_d.predicted is not none else '' }}"
+                {% endif %}>
               <td>
                 {{ d.strftime('%m/%d') }}
                 <small class="text-muted">{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
@@ -75,6 +105,12 @@
                   </span>
                   {% endif %}
                 </div>
+                {% if forecast_enabled and fc_b.predicted is not none %}
+                <div class="text-muted" style="font-size:.68rem"
+                     title="{{ method_labels.get(fc_b.method, '') }}{% if fc_b.low is not none %}（{{ fc_b.low }}〜{{ fc_b.high }}人）{% endif %}">
+                  予測 {{ fc_b.predicted }}人
+                </div>
+                {% endif %}
               </td>
               <td>
                 <div class="d-flex align-items-center gap-1">
@@ -87,7 +123,20 @@
                   </span>
                   {% endif %}
                 </div>
+                {% if forecast_enabled and fc_d.predicted is not none %}
+                <div class="text-muted" style="font-size:.68rem"
+                     title="{{ method_labels.get(fc_d.method, '') }}{% if fc_d.low is not none %}（{{ fc_d.low }}〜{{ fc_d.high }}人）{% endif %}">
+                  予測 {{ fc_d.predicted }}人
+                </div>
+                {% endif %}
               </td>
+              {% if forecast_enabled %}
+              <td class="text-center align-middle">
+                <input type="checkbox" class="form-check-input" name="special_{{ ds }}" value="1"
+                       {{ 'checked' if cnt.get('is_special_day') else '' }}
+                       onchange="window._formDirty = true">
+              </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
@@ -114,5 +163,22 @@ function colorCell(input, threshold) {
 }
 document.querySelectorAll('input[name^="b_"]').forEach(el => colorCell(el, {{ thresh_b }}));
 document.querySelectorAll('input[name^="d_"]').forEach(el => colorCell(el, {{ thresh_d }}));
+
+function applyForecast() {
+  document.querySelectorAll('#cust-table tbody tr').forEach(tr => {
+    if (tr.dataset.hasData === '1') return;
+    const fcB = tr.dataset.fcB, fcD = tr.dataset.fcD;
+    const inputB = tr.querySelector('input[name^="b_"]');
+    const inputD = tr.querySelector('input[name^="d_"]');
+    if (fcB && inputB) {
+      inputB.value = fcB;
+      inputB.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (fcD && inputD) {
+      inputD.value = fcD;
+      inputD.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+}
 </script>
 {% endblock %}

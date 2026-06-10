@@ -233,6 +233,39 @@
     </div>
   </div>
 </div>
+
+  <!-- ベータ機能 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">ベータ機能
+        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+              data-bs-title="客数予測（β）"
+              data-bs-content="過去の客数実績・曜日/祝日・気象データなどから朝食/ディナーの客数を予測し、客数管理ページとダッシュボードに表示します。予測精度を高めるには、客数管理画面で実績を入力し続けるか、過去客数データ入力ページから過去の実績を登録してください。緯度・経度を設定すると気象データを予測に利用できます（任意）。">?</span>
+      </h6>
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" role="switch" id="customer_forecast_enabled" name="customer_forecast_enabled"
+               {% if settings.get('customer_forecast_enabled', '0') == '1' %}checked{% endif %}>
+        <label class="form-check-label small fw-semibold" for="customer_forecast_enabled">
+          客数予測機能を有効にする（β）
+        </label>
+      </div>
+      <div class="d-flex gap-3 flex-wrap">
+        <div>
+          <label class="form-label small fw-semibold mb-1">店舗の緯度</label>
+          <input type="number" name="store_lat" value="{{ settings.get('store_lat', '') }}"
+                 step="0.0001" class="form-control form-control-sm" style="width:130px" placeholder="例: 35.6895">
+        </div>
+        <div>
+          <label class="form-label small fw-semibold mb-1">店舗の経度</label>
+          <input type="number" name="store_lon" value="{{ settings.get('store_lon', '') }}"
+                 step="0.0001" class="form-control form-control-sm" style="width:130px" placeholder="例: 139.6917">
+        </div>
+      </div>
+      <div class="text-muted small mt-2">
+        緯度・経度を設定すると、気象データ（Open-Meteo）を客数予測の精度向上に利用します。
+      </div>
+    </div>
+  </div>
 </form>
 
 <!-- バックアップ / リストア -->

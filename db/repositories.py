@@ -1,6 +1,7 @@
 """DB操作の集約モジュール"""
 from __future__ import annotations
 from typing import Optional
+from datetime import date as _date
 from db.database import get_connection, Connection
 from models.employee import Employee, FixedPattern
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
@@ -514,14 +515,17 @@ def remove_assignment(period_id: int, employee_id: int, date: str, time_slot: Ti
 # ── 予約客数 ─────────────────────────────────────────────────────────────
 
 def get_reservation_counts(period_id: int) -> dict[str, dict[str, int]]:
-    """期間の予約客数を {date_str: {"breakfast": int, "dinner": int}} で返す"""
+    """期間の予約客数を {date_str: {"breakfast": int, "dinner": int, "is_special_day": int}} で返す"""
     conn = get_connection()
     rows = conn.execute(
-        "SELECT date, breakfast, dinner FROM reservation_counts WHERE period_id=? ORDER BY date",
+        "SELECT date, breakfast, dinner, is_special_day FROM reservation_counts WHERE period_id=? ORDER BY date",
         (period_id,)
     ).fetchall()
     conn.close()
-    return {r["date"]: {"breakfast": r["breakfast"], "dinner": r["dinner"]} for r in rows}
+    return {
+        r["date"]: {"breakfast": r["breakfast"], "dinner": r["dinner"], "is_special_day": r["is_special_day"]}
+        for r in rows
+    }
 
 
 def get_total_customer_counts(period_ids: list[int]) -> dict[str, int]:
@@ -540,15 +544,106 @@ def get_total_customer_counts(period_ids: list[int]) -> dict[str, int]:
     return {"breakfast": b, "dinner": d, "total": b + d}
 
 
-def save_reservation_count(period_id: int, date_str: str, breakfast: int, dinner: int):
+def save_reservation_count(period_id: int, date_str: str, breakfast: int, dinner: int, is_special_day: int = 0):
     """予約客数を保存"""
     conn = get_connection()
     conn.execute(
-        """INSERT INTO reservation_counts (period_id, date, breakfast, dinner) VALUES (?,?,?,?)
+        """INSERT INTO reservation_counts (period_id, date, breakfast, dinner, is_special_day) VALUES (?,?,?,?,?)
            ON CONFLICT(period_id, date) DO UPDATE SET
-               breakfast=excluded.breakfast, dinner=excluded.dinner""",
-        (period_id, date_str, breakfast, dinner)
+               breakfast=excluded.breakfast, dinner=excluded.dinner, is_special_day=excluded.is_special_day""",
+        (period_id, date_str, breakfast, dinner, is_special_day)
     )
+    conn.commit()
+    conn.close()
+
+
+# ── 客数予測（β）─────────────────────────────────────────────────────────
+
+def get_customer_count_history(year_month: str) -> dict[str, dict[str, int]]:
+    """指定月（YYYY-MM）の過去客数（運用開始前の手入力分）を {date_str: {"breakfast": int, "dinner": int}} で返す"""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT date, breakfast, dinner FROM customer_count_history WHERE date LIKE ? ORDER BY date",
+        (f"{year_month}-%",)
+    ).fetchall()
+    conn.close()
+    return {r["date"]: {"breakfast": r["breakfast"], "dinner": r["dinner"]} for r in rows}
+
+
+def save_customer_count_history(entries: dict[str, dict[str, int]]):
+    """過去客数データ（{date_str: {"breakfast": int, "dinner": int}}）を一括保存"""
+    conn = get_connection()
+    for date_str, vals in entries.items():
+        conn.execute(
+            """INSERT INTO customer_count_history (date, breakfast, dinner) VALUES (?,?,?)
+               ON CONFLICT(date) DO UPDATE SET
+                   breakfast=excluded.breakfast, dinner=excluded.dinner""",
+            (date_str, vals.get("breakfast", 0), vals.get("dinner", 0))
+        )
+    conn.commit()
+    conn.close()
+
+
+def get_forecast_training_data() -> list[dict]:
+    """
+    客数予測モデルの学習データを返す。
+    customer_count_history（運用開始前の手入力分）と reservation_counts（運用後・本日より前の実績）を
+    日付で統合し、日付昇順のリストで返す。各要素:
+    {"date": str, "breakfast": int, "dinner": int, "is_special_day": int}
+    """
+    today_str = _date.today().isoformat()
+    conn = get_connection()
+    hist_rows = conn.execute(
+        "SELECT date, breakfast, dinner FROM customer_count_history"
+    ).fetchall()
+    actual_rows = conn.execute(
+        "SELECT date, breakfast, dinner, is_special_day FROM reservation_counts WHERE date < ?",
+        (today_str,)
+    ).fetchall()
+    conn.close()
+
+    merged: dict[str, dict] = {}
+    for r in hist_rows:
+        merged[r["date"]] = {"date": r["date"], "breakfast": r["breakfast"], "dinner": r["dinner"], "is_special_day": 0}
+    for r in actual_rows:
+        # 実績データを優先（重複日があれば上書き）
+        merged[r["date"]] = {
+            "date": r["date"], "breakfast": r["breakfast"], "dinner": r["dinner"],
+            "is_special_day": r["is_special_day"],
+        }
+    return sorted(merged.values(), key=lambda x: x["date"])
+
+
+def get_weather_cache(dates: list[str]) -> dict[str, dict]:
+    """指定日付群の気象キャッシュを {date_str: {"temp_max", "temp_min", "precipitation", "weather_code"}} で返す"""
+    if not dates:
+        return {}
+    conn = get_connection()
+    ph = ",".join(["?"] * len(dates))
+    rows = conn.execute(
+        f"SELECT * FROM weather_cache WHERE date IN ({ph})", dates
+    ).fetchall()
+    conn.close()
+    return {
+        r["date"]: {
+            "temp_max": r["temp_max"], "temp_min": r["temp_min"],
+            "precipitation": r["precipitation"], "weather_code": r["weather_code"],
+        }
+        for r in rows
+    }
+
+
+def save_weather_cache(entries: dict[str, dict]):
+    """気象データ（{date_str: {"temp_max","temp_min","precipitation","weather_code"}}）を一括キャッシュ保存"""
+    conn = get_connection()
+    for date_str, vals in entries.items():
+        conn.execute(
+            """INSERT INTO weather_cache (date, temp_max, temp_min, precipitation, weather_code) VALUES (?,?,?,?,?)
+               ON CONFLICT(date) DO UPDATE SET
+                   temp_max=excluded.temp_max, temp_min=excluded.temp_min,
+                   precipitation=excluded.precipitation, weather_code=excluded.weather_code""",
+            (date_str, vals.get("temp_max"), vals.get("temp_min"), vals.get("precipitation"), vals.get("weather_code"))
+        )
     conn.commit()
     conn.close()
 
@@ -571,7 +666,7 @@ def save_app_setting(key: str, value: str):
     )
     conn.commit()
     conn.close()
-    cache.delete_memoized(get_app_setting, key)
+    cache.delete_memoized(get_app_setting)  # 引数違いで残るキャッシュも含めて全消去
     cache.delete_memoized(get_all_app_settings)  # get_all_app_settings も無効化
 
 
@@ -593,8 +688,7 @@ def save_all_app_settings(settings: dict[str, str]):
     conn.commit()
     conn.close()
     cache.delete_memoized(get_all_app_settings)
-    for key in settings:
-        cache.delete_memoized(get_app_setting, key)
+    cache.delete_memoized(get_app_setting)  # 引数違いで残るキャッシュも含めて全消去
 
 
 def get_breakfast_band_constraints() -> dict[tuple[str, str], dict]:
