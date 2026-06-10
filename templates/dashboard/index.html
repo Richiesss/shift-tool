@@ -263,51 +263,6 @@
     {% endif %}
   </div>
 
-  {# ───────────── 1.5 客数予測（β） ───────────── #}
-  {% if forecast_enabled %}
-  <div class="section-label">今後の客数予測（β）</div>
-  <div class="db-card-dark">
-    <div class="table-responsive">
-      <table class="table table-sm table-borderless mb-0" style="color:#e2e8f0;font-size:.78rem">
-        <thead>
-          <tr style="color:#64748b;font-size:.7rem">
-            <th></th>
-            <th class="text-center"><i class="bi bi-sun" style="color:#f59e0b"></i> 朝食</th>
-            <th class="text-center"><i class="bi bi-moon" style="color:#818cf8"></i> ディナー</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in forecast_rows %}
-          {% set b = row.breakfast %}
-          {% set dn = row.dinner %}
-          <tr>
-            <td>
-              {{ row.date.strftime('%m/%d') }}
-              <small class="text-muted">（{{ DAY_JP[row.date.weekday()] }}）</small>
-              {% if loop.first %}<small class="text-muted">本日</small>{% endif %}
-            </td>
-            <td class="text-center">
-              {% if b.predicted is not none %}
-              <span style="font-weight:700;{{ 'color:#f87171' if (thresh_b > 0 and b.predicted >= thresh_b) else 'color:#e2e8f0' }}">{{ b.predicted }}名</span>
-              {% else %}<span class="text-muted">―</span>{% endif %}
-            </td>
-            <td class="text-center">
-              {% if dn.predicted is not none %}
-              <span style="font-weight:700;{{ 'color:#f87171' if (thresh_d > 0 and dn.predicted >= thresh_d) else 'color:#e2e8f0' }}">{{ dn.predicted }}名</span>
-              {% else %}<span class="text-muted">―</span>{% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="text-muted" style="font-size:.68rem;margin-top:.4rem">
-      過去の実績・曜日・気象などをもとにしたAI予測です。
-      <a href="{{ url_for('customers.list_periods') }}" style="color:#38bdf8">客数管理ページ</a>で実績を入力すると精度が向上します。
-    </div>
-  </div>
-  {% endif %}
-
   {# ───────────── 2. TODOリスト ───────────── #}
   <div class="section-label">TODO</div>
   {% if todos %}

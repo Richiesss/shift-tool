@@ -1,11 +1,8 @@
-from datetime import date as _date, timedelta
+from datetime import date as _date
 from collections import defaultdict
 from flask import Blueprint, render_template, url_for
 from db import repositories as repo
-from optimizer import forecast as forecast_mod
 from utils.constants import TimeSlot, Position
-
-_FORECAST_DAYS = 7
 
 bp = Blueprint("dashboard", __name__)
 
@@ -32,7 +29,7 @@ def index():
     upcoming_short_days  = []   # 直近7日の不足日ラベル
     unsubmitted          = []   # 希望未提出スタッフ
     todos                = []   # TODOアイテム
-    res_counts           = {}   # 予約客数（特殊日フラグ参照用）
+    res_counts           = {}   # 予約客数（今日の予約客数表示用）
 
     if not latest:
         todos.append({
@@ -168,26 +165,6 @@ def index():
                 'url':  url_for('customers.list_periods'),
             })
 
-    # ── 客数予測（β）：今後N日分のサマリー ──
-    forecast_enabled = repo.get_app_setting("customer_forecast_enabled", "0") == "1"
-    forecast_rows = []
-    if forecast_enabled:
-        fc_dates  = [today + timedelta(days=i) for i in range(_FORECAST_DAYS)]
-        fc_strs   = tuple(d.isoformat() for d in fc_dates)
-        special_days = tuple(sorted(
-            ds for ds, c in res_counts.items() if c.get("is_special_day") and ds in fc_strs
-        ))
-        fc_data  = forecast_mod.predict_customer_counts_cached(fc_strs, special_days)
-        thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
-        thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
-        for d in fc_dates:
-            fc = fc_data.get(d.isoformat(), {})
-            forecast_rows.append({
-                'date':      d,
-                'breakfast': fc.get('breakfast', {}),
-                'dinner':    fc.get('dinner', {}),
-            })
-
     return render_template(
         'dashboard/index.html',
         today=today,
@@ -201,8 +178,4 @@ def index():
         upcoming_short_days=upcoming_short_days,
         todos=todos,
         DAY_JP=_DAY_JP,
-        forecast_enabled=forecast_enabled,
-        forecast_rows=forecast_rows,
-        thresh_b=thresh_b if forecast_enabled else 0,
-        thresh_d=thresh_d if forecast_enabled else 0,
     )
