@@ -31,13 +31,12 @@ def _get_pg_pool():
             url = DATABASE_URL
             if url.startswith("postgres://"):
                 url = "postgresql://" + url[len("postgres://"):]
-            # statement_timeout: クエリが何らかの理由でハング/ロック待ちになっても
-            # gunicorn の worker timeout（120秒）より先にDB側で打ち切る
             # keepalives: プール内で再利用される接続が裏側で切断されていた場合に
             # 早期に検知し、OperationalError として再接続できるようにする
+            # （statement_timeout は Neon 等のプール接続だと起動パラメータとして
+            #   拒否されるため、Connection 側で SET により都度設定する）
             _pg_pool = psycopg2.pool.ThreadedConnectionPool(
                 1, 5, url,
-                options="-c statement_timeout=15000",
                 keepalives=1,
                 keepalives_idle=30,
                 keepalives_interval=10,
@@ -86,6 +85,7 @@ class Connection:
             self._conn = self._pool.getconn()
             self._factory = psycopg2.extras.RealDictCursor
             self.backend = "postgres"
+            self._set_statement_timeout()
         else:
             import sqlite3
             DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -96,6 +96,19 @@ class Connection:
             self._pool = None
             self.backend = "sqlite"
         self.lastrowid = None
+
+    def _set_statement_timeout(self):
+        """クエリが何らかの理由でハング/ロック待ちになっても
+        gunicorn の worker timeout（120秒）より先にDB側で打ち切る"""
+        try:
+            cur = self._conn.cursor()
+            cur.execute("SET statement_timeout = 15000")
+            cur.close()
+        except Exception:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
 
     def _pg_execute(self, sql: str, params):
         import psycopg2
@@ -110,6 +123,7 @@ class Connection:
             except Exception:
                 pass
             self._conn = self._pool.getconn()
+            self._set_statement_timeout()
             cur = self._conn.cursor(cursor_factory=self._factory)
             cur.execute(sql, params)
             return cur
