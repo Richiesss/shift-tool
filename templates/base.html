@@ -334,14 +334,17 @@
     ('shifts.index',          'bi-pencil-square',  '希望シフト'),
     ('generate.index',        'bi-lightning-fill', '自動生成'),
     ('schedule.list_periods', 'bi-calendar3',      'シフト表'),
+    ('schedule.stats_multi',  'bi-bar-chart-fill', '勤務統計'),
     ('customers.list_periods','bi-cup-hot-fill',   '客数管理'),
     ('employees.index',       'bi-people-fill',    'スタッフ管理'),
     ('settings.index',        'bi-gear-fill',      '設定'),
     ('help.index',            'bi-question-circle','ヘルプ'),
   ] %}
   {% for endpoint, icon, label in nav_items %}
+  {% set active = (request.endpoint == endpoint) if endpoint == 'schedule.stats_multi'
+                  else (request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) and request.endpoint != 'schedule.stats_multi') %}
   <a href="{{ url_for(endpoint) }}"
-     class="{{ 'active' if request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) else '' }}">
+     class="{{ 'active' if active else '' }}">
     <i class="bi {{ icon }}"></i>{{ label }}
   </a>
   {% endfor %}
@@ -357,7 +360,8 @@
     request.endpoint.startswith('customers') or
     request.endpoint.startswith('employees') or
     request.endpoint.startswith('settings') or
-    request.endpoint.startswith('help')
+    request.endpoint.startswith('help') or
+    request.endpoint == 'schedule.stats_multi'
 ) %}
 <div class="bottom-nav">
   {% for endpoint, icon, label in [
@@ -366,8 +370,9 @@
     ('generate.index',        'bi-lightning-fill', '自動生成'),
     ('schedule.list_periods', 'bi-calendar3',      'シフト表'),
   ] %}
+  {% set active = request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) and request.endpoint != 'schedule.stats_multi' %}
   <a href="{{ url_for(endpoint) }}"
-     class="{{ 'active' if request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) else '' }}">
+     class="{{ 'active' if active else '' }}">
     <i class="bi {{ icon }}"></i>{{ label }}
   </a>
   {% endfor %}
@@ -385,12 +390,15 @@
   <div class="drawer-title">メニュー</div>
   {% for endpoint, icon, label, desc in [
     ('customers.list_periods', 'bi-cup-hot-fill',    '客数管理',    '予約客数の入力'),
+    ('schedule.stats_multi',   'bi-bar-chart-fill',  '勤務統計',    '複数期間の勤務時間集計'),
     ('employees.index',        'bi-people-fill',     'スタッフ管理','スタッフの登録・編集'),
     ('settings.index',         'bi-gear-fill',       '設定',        'シフト制約・アプリ設定'),
     ('help.index',             'bi-question-circle', 'ヘルプ',      '使い方・開発者情報'),
   ] %}
+  {% set active = (request.endpoint == endpoint) if endpoint == 'schedule.stats_multi'
+                  else (request.endpoint and request.endpoint.startswith(endpoint.split('.')[0])) %}
   <a href="{{ url_for(endpoint) }}"
-     class="{{ 'active' if request.endpoint and request.endpoint.startswith(endpoint.split('.')[0]) else '' }}"
+     class="{{ 'active' if active else '' }}"
      onclick="closeDrawer()">
     <i class="bi {{ icon }}"></i>
     <div>
