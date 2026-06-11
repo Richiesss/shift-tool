@@ -84,6 +84,7 @@ def _get_shift_cells(
     date_str: str,
     assignments: dict,
     req_map: dict,
+    cell_notes: dict,
 ) -> tuple[str, str, str, str]:
     """
     (開始時刻セル, 区切り/備考セル, 終了時刻セル, スタイル種別) を返す。
@@ -101,6 +102,10 @@ def _get_shift_cells(
 
     req  = req_map.get((emp_id, date_str))
     note = (req.note or "").strip() if req else ""
+    # スタッフ個別コメント（セル単位のメモ）があれば優先して区切りセルに表示
+    cnote = (cell_notes.get((emp_id, date_str)) or "").strip()
+    if cnote:
+        note = cnote
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
@@ -119,6 +124,8 @@ def _get_shift_cells(
             return "", "朝のみ可", "", "am_only"
         if req and req.pattern_id == "pm_only":
             return "", "晩のみ可", "", "pm_only"
+        if cnote:
+            return "", cnote, "", "assigned_note"
         return "", "-", "", "off"
 
     # 4タプルから位置情報を展開
@@ -275,6 +282,7 @@ def export_excel(
     req_map  = {(r.employee_id, r.date): r for r in requests}
     notes    = repo.get_schedule_notes(period.id)        # 日付メモ → メモ1欄
     reserves = repo.get_reservation_counts(period.id)    # 予約客数 → 朝食見込・夜予約
+    cell_notes = repo.get_cell_notes(period.id)          # スタッフ個別コメント → 区切りセル
 
     wb = load_workbook(TEMPLATE_PATH)
     ws = wb.active
@@ -404,7 +412,7 @@ def export_excel(
             for i, d in enumerate(dates):
                 col = _block_col(i)
                 s_txt, m_txt, e_txt, style = _get_shift_cells(
-                    emp.id, d.isoformat(), assignments, req_map)
+                    emp.id, d.isoformat(), assignments, req_map, cell_notes)
                 ws.cell(r, col).value     = _num_or_text(s_txt)
                 ws.cell(r, col + 1).value = m_txt or None
                 ws.cell(r, col + 2).value = _num_or_text(e_txt)

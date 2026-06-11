@@ -135,6 +135,7 @@ def _get_shift_cells(
     date_str: str,
     assignments: dict,
     req_map: dict,
+    cell_notes: dict,
 ) -> tuple[str, str, str, str]:
     """
     (開始時刻セル, 区切り/備考セル, 終了時刻セル, スタイル種別) を返す。
@@ -146,6 +147,10 @@ def _get_shift_cells(
 
     req  = req_map.get((emp_id, date_str))
     note = (req.note or "").strip() if req else ""
+    # スタッフ個別コメント（セル単位のメモ）があれば優先して区切りセルに表示
+    cnote = (cell_notes.get((emp_id, date_str)) or "").strip()
+    if cnote:
+        note = cnote
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
@@ -164,6 +169,8 @@ def _get_shift_cells(
             return "", "朝のみ可", "", "am_only"
         if req and req.pattern_id == "pm_only":
             return "", "晩のみ可", "", "pm_only"
+        if cnote:
+            return "", cnote, "", "assigned_note"
         return "", "-", "", "off"
 
     # 4タプルから位置情報を展開
@@ -242,6 +249,7 @@ def export_pdf(
     req_map  = {(r.employee_id, r.date): r for r in requests}
     notes    = repo.get_schedule_notes(period.id)
     reserves = repo.get_reservation_counts(period.id)
+    cell_notes = repo.get_cell_notes(period.id)       # スタッフ個別コメント → 区切りセル
 
     font = _register_font()
 
@@ -465,7 +473,7 @@ def export_pdf(
             for i, d in enumerate(dates):
                 c0 = _block_col(i)
                 s_txt, m_txt, e_txt, style = _get_shift_cells(
-                    emp.id, d.isoformat(), assignments, req_map)
+                    emp.id, d.isoformat(), assignments, req_map, cell_notes)
                 data[r][c0]     = s_txt
                 data[r][c0 + 1] = m_txt
                 data[r][c0 + 2] = e_txt
