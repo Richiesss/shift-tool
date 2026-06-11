@@ -15,6 +15,7 @@ export/templates/SDU_shift_template.xlsx を読み込み、生成済みシフト
   AX列    : 右側氏名 / AY列: 勤務時間合計式 / AZ列: 人件費式(時給×時間)
 
 従業員数が枠数を超える場合はグループ末尾に行を挿入する（行高・マージも追従）。
+日付ブロックは期間日数(月によって13〜16日)に合わせて余りを列削除し、空白を作らない。
 """
 from __future__ import annotations
 from copy import copy
@@ -33,13 +34,12 @@ TEMPLATE_PATH = Path(__file__).parent / "templates" / "SDU_shift_template.xlsx"
 DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
 
 # ── テンプレートのレイアウト定数 ─────────────────────────────────────────
-N_BLOCKS     = 16   # 日付ブロック数（B〜AW列）
+N_BLOCKS     = 16   # テンプレートの日付ブロック数（B〜AW列）。期間日数に合わせて余りは列削除する
 COLS_PER_DAY = 3    # 1日 = 3列（開始 / 区切り・備考 / 終了）
 C_DATA       = 2    # データ先頭列（B）
 C_NAME_L     = 1    # 氏名列（左、A）
-C_NAME_R     = 50   # 氏名列（右、AX）
-C_HOURS      = 51   # 勤務時間合計式（AY）
-C_WAGE       = 52   # 人件費式（AZ）
+NAME_W       = 17.63  # 氏名列の幅
+DAY_W        = 5.75   # 日付1列の幅
 
 R_DATE1, R_DOW1   = 1, 2    # 1ブロック目: 日付・曜日
 R_MEMO1, R_MEMO2  = 3, 6    # メモ1（3-5行マージ）・メモ2
@@ -186,7 +186,7 @@ def _num_or_text(v: str):
         return v
 
 
-def _insert_rows_keep_layout(ws, idx: int, amount: int):
+def _insert_rows_keep_layout(ws, idx: int, amount: int, max_col: int):
     """idx 行の直前に amount 行挿入する。
     openpyxl の insert_rows はマージセル・行高を追従させないため手動でずらし、
     挿入行のスタイル・行高は直前の行（同グループの枠）からコピーする。"""
@@ -211,8 +211,37 @@ def _insert_rows_keep_layout(ws, idx: int, amount: int):
     for r in range(idx, idx + amount):
         if donor_h:
             ws.row_dimensions[r].height = donor_h
-        for c in range(1, C_WAGE + 1):
+        for c in range(1, max_col + 1):
             ws.cell(r, c)._style = copy(ws.cell(donor, c)._style)
+
+
+def _delete_trailing_blocks(ws, n: int):
+    """期間日数 n に合わせて余った日付ブロック列を削除する（空白ブロックを作らない）。
+    openpyxl の delete_cols はマージセルを追従させないため手動でずらす。"""
+    extra = N_BLOCKS - n
+    if extra <= 0:
+        return
+    first  = C_DATA + n * COLS_PER_DAY   # 削除開始列
+    amount = extra * COLS_PER_DAY
+    for rng in list(ws.merged_cells.ranges):
+        if rng.min_col >= first + amount:
+            # 削除範囲より右（氏名列など）→ 左へシフト
+            ws.unmerge_cells(str(rng))
+            ws.merge_cells(start_row=rng.min_row, end_row=rng.max_row,
+                           start_column=rng.min_col - amount,
+                           end_column=rng.max_col - amount)
+        elif rng.min_col >= first:
+            # 削除範囲内のブロックマージ → 解除
+            ws.unmerge_cells(str(rng))
+    ws.delete_cols(first, amount)
+    # 列幅を再構築（テンプレートのグループ幅指定は削除に追従しないため）
+    for letter in list(ws.column_dimensions.keys()):
+        del ws.column_dimensions[letter]
+    c_name_r = C_DATA + n * COLS_PER_DAY
+    ws.column_dimensions[get_column_letter(C_NAME_L)].width = NAME_W
+    for c in range(C_DATA, c_name_r):
+        ws.column_dimensions[get_column_letter(c)].width = DAY_W
+    ws.column_dimensions[get_column_letter(c_name_r)].width = NAME_W
 
 
 def _block_col(i: int) -> int:
@@ -220,10 +249,10 @@ def _block_col(i: int) -> int:
     return C_DATA + i * COLS_PER_DAY
 
 
-def _hours_formula(row: int) -> str:
-    """=(D9-B9)+(G9-E9)+...+(AW9-AU9) 形式の勤務時間合計式を返す"""
+def _hours_formula(row: int, n: int) -> str:
+    """=(D9-B9)+(G9-E9)+... 形式の勤務時間合計式（期間 n 日分）を返す"""
     terms = []
-    for i in range(N_BLOCKS):
+    for i in range(n):
         c = _block_col(i)
         terms.append(f"({get_column_letter(c + 2)}{row}-{get_column_letter(c)}{row})")
     return "=" + "+".join(terms)
@@ -251,6 +280,17 @@ def export_excel(
     n        = len(dates)
     holidays = holiday_set(dates)
 
+    # 月の日数(28/30/31日)に合わせて余りブロックを列ごと削除し、空白を作らない
+    _delete_trailing_blocks(ws, n)
+    c_name_r = C_DATA + n * COLS_PER_DAY  # 氏名列（右）
+    c_hours  = c_name_r + 1               # 勤務時間合計式
+    c_wage   = c_name_r + 2               # 人件費式
+    # 削除で左に寄ってきたテンプレート外の作業メモ等を消す
+    for row in ws.iter_rows(min_row=1, max_row=100, min_col=c_wage + 1, max_col=63):
+        for cell in row:
+            if cell.value is not None:
+                cell.value = None
+
     # ── 従業員をテンプレートの4グループに分類 ─────────────────────────
     # output_position 優先、未設定なら primary_position で判断
     def _out_pos(e):
@@ -271,10 +311,10 @@ def export_excel(
     k_pt_extra = max(0, len(k_pt) - K_PT_SLOTS)
     h_ft_extra = max(0, len(h_ft) - H_FT_SLOTS)
     h_pt_extra = max(0, len(h_pt) - H_PT_SLOTS)
-    _insert_rows_keep_layout(ws, H_PT_START + H_PT_SLOTS, h_pt_extra)
-    _insert_rows_keep_layout(ws, H_FT_START + H_FT_SLOTS, h_ft_extra)
-    _insert_rows_keep_layout(ws, K_PT_START + K_PT_SLOTS, k_pt_extra)
-    _insert_rows_keep_layout(ws, K_FT_START + K_FT_SLOTS, k_ft_extra)
+    _insert_rows_keep_layout(ws, H_PT_START + H_PT_SLOTS, h_pt_extra, c_wage)
+    _insert_rows_keep_layout(ws, H_FT_START + H_FT_SLOTS, h_ft_extra, c_wage)
+    _insert_rows_keep_layout(ws, K_PT_START + K_PT_SLOTS, k_pt_extra, c_wage)
+    _insert_rows_keep_layout(ws, K_FT_START + K_FT_SLOTS, k_ft_extra, c_wage)
 
     # 挿入後の行位置
     ko       = k_ft_extra + k_pt_extra
@@ -291,31 +331,26 @@ def export_excel(
     title   = f"{start_d.month}月      　　　　 {half}"
     for r in (R_DATE1, r_date2, r_date3):
         ws.cell(r, C_NAME_L).value = title
-        ws.cell(r, C_NAME_R).value = title
+        ws.cell(r, c_name_r).value = title
     ws.title = (f"{start_d.month:02d}{start_d.day:02d}_{end_d.month:02d}{end_d.day:02d}"
                 + ("(確定)" if period.status == "confirmed" else ""))
 
     # ── ヘッダー・フッター（日付/曜日/メモ/朝食見込/夜予約）────────────
-    for i in range(N_BLOCKS):
+    for i, d in enumerate(dates):
         col = _block_col(i)
         cl  = get_column_letter(col)
-        if i < n:
-            d  = dates[i]
-            ds = d.isoformat()
-            day_val = d.day
-            dow     = DAY_JP[d.weekday()]
-            note    = notes.get(ds, "") or None
-            res     = reserves.get(ds, {})
-            bf      = res.get("breakfast")
-            din     = res.get("dinner")
-            if d.weekday() == 5:
-                day_fill = FILL_SAT
-            elif d.weekday() == 6 or ds in holidays:
-                day_fill = FILL_SUN
-            else:
-                day_fill = FILL_NONE
+        ds = d.isoformat()
+        day_val = d.day
+        dow     = DAY_JP[d.weekday()]
+        note    = notes.get(ds, "") or None
+        res     = reserves.get(ds, {})
+        bf      = res.get("breakfast")
+        din     = res.get("dinner")
+        if d.weekday() == 5:
+            day_fill = FILL_SAT
+        elif d.weekday() == 6 or ds in holidays:
+            day_fill = FILL_SUN
         else:
-            day_val = dow = note = bf = din = None
             day_fill = FILL_NONE
 
         for r in (R_DATE1, r_date2, r_date3):
@@ -339,17 +374,17 @@ def export_excel(
             r   = start_row + j
             emp = emps[j] if j < len(emps) else None
             ws.cell(r, C_NAME_L).value = emp.name if emp else None
-            ws.cell(r, C_NAME_R).value = emp.name if emp else None
+            ws.cell(r, c_name_r).value = emp.name if emp else None
             # 全ブロックをクリア（テンプレートの凡例サンプル・前回値を消す）
-            for i in range(N_BLOCKS):
+            for i in range(n):
                 col = _block_col(i)
                 for cc in range(col, col + COLS_PER_DAY):
                     cell = ws.cell(r, cc)
                     cell.value = None
                     cell.fill  = FILL_NONE
             if emp is None:
-                ws.cell(r, C_HOURS).value = None
-                ws.cell(r, C_WAGE).value  = None
+                ws.cell(r, c_hours).value = None
+                ws.cell(r, c_wage).value  = None
                 continue
             for i, d in enumerate(dates):
                 col = _block_col(i)
@@ -370,8 +405,10 @@ def export_excel(
                     # 社員の休み・指定休は3セル全体を赤塗り
                     for cc in range(col, col + COLS_PER_DAY):
                         ws.cell(r, cc).fill = FILL_FTOFF
-            ws.cell(r, C_HOURS).value = _hours_formula(r)
-            ws.cell(r, C_WAGE).value  = f"=AY{r}*{emp.hourly_wage}" if emp.hourly_wage else None
+            ws.cell(r, c_hours).value = _hours_formula(r, n)
+            ws.cell(r, c_wage).value = (
+                f"={get_column_letter(c_hours)}{r}*{emp.hourly_wage}"
+                if emp.hourly_wage else None)
 
     _fill_group(K_FT_START, K_FT_SLOTS + k_ft_extra, k_ft)
     _fill_group(k_pt_row,   K_PT_SLOTS + k_pt_extra, k_pt)

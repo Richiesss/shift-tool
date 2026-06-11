@@ -4,7 +4,7 @@ export/templates/SDU_shift_template.xlsx と同じ紙面レイアウトを repor
 Excel出力（テンプレート流し込み）を印刷したときと同じ見た目になるよう、
 テンプレートの実測値（列幅・行高・フォントサイズ・罫線）を縮尺して描画する。
 
-紙面構成（1日 = 3列: 開始時刻 / 区切り("-")・備考 / 終了時刻、日付ブロックは16固定）:
+紙面構成（1日 = 3列: 開始時刻 / 区切り("-")・備考 / 終了時刻、日付ブロックは期間日数分）:
   日付・曜日 / メモ1(3行) / メモ2 / 朝食見込・夜予約
   キッチン社員(2枠) / キッチンA・P(18枠)
   2ブロック目ヘッダー（日付・曜日・朝食見込・夜予約）
@@ -33,7 +33,7 @@ from utils.holidays import holiday_set
 DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
 
 # ── テンプレートのレイアウト実測値 ───────────────────────────────────────
-N_BLOCKS     = 16     # 日付ブロック数
+N_BLOCKS     = 16     # テンプレートの最大日付ブロック数（実際は期間日数分だけ描画）
 COLS_PER_DAY = 3      # 1日 = 3列（開始 / 区切り・備考 / 終了）
 NAME_W_CH    = 17.63  # 氏名列幅（Excel文字単位）
 DAY_W_CH     = 5.75   # 日付1列幅（Excel文字単位）
@@ -72,9 +72,15 @@ MED, THIN = 0.8, 0.3  # 罫線幅(pt): medium / thin
 # ── フォント登録 ─────────────────────────────────────────────────────────
 
 def _register_font() -> str:
-    """日本語フォントを登録。利用不可の場合は Helvetica にフォールバック。"""
+    """日本語フォントを登録。利用不可の場合は Helvetica にフォールバック。
+
+    元シートが全セル太字のため、同梱の太字フォント（BIZ UDGothic Bold, OFL）を
+    最優先で使う。見つからない場合のみシステムフォントを探す。"""
     import glob
+    from pathlib import Path
     candidates = [
+        # 同梱フォント（太字）
+        str(Path(__file__).parent / "fonts" / "BIZUDGothic-Bold.ttf"),
         # Linux: IPA Gothic (.ttf, ReportLab互換)
         "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
         "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
@@ -272,8 +278,8 @@ def export_pdf(
     avail_w = page_w - 2 * MARGIN_LR
     avail_h = page_h - 2 * MARGIN_TB
 
-    n_cols    = 2 + N_BLOCKS * COLS_PER_DAY
-    natural_w = (2 * NAME_W_CH + N_BLOCKS * COLS_PER_DAY * DAY_W_CH) * CH_PT
+    n_cols    = 2 + n * COLS_PER_DAY  # 月の日数に合わせブロック数を可変にし空白を作らない
+    natural_w = (2 * NAME_W_CH + n * COLS_PER_DAY * DAY_W_CH) * CH_PT
 
     # 行構成: ヘッダー8行 + K枠 + 2ブロック目4行 + H枠 + フッター2行
     row_heights_nat: list[float] = []
@@ -290,7 +296,7 @@ def export_pdf(
     f  = min(sx, sy)           # フォントは小さい方の縮尺に合わせる
 
     col_widths  = ([NAME_W_CH * CH_PT * sx]
-                   + [DAY_W_CH * CH_PT * sx] * (N_BLOCKS * COLS_PER_DAY)
+                   + [DAY_W_CH * CH_PT * sx] * (n * COLS_PER_DAY)
                    + [NAME_W_CH * CH_PT * sx])
     row_heights = [h * sy for h in row_heights_nat]
 
@@ -347,7 +353,7 @@ def export_pdf(
 
     # ── ヘッダー（日付・曜日・メモ1・メモ2・朝食見込・夜予約）──────────
     def _fill_date_rows(r_date, r_dow):
-        for i in range(N_BLOCKS):
+        for i in range(n):
             c0 = _block_col(i)
             _span(c0, r_date, c0 + 2, r_date)
             _span(c0, r_dow,  c0 + 2, r_dow)
@@ -370,7 +376,7 @@ def export_pdf(
     data[R_DATE1][0]          = Paragraph(title, title_style)
     data[R_DATE1][n_cols - 1] = Paragraph(title, title_style)
 
-    for i in range(N_BLOCKS):
+    for i in range(n):
         c0 = _block_col(i)
         _span(c0, R_MEMO1, c0 + 2, R_MEMO1 + 2)   # メモ1: 3列×3行
         _span(c0, R_MEMO2, c0 + 2, R_MEMO2)
@@ -403,7 +409,7 @@ def export_pdf(
     _span(n_cols - 1, r_date2, n_cols - 1, r_dow2)
     data[r_date2][0]          = Paragraph(title, title_style)
     data[r_date2][n_cols - 1] = Paragraph(title, title_style)
-    for i in range(N_BLOCKS):
+    for i in range(n):
         c0 = _block_col(i)
         _span(c0, r_bf2,  c0 + 2, r_bf2)
         _span(c0, r_din2, c0 + 2, r_din2)
@@ -479,7 +485,7 @@ def export_pdf(
     # ── 罫線（テンプレートの medium/thin 使い分けを再現）────────────────
     last = n_cols - 1
     # 縦線: 氏名列の両側と日付ブロック境界は medium
-    for c in [0, 1] + [_block_col(i) for i in range(1, N_BLOCKS)] + [last]:
+    for c in [0, 1] + [_block_col(i) for i in range(1, n)] + [last]:
         cmds.append(("LINEBEFORE", (c, 0), (c, -1), MED, colors.black))
     cmds.append(("LINEAFTER", (last, 0), (last, -1), MED, colors.black))
 

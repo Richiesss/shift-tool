@@ -36,6 +36,9 @@ added_datas = [
     (str(OPENPYXL_DIR),  "openpyxl"),
     # アイコンをランタイムでも読み込めるよう同梱（タスクバー表示用）
     ("assets/icon.ico",  "assets"),
+    # シフト表出力用のテンプレート・日本語太字フォント
+    ("export/templates", "export/templates"),
+    ("export/fonts",     "export/fonts"),
 ]
 
 # macOS: Qt6 フレームワーク・プラグインを明示的に含める
