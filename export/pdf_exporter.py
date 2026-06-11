@@ -28,6 +28,7 @@ from reportlab.lib.enums import TA_CENTER
 from models.employee import Employee
 from models.schedule import SchedulePeriod
 from utils.constants import TimeSlot, EmploymentType, PrimaryPosition
+from utils.holidays import holiday_set
 
 DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
 
@@ -57,10 +58,13 @@ H_FT_SLOTS, H_PT_SLOTS = 3, 16   # ホール社員 / A・P の枠数
 MARGIN_LR = 8.5
 MARGIN_TB = 11.3
 
-# ステータス別のセル塗り（テンプレートの凡例に準拠）
+# ステータス別のセル塗り（完成イメージ SDU_Shift_full.xlsx に準拠）
 COL_NOTE  = colors.HexColor("#FFFF00")  # 黄: 備考メモ
-COL_LEAVE = colors.HexColor("#B3E5A1")  # 緑: 有給
-COL_FTOFF = colors.HexColor("#FF0000")  # 赤: 指定休
+COL_LEAVE = colors.HexColor("#B3E5A1")  # 緑: 有給（3セル全体）
+COL_FTOFF = colors.HexColor("#FF0000")  # 赤: 社員の休み・指定休（3セル全体）
+COL_SAT   = colors.HexColor("#60CBF3")  # 水色: 土曜の日付・曜日
+COL_SUN   = colors.HexColor("#F6C6AC")  # オレンジ: 日曜・祝日の日付・曜日
+COL_MEMO  = colors.HexColor("#FF0000")  # メモ1・メモ2の文字色（赤）
 
 MED, THIN = 0.8, 0.3  # 罫線幅(pt): medium / thin
 
@@ -139,7 +143,7 @@ def _get_shift_cells(
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
-        return "", "指定休", "", "ft_off"
+        return "", "-", "", "ft_off"
 
     # 有給チェック（paid_leave パターン or メモに「有給」）
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
@@ -235,8 +239,9 @@ def export_pdf(
 
     font = _register_font()
 
-    dates = list(period.date_range())[:N_BLOCKS]
-    n     = len(dates)
+    dates    = list(period.date_range())[:N_BLOCKS]
+    n        = len(dates)
+    holidays = holiday_set(dates)
 
     # ── 従業員をテンプレートの4グループに分類（Excel出力と同一ロジック）──
     def _out_pos(e):
@@ -318,9 +323,21 @@ def export_pdf(
     title_style = ParagraphStyle(
         "title", fontName=font, fontSize=F_TITLE * f, leading=F_TITLE * f * 1.1,
         alignment=TA_CENTER)
+    # メモ1・メモ2は赤字18pt（完成イメージ準拠）
     memo_style = ParagraphStyle(
-        "memo", fontName=font, fontSize=F_MEMO * f, leading=F_MEMO * f * 1.1,
-        alignment=TA_CENTER)
+        "memo", fontName=font, fontSize=F_DATE * f, leading=F_DATE * f * 1.1,
+        alignment=TA_CENTER, textColor=COL_MEMO)
+
+    def _shrink_size(text: str, base_pt: float, width_pt: float) -> float | None:
+        """shrink_to_fit 相当: 文字列がセル幅を超える場合の縮小フォントサイズを返す。
+        収まる場合は None（既定サイズのまま）。"""
+        if not text:
+            return None
+        w = pdfmetrics.stringWidth(str(text), font, base_pt)
+        avail = width_pt - 1.5
+        if w <= avail:
+            return None
+        return max(2.5, base_pt * avail / w)
 
     def _span(c0, r0, c1, r1):
         cmds.append(("SPAN", (c0, r0), (c1, r1)))
@@ -338,6 +355,11 @@ def export_pdf(
                 d = dates[i]
                 data[r_date][c0] = str(d.day)
                 data[r_dow][c0]  = DAY_JP[d.weekday()]
+                # 土曜=水色 / 日曜・祝日=オレンジ
+                if d.weekday() == 5:
+                    cmds.append(("BACKGROUND", (c0, r_date), (c0 + 2, r_dow), COL_SAT))
+                elif d.weekday() == 6 or d.isoformat() in holidays:
+                    cmds.append(("BACKGROUND", (c0, r_date), (c0 + 2, r_dow), COL_SUN))
         _font_size(r_date, F_DATE)
         _font_size(r_dow,  F_DATE)
 
@@ -408,6 +430,9 @@ def export_pdf(
     data[r_date3][n_cols - 1] = Paragraph(title, title_style)
 
     # ── 従業員行 ───────────────────────────────────────────────────────
+    name_w = NAME_W_CH * CH_PT * sx
+    cell_w = DAY_W_CH * CH_PT * sx
+
     def _fill_group(start_row: int, slot_count: int, emps: list[Employee]):
         for j in range(slot_count):
             r = start_row + j
@@ -418,6 +443,11 @@ def export_pdf(
             emp = emps[j]
             data[r][0]          = emp.name
             data[r][n_cols - 1] = emp.name
+            # 氏名が列幅を超える場合は縮小（shrink_to_fit 再現）
+            sz = _shrink_size(emp.name, F_NAME * f, name_w)
+            if sz:
+                cmds.append(("FONTSIZE", (0, r), (0, r), sz))
+                cmds.append(("FONTSIZE", (n_cols - 1, r), (n_cols - 1, r), sz))
             for i, d in enumerate(dates):
                 c0 = _block_col(i)
                 s_txt, m_txt, e_txt, style = _get_shift_cells(
@@ -425,12 +455,21 @@ def export_pdf(
                 data[r][c0]     = s_txt
                 data[r][c0 + 1] = m_txt
                 data[r][c0 + 2] = e_txt
+                # 備考等が列幅を超える場合は縮小（shrink_to_fit 再現）
+                for cc, txt in ((c0, s_txt), (c0 + 1, m_txt), (c0 + 2, e_txt)):
+                    sz = _shrink_size(txt, F_CELL * f, cell_w)
+                    if sz:
+                        cmds.append(("FONTSIZE", (cc, r), (cc, r), sz))
                 if style in ("assigned_note", "am_only", "pm_only"):
                     cmds.append(("BACKGROUND", (c0 + 1, r), (c0 + 1, r), COL_NOTE))
                 elif style == "leave":
-                    cmds.append(("BACKGROUND", (c0 + 1, r), (c0 + 1, r), COL_LEAVE))
-                elif style == "ft_off":
-                    cmds.append(("BACKGROUND", (c0 + 1, r), (c0 + 1, r), COL_FTOFF))
+                    # 有給は3セル全体を緑塗り（完成イメージ準拠）
+                    cmds.append(("BACKGROUND", (c0, r), (c0 + 2, r), COL_LEAVE))
+                elif style == "ft_off" or (
+                    style == "off" and emp.employment_type == EmploymentType.FULL_TIME
+                ):
+                    # 社員の休み・指定休は3セル全体を赤塗り
+                    cmds.append(("BACKGROUND", (c0, r), (c0 + 2, r), COL_FTOFF))
 
     _fill_group(k_ft_row, k_ft_n, k_ft)
     _fill_group(k_pt_row, k_pt_n, k_pt)

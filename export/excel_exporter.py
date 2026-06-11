@@ -26,6 +26,7 @@ from openpyxl.utils import get_column_letter
 from models.employee import Employee
 from models.schedule import SchedulePeriod
 from utils.constants import TimeSlot, EmploymentType, PrimaryPosition
+from utils.holidays import holiday_set
 
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "SDU_shift_template.xlsx"
 
@@ -50,11 +51,13 @@ H_FT_START, H_FT_SLOTS = 33, 3    # ホール社員
 H_PT_START, H_PT_SLOTS = 36, 16   # ホールA・P
 R_DATE3 = 52                       # フッター（日付/曜日）
 
-# ── ステータス別のセル装飾（テンプレートの凡例に準拠）──────────────────
+# ── ステータス別のセル装飾（完成イメージ SDU_Shift_full.xlsx に準拠）────
 FILL_NONE  = PatternFill(fill_type=None)
 FILL_NOTE  = PatternFill("solid", fgColor="FFFF00")  # 黄: 備考メモ
-FILL_LEAVE = PatternFill("solid", fgColor="B3E5A1")  # 緑: 有給
-FILL_FTOFF = PatternFill("solid", fgColor="FF0000")  # 赤: 指定休
+FILL_LEAVE = PatternFill("solid", fgColor="B3E5A1")  # 緑: 有給（3セル全体）
+FILL_FTOFF = PatternFill("solid", fgColor="FF0000")  # 赤: 社員の休み・指定休（3セル全体）
+FILL_SAT   = PatternFill("solid", fgColor="60CBF3")  # 水色: 土曜の日付・曜日
+FILL_SUN   = PatternFill("solid", fgColor="F6C6AC")  # オレンジ: 日曜・祝日の日付・曜日
 
 
 # ── ユーティリティ ────────────────────────────────────────────────────────
@@ -98,7 +101,7 @@ def _get_shift_cells(
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
-        return "", "指定休", "", "ft_off"
+        return "", "-", "", "ft_off"
 
     # 有給チェック（paid_leave パターン or メモに「有給」）
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
@@ -244,8 +247,9 @@ def export_excel(
     wb = load_workbook(TEMPLATE_PATH)
     ws = wb.active
 
-    dates = list(period.date_range())[:N_BLOCKS]  # テンプレートは最大16日分
-    n     = len(dates)
+    dates    = list(period.date_range())[:N_BLOCKS]  # テンプレートは最大16日分
+    n        = len(dates)
+    holidays = holiday_set(dates)
 
     # ── 従業員をテンプレートの4グループに分類 ─────────────────────────
     # output_position 優先、未設定なら primary_position で判断
@@ -304,12 +308,23 @@ def export_excel(
             res     = reserves.get(ds, {})
             bf      = res.get("breakfast")
             din     = res.get("dinner")
+            if d.weekday() == 5:
+                day_fill = FILL_SAT
+            elif d.weekday() == 6 or ds in holidays:
+                day_fill = FILL_SUN
+            else:
+                day_fill = FILL_NONE
         else:
             day_val = dow = note = bf = din = None
+            day_fill = FILL_NONE
 
         for r in (R_DATE1, r_date2, r_date3):
             ws.cell(r, col).value = day_val
             ws.cell(r + 1, col).value = dow
+            # 土曜=水色 / 日曜・祝日=オレンジ（マージ範囲の3セルすべてに塗る）
+            for cc in range(col, col + COLS_PER_DAY):
+                ws.cell(r, cc).fill = day_fill
+                ws.cell(r + 1, cc).fill = day_fill
         ws.cell(R_MEMO1, col).value = note
         ws.cell(R_MEMO2, col).value = None
         ws.cell(R_BF,  col).value = bf
@@ -346,9 +361,15 @@ def export_excel(
                 if style in ("assigned_note", "am_only", "pm_only"):
                     ws.cell(r, col + 1).fill = FILL_NOTE
                 elif style == "leave":
-                    ws.cell(r, col + 1).fill = FILL_LEAVE
-                elif style == "ft_off":
-                    ws.cell(r, col + 1).fill = FILL_FTOFF
+                    # 有給は3セル全体を緑塗り（完成イメージ準拠）
+                    for cc in range(col, col + COLS_PER_DAY):
+                        ws.cell(r, cc).fill = FILL_LEAVE
+                elif style == "ft_off" or (
+                    style == "off" and emp.employment_type == EmploymentType.FULL_TIME
+                ):
+                    # 社員の休み・指定休は3セル全体を赤塗り
+                    for cc in range(col, col + COLS_PER_DAY):
+                        ws.cell(r, cc).fill = FILL_FTOFF
             ws.cell(r, C_HOURS).value = _hours_formula(r)
             ws.cell(r, C_WAGE).value  = f"=AY{r}*{emp.hourly_wage}" if emp.hourly_wage else None
 
