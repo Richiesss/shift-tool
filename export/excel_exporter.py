@@ -22,7 +22,7 @@ from copy import copy
 from datetime import date
 from pathlib import Path
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from models.employee import Employee
 from models.schedule import SchedulePeriod
@@ -58,6 +58,9 @@ FILL_LEAVE = PatternFill("solid", fgColor="B3E5A1")  # 緑: 有給（3セル全�
 FILL_FTOFF = PatternFill("solid", fgColor="FF0000")  # 赤: 社員の休み・指定休（3セル全体）
 FILL_SAT   = PatternFill("solid", fgColor="60CBF3")  # 水色: 土曜の日付・曜日
 FILL_SUN   = PatternFill("solid", fgColor="F6C6AC")  # オレンジ: 日曜・祝日の日付・曜日
+
+# 全セル縦横中央揃え（テンプレートの氏名列は標準=左寄せのため明示的に上書き）
+ALIGN_CC = Alignment(horizontal="center", vertical="center")
 
 
 # ── ユーティリティ ────────────────────────────────────────────────────────
@@ -330,8 +333,10 @@ def export_excel(
     half    = "前半" if start_d.day <= 15 else "後半"
     title   = f"{start_d.month}月      　　　　 {half}"
     for r in (R_DATE1, r_date2, r_date3):
-        ws.cell(r, C_NAME_L).value = title
-        ws.cell(r, c_name_r).value = title
+        for c in (C_NAME_L, c_name_r):
+            cell = ws.cell(r, c)
+            cell.value = title
+            cell.alignment = ALIGN_CC
     ws.title = (f"{start_d.month:02d}{start_d.day:02d}_{end_d.month:02d}{end_d.day:02d}"
                 + ("(確定)" if period.status == "confirmed" else ""))
 
@@ -368,13 +373,23 @@ def export_excel(
         ws.cell(r_date2 + 2, col).value = f"={cl}{R_BF}"  if bf  is not None else None
         ws.cell(r_date2 + 3, col).value = f"={cl}{R_DIN}" if din is not None else None
 
+    # 2ブロック目の朝食見込・夜予約ラベルとヘッダーラベルの中央揃え
+    for r, label in ((R_BF, "朝食見込"), (R_DIN, "夜予約"),
+                     (r_date2 + 2, "朝食見込"), (r_date2 + 3, "夜予約")):
+        for c in (C_NAME_L, c_name_r):
+            cell = ws.cell(r, c)
+            cell.value = label
+            cell.alignment = ALIGN_CC
+
     # ── 従業員グループの流し込み ───────────────────────────────────────
     def _fill_group(start_row: int, slot_count: int, emps: list[Employee]):
         for j in range(slot_count):
             r   = start_row + j
             emp = emps[j] if j < len(emps) else None
-            ws.cell(r, C_NAME_L).value = emp.name if emp else None
-            ws.cell(r, c_name_r).value = emp.name if emp else None
+            for c in (C_NAME_L, c_name_r):
+                cell = ws.cell(r, c)
+                cell.value = emp.name if emp else None
+                cell.alignment = ALIGN_CC
             # 全ブロックをクリア（テンプレートの凡例サンプル・前回値を消す）
             for i in range(n):
                 col = _block_col(i)

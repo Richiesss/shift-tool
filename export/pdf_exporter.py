@@ -317,6 +317,8 @@ def export_pdf(
     cmds: list[tuple] = [
         ("FONTNAME",      (0, 0), (-1, -1), font),
         ("FONTSIZE",      (0, 0), (-1, -1), F_CELL * f),
+        # LEADING を文字サイズに追従させないと縦中央からずれる（既定12pt固定のため）
+        ("LEADING",       (0, 0), (-1, -1), F_CELL * f * 1.2),
         ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING",   (0, 0), (-1, -1), 1),
@@ -326,13 +328,13 @@ def export_pdf(
         ("TEXTCOLOR",     (0, 0), (-1, -1), colors.black),
     ]
 
-    title_style = ParagraphStyle(
-        "title", fontName=font, fontSize=F_TITLE * f, leading=F_TITLE * f * 1.1,
-        alignment=TA_CENTER)
     # メモ1・メモ2は赤字18pt（完成イメージ準拠）
     memo_style = ParagraphStyle(
         "memo", fontName=font, fontSize=F_DATE * f, leading=F_DATE * f * 1.1,
         alignment=TA_CENTER, textColor=COL_MEMO)
+
+    name_w = NAME_W_CH * CH_PT * sx
+    cell_w = DAY_W_CH * CH_PT * sx
 
     def _shrink_size(text: str, base_pt: float, width_pt: float) -> float | None:
         """shrink_to_fit 相当: 文字列がセル幅を超える場合の縮小フォントサイズを返す。
@@ -345,11 +347,19 @@ def export_pdf(
             return None
         return max(2.5, base_pt * avail / w)
 
+    def _set_title(c, r):
+        """氏名列のタイトルセル（文字列で書き、縦横とも中央に揃える）"""
+        data[r][c] = title
+        sz = _shrink_size(title, F_TITLE * f, name_w) or F_TITLE * f
+        cmds.append(("FONTSIZE", (c, r), (c, r), sz))
+        cmds.append(("LEADING",  (c, r), (c, r), sz * 1.2))
+
     def _span(c0, r0, c1, r1):
         cmds.append(("SPAN", (c0, r0), (c1, r1)))
 
     def _font_size(row, size, c0=0, c1=-1):
         cmds.append(("FONTSIZE", (c0, row), (c1, row), size * f))
+        cmds.append(("LEADING",  (c0, row), (c1, row), size * f * 1.2))
 
     # ── ヘッダー（日付・曜日・メモ1・メモ2・朝食見込・夜予約）──────────
     def _fill_date_rows(r_date, r_dow):
@@ -373,8 +383,8 @@ def export_pdf(
     # タイトル（左右氏名列、日付〜メモ1の5行ぶんを縦マージ）
     _span(0, R_DATE1, 0, R_MEMO1 + 2)
     _span(n_cols - 1, R_DATE1, n_cols - 1, R_MEMO1 + 2)
-    data[R_DATE1][0]          = Paragraph(title, title_style)
-    data[R_DATE1][n_cols - 1] = Paragraph(title, title_style)
+    _set_title(0, R_DATE1)
+    _set_title(n_cols - 1, R_DATE1)
 
     for i in range(n):
         c0 = _block_col(i)
@@ -407,8 +417,8 @@ def export_pdf(
     _fill_date_rows(r_date2, r_dow2)
     _span(0, r_date2, 0, r_dow2)
     _span(n_cols - 1, r_date2, n_cols - 1, r_dow2)
-    data[r_date2][0]          = Paragraph(title, title_style)
-    data[r_date2][n_cols - 1] = Paragraph(title, title_style)
+    _set_title(0, r_date2)
+    _set_title(n_cols - 1, r_date2)
     for i in range(n):
         c0 = _block_col(i)
         _span(c0, r_bf2,  c0 + 2, r_bf2)
@@ -432,13 +442,10 @@ def export_pdf(
     _fill_date_rows(r_date3, r_dow3)
     _span(0, r_date3, 0, r_dow3)
     _span(n_cols - 1, r_date3, n_cols - 1, r_dow3)
-    data[r_date3][0]          = Paragraph(title, title_style)
-    data[r_date3][n_cols - 1] = Paragraph(title, title_style)
+    _set_title(0, r_date3)
+    _set_title(n_cols - 1, r_date3)
 
     # ── 従業員行 ───────────────────────────────────────────────────────
-    name_w = NAME_W_CH * CH_PT * sx
-    cell_w = DAY_W_CH * CH_PT * sx
-
     def _fill_group(start_row: int, slot_count: int, emps: list[Employee]):
         for j in range(slot_count):
             r = start_row + j
@@ -452,8 +459,9 @@ def export_pdf(
             # 氏名が列幅を超える場合は縮小（shrink_to_fit 再現）
             sz = _shrink_size(emp.name, F_NAME * f, name_w)
             if sz:
-                cmds.append(("FONTSIZE", (0, r), (0, r), sz))
-                cmds.append(("FONTSIZE", (n_cols - 1, r), (n_cols - 1, r), sz))
+                for cc in (0, n_cols - 1):
+                    cmds.append(("FONTSIZE", (cc, r), (cc, r), sz))
+                    cmds.append(("LEADING",  (cc, r), (cc, r), sz * 1.2))
             for i, d in enumerate(dates):
                 c0 = _block_col(i)
                 s_txt, m_txt, e_txt, style = _get_shift_cells(
@@ -466,6 +474,7 @@ def export_pdf(
                     sz = _shrink_size(txt, F_CELL * f, cell_w)
                     if sz:
                         cmds.append(("FONTSIZE", (cc, r), (cc, r), sz))
+                        cmds.append(("LEADING",  (cc, r), (cc, r), sz * 1.2))
                 if style in ("assigned_note", "am_only", "pm_only"):
                     cmds.append(("BACKGROUND", (c0 + 1, r), (c0 + 1, r), COL_NOTE))
                 elif style == "leave":
@@ -489,14 +498,17 @@ def export_pdf(
         cmds.append(("LINEBEFORE", (c, 0), (c, -1), MED, colors.black))
     cmds.append(("LINEAFTER", (last, 0), (last, -1), MED, colors.black))
 
-    def _hline(row, weight, where="below"):
+    def _hline(row, weight, where="below", data_only=False):
+        """横罫線。data_only=True はタイトルの縦マージ内を貫通させないよう
+        日付ブロック列のみに線を引く。"""
         cmd = "LINEBELOW" if where == "below" else "LINEABOVE"
-        cmds.append((cmd, (0, row), (-1, row), weight, colors.black))
+        c0, c1 = (1, n_cols - 2) if data_only else (0, -1)
+        cmds.append((cmd, (c0, row), (c1, row), weight, colors.black))
 
-    # ヘッダー部
+    # ヘッダー部（日付・曜日の区切りはタイトルセル(縦マージ)内なのでデータ列のみ）
     _hline(R_DATE1, MED, "above")
-    _hline(R_DATE1, THIN)
-    _hline(R_DOW1, MED)
+    _hline(R_DATE1, THIN, data_only=True)
+    _hline(R_DOW1, MED, data_only=True)
     _hline(R_MEMO1 + 2, MED)
     _hline(R_MEMO2, MED)
     _hline(R_BF, MED)
@@ -509,12 +521,12 @@ def export_pdf(
         _hline(r, THIN)
     _hline(r_date3 - 1, MED)
     # 2ブロック目ヘッダー
-    _hline(r_date2, THIN)
+    _hline(r_date2, THIN, data_only=True)
     _hline(r_dow2, MED)
     _hline(r_bf2, MED)
     _hline(r_din2, MED)
     # フッター
-    _hline(r_date3, THIN)
+    _hline(r_date3, THIN, data_only=True)
     _hline(r_dow3, MED)
 
     # ── ドキュメント生成（Canvas直描画で1ページを保証）─────────────────
