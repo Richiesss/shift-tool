@@ -3,7 +3,7 @@
 セルフォーマット: 1日=3列(開始時刻 / 区切り("-")または備考 / 終了時刻)
   通常シフト   : "13" / "-" / "22.5"
   備考付きシフト: "6.5" / "オムレツ" / "15"
-  有給・休み等 : 3列分をSPANして "有給" / "-" / "休" などを中央表示
+  有給・休み等 : 3列分をSPANして "有給" / "-" / "指定休" などを中央表示
 """
 from __future__ import annotations
 from datetime import date
@@ -124,7 +124,7 @@ def _get_shift_cells(
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
-        return "", "休", "", "ft_off"
+        return "", "指定休", "", "ft_off"
 
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
         return "", "有給", "", "leave"
