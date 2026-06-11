@@ -117,29 +117,32 @@ class Connection:
 
     def _pg_execute(self, sql: str, params):
         import psycopg2
-        try:
-            cur = self._conn.cursor(cursor_factory=self._factory)
-            cur.execute(sql, params)
-            return cur
-        except psycopg2.OperationalError:
-            # stale connection — get a fresh one from pool
+        last_err = None
+        for _ in range(3):
             try:
-                self._pool.putconn(self._conn, close=True)
-            except Exception:
-                pass
-            self._conn = self._pool.getconn()
-            self._set_statement_timeout()
-            cur = self._conn.cursor(cursor_factory=self._factory)
-            cur.execute(sql, params)
-            return cur
-        except psycopg2.Error:
-            # クエリエラー（statement_timeout含む）でトランザクションが
-            # 中断状態のままプールに戻らないようロールバックしてから再送出
-            try:
-                self._conn.rollback()
-            except Exception:
-                pass
-            raise
+                cur = self._conn.cursor(cursor_factory=self._factory)
+                cur.execute(sql, params)
+                return cur
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                # 接続切断（Neonのアイドルタイムアウト等で「connection already
+                # closed」になるケースを含む）— プールから破棄して新しい接続を
+                # 取得し、リトライする
+                last_err = e
+                try:
+                    self._pool.putconn(self._conn, close=True)
+                except Exception:
+                    pass
+                self._conn = self._pool.getconn()
+                self._set_statement_timeout()
+            except psycopg2.Error:
+                # クエリエラー（statement_timeout含む）でトランザクションが
+                # 中断状態のままプールに戻らないようロールバックしてから再送出
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+                raise
+        raise last_err
 
     def rollback(self):
         try:
