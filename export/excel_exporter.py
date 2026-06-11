@@ -1,6 +1,9 @@
 """Excel出力モジュール（従業員×日付 マトリクス形式）
 
-セルフォーマット: "13 - 22.5" / "6.5 オムレツ 15" / "有給" / "-"
+セルフォーマット: 1日=3列(開始時刻 / 区切り("-")または備考 / 終了時刻)
+  通常シフト   : "13" / "-" / "22.5"
+  備考付きシフト: "6.5" / "オムレツ" / "15"
+  有給・休み等 : 3列マージして "有給" / "-" / "休" などを中央表示
 """
 from __future__ import annotations
 from datetime import date
@@ -33,7 +36,7 @@ FILL_AM_ONLY = PatternFill("solid", fgColor="DBEAFE")   # 水色（朝のみ可�
 FILL_PM_ONLY = PatternFill("solid", fgColor="FED7AA")   # オレンジ（晩のみ可）
 FILL_WHITE   = PatternFill("solid", fgColor="FFFFFF")   # 白（通常・白地）
 FILL_EVEN    = PatternFill("solid", fgColor="FFFFFF")   # 白（偶数行も白で統一）
-FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行
+FILL_SUMMARY = PatternFill("solid", fgColor="F8FAFC")   # 集計行・新規メモ/見込行
 # 備考欄：黄色網掛け（lightGray パターン × 黄色 on 白）
 FILL_MEMO    = PatternFill(patternType="lightGray", fgColor="FDE047", bgColor="FFFFFF")
 
@@ -57,6 +60,9 @@ ALIGN_W = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
 
+# 日付ブロックの列内訳（開始時刻 / 区切り・備考 / 終了時刻）
+COLS_PER_DAY = 3
+
 
 # ── ユーティリティ ────────────────────────────────────────────────────────
 
@@ -77,21 +83,21 @@ def _to_decimal(time_str: str) -> str:
         return time_str
 
 
-def _get_shift_text(
+def _get_shift_cells(
     emp_id: int,
     date_str: str,
     assignments: dict,
     req_map: dict,
-) -> tuple[str, str]:
+) -> tuple[str, str, str, str]:
     """
-    (セルテキスト, スタイル種別) を返す。
-    スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off'
+    (開始時刻セル, 区切り/備考セル, 終了時刻セル, スタイル種別) を返す。
+    スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off' | 'ft_off' | 'am_only' | 'pm_only'
 
     表示フォーマット:
-      通常シフト   : "13 - 22.5"
-      備考付きシフト: "6.5 オムレツ 15"
-      有給         : "有給"
-      休み         : "-"
+      通常シフト   : ("13", "-", "22.5")
+      備考付きシフト: ("6.5", "オムレツ", "15")
+      有給         : ("", "有給", "")
+      休み         : ("", "-", "")
 
     assignments の値は (position_value, is_reinforcement, reinf_start, reinf_end) の4タプル。
     """
@@ -102,11 +108,11 @@ def _get_shift_text(
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
-        return "休", "ft_off"
+        return "", "休", "", "ft_off"
 
     # 有給チェック（paid_leave パターン or メモに「有給」）
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
-        return "有給", "leave"
+        return "", "有給", "", "leave"
 
     # アサイン確認
     b_raw = assignments.get((emp_id, date_str, TimeSlot.BREAKFAST.value))
@@ -114,10 +120,10 @@ def _get_shift_text(
 
     if not b_raw and not d_raw:
         if req and req.pattern_id == "am_only":
-            return "朝のみ可", "am_only"
+            return "", "朝のみ可", "", "am_only"
         if req and req.pattern_id == "pm_only":
-            return "晩のみ可", "pm_only"
-        return "-", "off"
+            return "", "晩のみ可", "", "pm_only"
+        return "", "-", "", "off"
 
     # 4タプルから位置情報を展開
     b_pos, b_is_reinf, b_rs, b_re = b_raw if b_raw else (None, False, None, None)
@@ -135,8 +141,8 @@ def _get_shift_text(
         else:
             s, e = _slot_default(b_pos, d_pos)
         if note:
-            return f"{s} {note} {e}", "assigned_note"
-        return f"{s} - {e}", "assigned"
+            return s, note, e, "assigned_note"
+        return s, "-", e, "assigned"
 
     # 時刻取得（パターンから）
     if req and req.pattern_id == "double":
@@ -154,10 +160,10 @@ def _get_shift_text(
     else:
         s, e = _slot_default(b_pos, d_pos)
 
-    # 備考を時刻の間に挟む形式
+    # 備考を時刻の間（区切りセル）に挟む形式
     if note:
-        return f"{s} {note} {e}", "assigned_note"
-    return f"{s} - {e}", "assigned"
+        return s, note, e, "assigned_note"
+    return s, "-", e, "assigned"
 
 
 def _slot_default(b_pos, d_pos) -> tuple[str, str]:
@@ -186,6 +192,19 @@ def _cell(ws, row, col, value="", fill=None, font=None, align=None, border=None)
     return c
 
 
+def _cell_merged(ws, row, start_col, end_col, value="", fill=None, font=None, align=None, border=None):
+    """指定範囲を横方向にマージしてセルを設定する（日付1日分=3列など）"""
+    for c in range(start_col, end_col + 1):
+        cell = ws.cell(row, c)
+        if fill:   cell.fill   = fill
+        if border: cell.border = border
+    ws.merge_cells(start_row=row, start_column=start_col, end_row=row, end_column=end_col)
+    top = ws.cell(row, start_col, value)
+    if font:  top.font = font
+    if align: top.alignment = align
+    return top
+
+
 # ── メイン出力 ────────────────────────────────────────────────────────────
 
 def export_excel(
@@ -199,9 +218,9 @@ def export_excel(
 
     フォーマット:
       行: 従業員（1行1人）
-      列: 日付（1列1日）
-      セル: 実勤務時間 ("13 - 22.5") または "有給" / "-"
+      列: 日付（1日=3列: 開始時刻 / 区切り・備考 / 終了時刻）
       両端に氏名列
+      ヘッダー部に メモ1・メモ2・朝食見込・夜予約 の行（現状は空欄でレイアウトのみ）
     """
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
@@ -217,9 +236,9 @@ def export_excel(
     holidays = holiday_set(dates)
 
     # 列インデックス
-    C_NAME_L = 1          # 氏名（左）
-    C_DATA   = 2          # データ先頭
-    C_NAME_R = C_DATA + n # 氏名（右）
+    C_NAME_L = 1                    # 氏名（左）
+    C_DATA   = 2                    # データ先頭
+    C_NAME_R = C_DATA + n * COLS_PER_DAY  # 氏名（右）
 
     # ──────────────────────────────────────────────────────────────────
     # 行 1: 期間タイトル
@@ -236,12 +255,13 @@ def export_excel(
     _cell(ws, 2, C_NAME_L, "氏名",  fill=FILL_NAME, font=FONT_NAME, align=ALIGN_C, border=BORDER)
     _cell(ws, 2, C_NAME_R, "氏名",  fill=FILL_NAME, font=FONT_NAME, align=ALIGN_C, border=BORDER)
     for i, d in enumerate(dates):
-        col  = C_DATA + i
+        start_col = C_DATA + i * COLS_PER_DAY
+        end_col   = start_col + COLS_PER_DAY - 1
         dow  = d.weekday()
         is_h = d.isoformat() in holidays
         fill = FILL_SUN_H if (dow == 6 or is_h) else (FILL_SAT_H if dow == 5 else FILL_WD_H)
         font = FONT_SUN   if (dow == 6 or is_h) else (FONT_SAT   if dow == 5 else FONT_HDR)
-        _cell(ws, 2, col, d.day, fill=fill, font=font, align=ALIGN_C, border=BORDER)
+        _cell_merged(ws, 2, start_col, end_col, d.day, fill=fill, font=font, align=ALIGN_C, border=BORDER)
     ws.row_dimensions[2].height = 18
 
     # ──────────────────────────────────────────────────────────────────
@@ -250,13 +270,14 @@ def export_excel(
     _cell(ws, 3, C_NAME_L, "", fill=FILL_NAME, border=BORDER)
     _cell(ws, 3, C_NAME_R, "", fill=FILL_NAME, border=BORDER)
     for i, d in enumerate(dates):
-        col  = C_DATA + i
+        start_col = C_DATA + i * COLS_PER_DAY
+        end_col   = start_col + COLS_PER_DAY - 1
         dow  = d.weekday()
         is_h = d.isoformat() in holidays
         fill = FILL_SUN_H if (dow == 6 or is_h) else (FILL_SAT_H if dow == 5 else FILL_WD_H)
         font = FONT_SUN   if (dow == 6 or is_h) else (FONT_SAT   if dow == 5 else FONT_HDR)
         label = DAY_JP[dow] + ("(祝)" if is_h else "")
-        _cell(ws, 3, col, label, fill=fill, font=font, align=ALIGN_C, border=BORDER)
+        _cell_merged(ws, 3, start_col, end_col, label, fill=fill, font=font, align=ALIGN_C, border=BORDER)
     ws.row_dimensions[3].height = 15
 
     # ──────────────────────────────────────────────────────────────────
@@ -266,16 +287,36 @@ def export_excel(
           font=Font(size=8, color="78350F", bold=True), align=ALIGN_C, border=BORDER)
     _cell(ws, 4, C_NAME_R, "", fill=FILL_MEMO, border=BORDER)
     for i, d in enumerate(dates):
-        col  = C_DATA + i
+        start_col = C_DATA + i * COLS_PER_DAY
+        end_col   = start_col + COLS_PER_DAY - 1
         note = notes.get(d.isoformat(), "")
-        _cell(ws, 4, col, note, fill=FILL_MEMO,
-              font=Font(size=8, color="78350F"), align=ALIGN_L, border=BORDER)
+        _cell_merged(ws, 4, start_col, end_col, note, fill=FILL_MEMO,
+                      font=Font(size=8, color="78350F"), align=ALIGN_L, border=BORDER)
     ws.row_dimensions[4].height = 16
 
     # ──────────────────────────────────────────────────────────────────
-    # 行 5+: 従業員データ
+    # 行 5-8: メモ1・メモ2・朝食見込・夜予約（SDU_shift.xlsx準拠のレイアウト、現状は空欄）
     # ──────────────────────────────────────────────────────────────────
-    R_DATA = 5
+    EXTRA_ROWS = [
+        (5, "メモ1",   36),
+        (6, "メモ2",   18),
+        (7, "朝食見込", 18),
+        (8, "夜予約",   18),
+    ]
+    for row_num, label, height in EXTRA_ROWS:
+        _cell(ws, row_num, C_NAME_L, label, fill=FILL_SUMMARY, font=FONT_HDR, align=ALIGN_C, border=BORDER)
+        _cell(ws, row_num, C_NAME_R, "", fill=FILL_SUMMARY, border=BORDER)
+        for i in range(n):
+            start_col = C_DATA + i * COLS_PER_DAY
+            end_col   = start_col + COLS_PER_DAY - 1
+            _cell_merged(ws, row_num, start_col, end_col, "", fill=FILL_SUMMARY,
+                          font=FONT_HDR, align=ALIGN_C, border=BORDER)
+        ws.row_dimensions[row_num].height = height
+
+    # ──────────────────────────────────────────────────────────────────
+    # 行 9+: 従業員データ
+    # ──────────────────────────────────────────────────────────────────
+    R_DATA = 9
     for row_idx, emp in enumerate(employees):
         r       = R_DATA + row_idx
         is_even = (row_idx % 2 == 1)
@@ -286,11 +327,13 @@ def export_excel(
               align=ALIGN_L, border=BORDER)
 
         for i, d in enumerate(dates):
-            col      = C_DATA + i
-            date_str = d.isoformat()
-            dow      = d.weekday()
-            is_h     = date_str in holidays
-            text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
+            start_col = C_DATA + i * COLS_PER_DAY
+            sep_col   = start_col + 1
+            end_col   = start_col + 2
+            date_str  = d.isoformat()
+            dow       = d.weekday()
+            is_h      = date_str in holidays
+            s_txt, m_txt, e_txt, style = _get_shift_cells(emp.id, date_str, assignments, req_map)
 
             if style == "ft_off":
                 fill = FILL_FT_OFF
@@ -314,7 +357,12 @@ def export_excel(
                 fill = base_fill
                 font = FONT_DATA
 
-            _cell(ws, r, col, text, fill=fill, font=font, align=ALIGN_C, border=BORDER)
+            if style in ("assigned", "assigned_note"):
+                _cell(ws, r, start_col, s_txt, fill=fill, font=font, align=ALIGN_C, border=BORDER)
+                _cell(ws, r, sep_col,   m_txt, fill=fill, font=font, align=ALIGN_C, border=BORDER)
+                _cell(ws, r, end_col,   e_txt, fill=fill, font=font, align=ALIGN_C, border=BORDER)
+            else:
+                _cell_merged(ws, r, start_col, end_col, m_txt, fill=fill, font=font, align=ALIGN_C, border=BORDER)
 
         # 氏名（右）
         _cell(ws, r, C_NAME_R, emp.name, fill=FILL_NAME, font=FONT_NAME,
@@ -352,7 +400,8 @@ def export_excel(
         min_sk  = const.get("min_skilled", 0)
 
         for i, d in enumerate(dates):
-            col = C_DATA + i
+            start_col = C_DATA + i * COLS_PER_DAY
+            end_col   = start_col + COLS_PER_DAY - 1
             ds  = d.isoformat()
             cnt = count_map[(ds, slot.value, pos.value)]
             sk  = skilled_map[(ds, slot.value, pos.value)]
@@ -364,11 +413,8 @@ def export_excel(
             else:
                 fill = PatternFill("solid", fgColor="D1FAE5")
 
-            c = ws.cell(r, col, f"{cnt}名\n熟{sk}")
-            c.fill      = fill
-            c.font      = FONT_SUM
-            c.alignment = ALIGN_W
-            c.border    = BORDER
+            _cell_merged(ws, r, start_col, end_col, f"{cnt}名\n熟{sk}",
+                          fill=fill, font=FONT_SUM, align=ALIGN_W, border=BORDER)
 
         _cell(ws, r, C_NAME_R, "", fill=FILL_SUMMARY, border=BORDER)
         ws.row_dimensions[r].height = 26
@@ -379,9 +425,12 @@ def export_excel(
     ws.column_dimensions[get_column_letter(C_NAME_L)].width = 10
     ws.column_dimensions[get_column_letter(C_NAME_R)].width = 10
     for i in range(n):
-        ws.column_dimensions[get_column_letter(C_DATA + i)].width = 12
+        start_col = C_DATA + i * COLS_PER_DAY
+        ws.column_dimensions[get_column_letter(start_col)].width     = 4.5  # 開始時刻
+        ws.column_dimensions[get_column_letter(start_col + 1)].width = 3    # 区切り・備考
+        ws.column_dimensions[get_column_letter(start_col + 2)].width = 4.5  # 終了時刻
 
-    ws.freeze_panes = "B4"  # 名前列・ヘッダーを固定
+    ws.freeze_panes = "B9"  # 名前列・ヘッダー(1-8行)を固定
 
     # 印刷設定: A4横向き・1ページに収める
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
@@ -389,6 +438,6 @@ def export_excel(
     ws.page_setup.paperSize    = 9   # A4
     ws.page_setup.fitToWidth   = 1   # 横1ページ
     ws.page_setup.fitToHeight  = 1   # 縦1ページ
-    ws.print_title_rows        = "1:3"
+    ws.print_title_rows        = "1:8"
 
     wb.save(path)

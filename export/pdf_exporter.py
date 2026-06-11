@@ -1,6 +1,9 @@
 """PDF出力モジュール（従業員×日付 マトリクス形式）
 
-セルフォーマット: "13 - 22.5" / "6.5 オムレツ 15" / "有給" / "-"
+セルフォーマット: 1日=3列(開始時刻 / 区切り("-")または備考 / 終了時刻)
+  通常シフト   : "13" / "-" / "22.5"
+  備考付きシフト: "6.5" / "オムレツ" / "15"
+  有給・休み等 : 3列分をSPANして "有給" / "-" / "休" などを中央表示
 """
 from __future__ import annotations
 from datetime import date
@@ -21,6 +24,9 @@ from utils.constants import TimeSlot, Position, PrimaryPosition
 from utils.holidays import holiday_set
 
 DAY_JP = ["月", "火", "水", "木", "金", "土", "日"]
+
+# 日付ブロックの列内訳（開始時刻 / 区切り・備考 / 終了時刻）
+COLS_PER_DAY = 3
 
 # セルスタイル色
 COL_HDR_TITLE = colors.HexColor("#1E3A5F")   # タイトル背景
@@ -93,15 +99,21 @@ def _to_decimal(time_str: str) -> str:
         return time_str
 
 
-def _get_shift_text(
+def _get_shift_cells(
     emp_id: int,
     date_str: str,
     assignments: dict,
     req_map: dict,
-) -> tuple[str, str]:
+) -> tuple[str, str, str, str]:
     """
-    (セルテキスト, スタイル種別) を返す。
-    スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off'
+    (開始時刻セル, 区切り/備考セル, 終了時刻セル, スタイル種別) を返す。
+    スタイル種別: 'assigned' | 'assigned_note' | 'leave' | 'off' | 'ft_off' | 'am_only' | 'pm_only'
+
+    表示フォーマット:
+      通常シフト   : ("13", "-", "22.5")
+      備考付きシフト: ("6.5", "オムレツ", "15")
+      有給         : ("", "有給", "")
+      休み         : ("", "-", "")
 
     assignments の値は (position_value, is_reinforcement, reinf_start, reinf_end) の4タプル。
     """
@@ -112,20 +124,20 @@ def _get_shift_text(
 
     # 正社員希望休
     if req and req.pattern_id == "off_request":
-        return "休", "ft_off"
+        return "", "休", "", "ft_off"
 
     if (req and req.pattern_id == "paid_leave") or "有給" in note:
-        return "有給", "leave"
+        return "", "有給", "", "leave"
 
     b_raw = assignments.get((emp_id, date_str, TimeSlot.BREAKFAST.value))
     d_raw = assignments.get((emp_id, date_str, TimeSlot.DINNER.value))
 
     if not b_raw and not d_raw:
         if req and req.pattern_id == "am_only":
-            return "朝のみ可", "am_only"
+            return "", "朝のみ可", "", "am_only"
         if req and req.pattern_id == "pm_only":
-            return "晩のみ可", "pm_only"
-        return "-", "off"
+            return "", "晩のみ可", "", "pm_only"
+        return "", "-", "", "off"
 
     # 4タプルから位置情報を展開
     b_pos,  b_is_reinf, b_rs, b_re = b_raw if b_raw else (None, False, None, None)
@@ -143,8 +155,8 @@ def _get_shift_text(
         else:
             s, e = _slot_default(b_pos, d_pos)
         if note:
-            return f"{s} {note} {e}", "assigned_note"
-        return f"{s}-{e}", "assigned"
+            return s, note, e, "assigned_note"
+        return s, "-", e, "assigned"
 
     if req and req.pattern_id == "double":
         s, e = "6", "23"
@@ -162,8 +174,8 @@ def _get_shift_text(
         s, e = _slot_default(b_pos, d_pos)
 
     if note:
-        return f"{s} {note} {e}", "assigned_note"
-    return f"{s}-{e}", "assigned"
+        return s, note, e, "assigned_note"
+    return s, "-", e, "assigned"
 
 
 def _slot_default(b_pos, d_pos) -> tuple[str, str]:
@@ -187,19 +199,36 @@ def _slot_default(b_pos, d_pos) -> tuple[str, str]:
 COL_EVENT_BG = colors.HexColor("#FEF08A")  # 行事行（備考欄）の背景（黄色）
 
 
+def _date_span_cmds(row_idx: int, n_dates: int) -> list[tuple]:
+    """日付1日分=3列 を行 row_idx 全体に渡って横方向にSPANするコマンド一覧"""
+    cmds = []
+    for i in range(n_dates):
+        c0 = 1 + i * COLS_PER_DAY
+        c1 = c0 + COLS_PER_DAY - 1
+        cmds.append(("SPAN", (c0, row_idx), (c1, row_idx)))
+    return cmds
+
+
 def _build_block_table(
     block_emps, dates, assignments, req_map, col_widths,
     font_name, font_size, n, emp_h, hdr_h, dow_h, period_label,
     events_h: int = 0, notes: dict | None = None, holidays: set | None = None,
+    memo1_h: int = 0, memo2_h: int = 0, forecast_h: int = 0,
 ):
     """
     従業員グループ1ブロック分のテーブルを生成する。
 
+    1日=3列(開始時刻 / 区切り・備考 / 終了時刻)。
+
     行構成（events_h > 0 のとき）:
       Row 0 : 日付番号
       Row 1 : 曜日
-      Row 2 : 行事メモ欄（空欄）
-      Row 3+: 従業員シフト行
+      Row 2 : 行事メモ欄（既存の日付別備考）
+      Row 3 : メモ1（空欄）
+      Row 4 : メモ2（空欄）
+      Row 5 : 朝食見込（空欄）
+      Row 6 : 夜予約（空欄）
+      Row 7+: 従業員シフト行
 
     行構成（events_h == 0 のとき）:
       Row 0 : 日付番号
@@ -208,29 +237,52 @@ def _build_block_table(
     """
     n_block    = len(block_emps)
     has_events = events_h > 0
-    EMP_START  = 3 if has_events else 2
+    n_cols     = n * COLS_PER_DAY  # 日付データ列の総数
+    EMP_START  = 7 if has_events else 2
 
-    _hols     = holidays or set()
-    row_dates = [period_label] + [str(d.day) for d in dates] + [period_label]
-    row_dows  = [""] + [DAY_JP[d.weekday()] + ("(祝)" if d.isoformat() in _hols else "") for d in dates] + [""]
+    _hols = holidays or set()
 
+    def _span_row(values, label_left="", label_right=""):
+        row = [label_left]
+        for v in values:
+            row += [v, "", ""]
+        row.append(label_right)
+        return row
+
+    row_dates = _span_row([str(d.day) for d in dates], period_label, period_label)
+    row_dows  = _span_row(
+        [DAY_JP[d.weekday()] + ("(祝)" if d.isoformat() in _hols else "") for d in dates],
+        "", "",
+    )
+
+    cell_styles: list[list[str]] = []
     emp_rows = []
     for emp in block_emps:
         row = [emp.name]
+        styles = []
         for d in dates:
-            text, _ = _get_shift_text(emp.id, d.isoformat(), assignments, req_map)
-            row.append(text)
+            s, m, e, style = _get_shift_cells(emp.id, d.isoformat(), assignments, req_map)
+            row += [s, m, e]
+            styles.append(style)
         row.append(emp.name)
         emp_rows.append(row)
+        cell_styles.append(styles)
+
+    table_data  = [row_dates, row_dows]
+    row_heights = [hdr_h, dow_h]
 
     if has_events:
         note_cells = [(notes or {}).get(d.isoformat(), "") for d in dates]
-        row_notes  = ["備考"] + note_cells + [""]
-        table_data  = [row_dates, row_dows, row_notes] + emp_rows
-        row_heights = [hdr_h, dow_h, events_h] + [emp_h] * n_block
-    else:
-        table_data  = [row_dates, row_dows] + emp_rows
-        row_heights = [hdr_h, dow_h] + [emp_h] * n_block
+        row_notes  = _span_row(note_cells, "備考", "")
+        row_memo1  = _span_row(["" for _ in dates], "メモ1", "")
+        row_memo2  = _span_row(["" for _ in dates], "メモ2", "")
+        row_bf     = _span_row(["" for _ in dates], "朝食見込", "")
+        row_dinner = _span_row(["" for _ in dates], "夜予約", "")
+        table_data  += [row_notes, row_memo1, row_memo2, row_bf, row_dinner]
+        row_heights += [events_h, memo1_h, memo2_h, forecast_h, forecast_h]
+
+    table_data  += emp_rows
+    row_heights += [emp_h] * n_block
 
     tbl = Table(table_data, colWidths=col_widths,
                 rowHeights=row_heights, repeatRows=0)
@@ -251,7 +303,7 @@ def _build_block_table(
         ("BACKGROUND", (0, EMP_START),  (0, -1),  COL_NAME),
         ("BACKGROUND", (-1, EMP_START), (-1, -1), COL_NAME),
         # ヘッダー行（日付・曜日）
-        ("BACKGROUND", (1, 0), (n, 1), COL_HDR_WD),
+        ("BACKGROUND", (1, 0), (n_cols, 1), COL_HDR_WD),
         ("FONTSIZE",   (0, 0), (-1, 1), font_size + 1),
         # 期間ラベルセル（左右）: 濃紺背景・白文字
         ("BACKGROUND", (0, 0),  (0, 0),  COL_HDR_TITLE),
@@ -260,56 +312,78 @@ def _build_block_table(
         ("TEXTCOLOR",  (-1, 0), (-1, 0), colors.white),
     ]
 
+    # 日付・曜日行: 1日=3列をSPAN
+    cmds += _date_span_cmds(0, n)
+    cmds += _date_span_cmds(1, n)
+
     if has_events:
+        NOTES_ROW, MEMO1_ROW, MEMO2_ROW, BF_ROW, DINNER_ROW = 2, 3, 4, 5, 6
+        for r_idx in (NOTES_ROW, MEMO1_ROW, MEMO2_ROW, BF_ROW, DINNER_ROW):
+            cmds += _date_span_cmds(r_idx, n)
+
         cmds += [
-            ("BACKGROUND", (0, 2),  (-1, 2), COL_EVENT_BG),
-            ("FONTSIZE",   (0, 2),  (0, 2),  max(5, font_size - 1)),
-            ("TEXTCOLOR",  (0, 2),  (0, 2),  COL_TXT_OFF),
-            ("ALIGN",      (0, 2),  (0, 2),  "LEFT"),
-            ("ALIGN",      (1, 2),  (-1, 2), "LEFT"),
+            ("BACKGROUND", (0, NOTES_ROW),  (-1, NOTES_ROW), COL_EVENT_BG),
+            ("FONTSIZE",   (0, NOTES_ROW),  (0, NOTES_ROW),  max(5, font_size - 1)),
+            ("TEXTCOLOR",  (0, NOTES_ROW),  (0, NOTES_ROW),  COL_TXT_OFF),
+            ("ALIGN",      (0, NOTES_ROW),  (0, NOTES_ROW),  "LEFT"),
+            ("ALIGN",      (1, NOTES_ROW),  (-1, NOTES_ROW), "LEFT"),
         ]
+        # メモ1・メモ2・朝食見込・夜予約: 空欄のレイアウトのみ（薄グレーのヘッダー帯）
+        for r_idx in (MEMO1_ROW, MEMO2_ROW, BF_ROW, DINNER_ROW):
+            cmds += [
+                ("BACKGROUND", (0, r_idx), (-1, r_idx), COL_HDR_WD),
+                ("FONTSIZE",   (0, r_idx), (0, r_idx),  max(5, font_size - 1)),
+            ]
 
     # 土日・祝日ヘッダー着色
     for i, d in enumerate(dates):
-        col  = i + 1
+        c0   = 1 + i * COLS_PER_DAY
+        c1   = c0 + COLS_PER_DAY - 1
         dow  = d.weekday()
         is_h = d.isoformat() in _hols
         if dow == 6 or is_h:
-            cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SUN),
-                     ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SUN)]
+            cmds += [("BACKGROUND", (c0, 0), (c1, 1), COL_HDR_SUN),
+                     ("TEXTCOLOR",  (c0, 0), (c1, 1), COL_TXT_SUN)]
         elif dow == 5:
-            cmds += [("BACKGROUND", (col, 0), (col, 1), COL_HDR_SAT),
-                     ("TEXTCOLOR",  (col, 0), (col, 1), COL_TXT_SAT)]
+            cmds += [("BACKGROUND", (c0, 0), (c1, 1), COL_HDR_SAT),
+                     ("TEXTCOLOR",  (c0, 0), (c1, 1), COL_TXT_SAT)]
 
     # 従業員行の着色
     for row_idx, emp in enumerate(block_emps):
         r      = EMP_START + row_idx
         row_bg = COL_EVEN if row_idx % 2 == 1 else COL_WHITE
-        cmds.append(("BACKGROUND", (1, r), (n, r), row_bg))
+        cmds.append(("BACKGROUND", (1, r), (n_cols, r), row_bg))
         for i, d in enumerate(dates):
-            col      = i + 1
+            c0       = 1 + i * COLS_PER_DAY
+            c1       = c0 + COLS_PER_DAY - 1
             date_str = d.isoformat()
             dow      = d.weekday()
-            text, style = _get_shift_text(emp.id, date_str, assignments, req_map)
-            is_h = date_str in _hols
+            is_h     = date_str in _hols
+            style    = cell_styles[row_idx][i]
+
+            if style in ("assigned", "assigned_note"):
+                continue  # 開始/区切り・備考/終了の3セルをそのまま表示
+
+            # それ以外は3列をSPANして1つのラベルとして中央表示
+            cmds.append(("SPAN", (c0, r), (c1, r)))
             if style == "ft_off":
-                cmds.append(("BACKGROUND", (col, r), (col, r), COL_FT_OFF_BG))
-                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_FT_OFF_TX))
+                cmds.append(("BACKGROUND", (c0, r), (c1, r), COL_FT_OFF_BG))
+                cmds.append(("TEXTCOLOR",  (c0, r), (c1, r), COL_FT_OFF_TX))
             elif style == "leave":
-                cmds.append(("BACKGROUND", (col, r), (col, r), COL_LEAVE))
-                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_TXT_LEAVE))
+                cmds.append(("BACKGROUND", (c0, r), (c1, r), COL_LEAVE))
+                cmds.append(("TEXTCOLOR",  (c0, r), (c1, r), COL_TXT_LEAVE))
             elif style == "am_only":
-                cmds.append(("BACKGROUND", (col, r), (col, r), COL_AM_ONLY_BG))
-                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_AM_ONLY_TX))
+                cmds.append(("BACKGROUND", (c0, r), (c1, r), COL_AM_ONLY_BG))
+                cmds.append(("TEXTCOLOR",  (c0, r), (c1, r), COL_AM_ONLY_TX))
             elif style == "pm_only":
-                cmds.append(("BACKGROUND", (col, r), (col, r), COL_PM_ONLY_BG))
-                cmds.append(("TEXTCOLOR",  (col, r), (col, r), COL_PM_ONLY_TX))
+                cmds.append(("BACKGROUND", (c0, r), (c1, r), COL_PM_ONLY_BG))
+                cmds.append(("TEXTCOLOR",  (c0, r), (c1, r), COL_PM_ONLY_TX))
             elif style == "off":
                 if dow == 6 or is_h:
-                    cmds.append(("BACKGROUND", (col, r), (col, r), COL_SUN_D))
+                    cmds.append(("BACKGROUND", (c0, r), (c1, r), COL_SUN_D))
                 elif dow == 5:
-                    cmds.append(("BACKGROUND", (col, r), (col, r), COL_SAT_D))
-                cmds.append(("TEXTCOLOR", (col, r), (col, r), COL_TXT_OFF))
+                    cmds.append(("BACKGROUND", (c0, r), (c1, r), COL_SAT_D))
+                cmds.append(("TEXTCOLOR", (c0, r), (c1, r), COL_TXT_OFF))
 
     tbl.setStyle(TableStyle(cmds))
     return tbl
@@ -325,9 +399,9 @@ def export_pdf(
     シフト表を PDF に出力する（横向き A4・1ページ）。
 
     レイアウト:
-      上段: キッチン所属スタッフ
+      上段: キッチン所属スタッフ（メモ1/メモ2/朝食見込/夜予約欄つき。現状は空欄）
       下段: ホール所属スタッフ（primary_position が KITCHEN 以外 / 未設定）
-      各段に行事メモ欄を設ける。集計行は出力しない。
+      各日付は3列(開始時刻 / 区切り・備考 / 終了時刻)。集計行は出力しない。
     """
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
@@ -360,11 +434,12 @@ def export_pdf(
     page_w = landscape(A4)[0] - 2 * MARGIN
     name_w = 16 * mm
     data_w = (page_w - 2 * name_w) / n
-    col_widths = [name_w] + [data_w] * n + [name_w]
+    cell_w = data_w / COLS_PER_DAY
+    col_widths = [name_w] + [cell_w] * (n * COLS_PER_DAY) + [name_w]
 
-    # 最長セル "5.75-14.75"(9文字) を基準にフォントサイズを算出
-    # 0.6 = 典型的な等幅フォントの文字幅係数（pt/pt）
-    font_size = max(5, min(8, int(data_w / (9 * 0.6))))
+    # 各セルの想定最大文字数(4文字: "22.5"等)を基準にフォントサイズを算出
+    # 0.55 = 典型的な等幅フォントの文字幅係数（pt/pt）
+    font_size = max(5, min(8, int(cell_w / (4 * 0.55))))
 
     start_d      = date.fromisoformat(period.start_date)
     half         = "前半" if start_d.day <= 15 else "後半"
@@ -372,17 +447,20 @@ def export_pdf(
     doc_title    = f"{start_d.month}月{half} SKY DINING UOMAN シフト"
 
     # ── レイアウト計算 ────────────────────────────────────────────────
-    HDR_H    = 11   # 日付番号行高さ (pt)
-    DOW_H    = 9    # 曜日行高さ (pt)
-    EVENTS_H = 13   # 行事メモ行高さ (pt, キッチンブロックのみ)
-    GAP      = 4    # グループ間スペーサー (pt)
-    TITLE_H  = 18   # タイトル段落高さ余裕込み (pt)
+    HDR_H      = 11   # 日付番号行高さ (pt)
+    DOW_H      = 9    # 曜日行高さ (pt)
+    EVENTS_H   = 13   # 行事メモ行高さ (pt, キッチンブロックのみ)
+    MEMO1_H    = 20   # メモ1行高さ (pt, キッチンブロックのみ・空欄)
+    MEMO2_H    = 10   # メモ2行高さ (pt, キッチンブロックのみ・空欄)
+    FORECAST_H = 10   # 朝食見込・夜予約 行高さ (pt, キッチンブロックのみ・空欄)
+    GAP        = 4    # グループ間スペーサー (pt)
+    TITLE_H    = 18   # タイトル段落高さ余裕込み (pt)
 
     # フレーム高さ（reportlab が使える縦スペース）
     frame_h = landscape(A4)[1] - 2 * MARGIN
 
     # 固定消費高さ: タイトル + 各ブロックのヘッダー行 + スペーサー
-    kit_hdr_h  = HDR_H + DOW_H + EVENTS_H   # キッチンブロックヘッダー
+    kit_hdr_h  = HDR_H + DOW_H + EVENTS_H + MEMO1_H + MEMO2_H + 2 * FORECAST_H
     hall_hdr_h = HDR_H + DOW_H              # ホールブロックヘッダー（行事なし）
 
     has_kitchen = bool(kitchen_emps)
@@ -413,13 +491,14 @@ def export_pdf(
 
     story = [Paragraph(title_text, title_style)]
 
-    # 上段: キッチン（備考行あり）
+    # 上段: キッチン（備考・メモ1・メモ2・朝食見込・夜予約行あり）
     if kitchen_emps:
         tbl = _build_block_table(
             kitchen_emps, dates, assignments, req_map,
             col_widths, font_name, font_size, n,
             emp_h, HDR_H, DOW_H, period_label,
             events_h=EVENTS_H, notes=notes, holidays=holidays,
+            memo1_h=MEMO1_H, memo2_h=MEMO2_H, forecast_h=FORECAST_H,
         )
         story.append(tbl)
         if hall_emps:
