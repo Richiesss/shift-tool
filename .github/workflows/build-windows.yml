@@ -21,7 +21,7 @@ jobs:
           cache: "pip"
 
       - name: 依存パッケージをインストール
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-desktop.txt
 
       - name: バージョン情報を埋め込む
         run: |
@@ -60,7 +60,7 @@ jobs:
           cache: "pip"
 
       - name: 依存パッケージをインストール
-        run: pip install -r requirements.txt Pillow
+        run: pip install -r requirements-desktop.txt Pillow
 
       - name: icon.icns を生成
         run: |

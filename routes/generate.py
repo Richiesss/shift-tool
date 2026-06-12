@@ -3,8 +3,10 @@ import threading
 import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, make_response
 from db import repositories as repo
-from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE, SolveProgressCallback
 from utils.solver_logger import logger, log_path
+
+# 優先度スケール（solverから分離して定義）
+PRIORITY_SCALE = {"低": 0.1, "中": 1.0, "高": 10.0}
 
 bp = Blueprint("generate", __name__, url_prefix="/generate")
 
@@ -87,6 +89,7 @@ def run():
         v = request.form.get(key, "中")
         return PRIORITY_SCALE.get(v, 1.0)
 
+    from optimizer.solver import SolverConfig
     config = SolverConfig(
         cost_scale=_scale("cost_scale"),
         pt_pref_scale=_scale("pt_pref_scale"),
@@ -148,6 +151,7 @@ def run():
         with app.app_context():
             try:
                 logger.info(f"[THREAD START] period_id={period_id}  log={log_path()}")
+                from optimizer.solver import solve, SolveProgressCallback
                 cb = SolveProgressCallback(period_id, max_time=25.0)
                 result = solve(period, employees, requests_list, config, progress_callback=cb, period_id=period_id)
                 if result.status in ("optimal", "feasible"):
@@ -198,6 +202,7 @@ def api_run():
     employees = repo.get_all_employees(active_only=True)
     requests_list = repo.get_shift_requests(period_id)
     
+    from optimizer.solver import solve, SolverConfig, SolveProgressCallback
     config = SolverConfig(
         cost_scale=cost_scale,
         pt_pref_scale=pt_pref_scale,

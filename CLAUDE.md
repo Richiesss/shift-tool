@@ -40,7 +40,7 @@ SDU-Shift は飲食店向けのシフト表自動生成ツール。同じバッ�
 
 ### デスクトップ版
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-desktop.txt
 python main.py
 ```
 DBは `~/.shift_tool/shift_tool.db`（開発環境）に自動作成される。

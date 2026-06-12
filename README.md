@@ -145,7 +145,7 @@ pinned: false
 ```bash
 git clone https://github.com/Richiesss/shift-tool.git
 cd shift-tool
-pip install -r requirements.txt
+pip install -r requirements-desktop.txt
 python main.py
 ```
 

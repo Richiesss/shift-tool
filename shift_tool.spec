@@ -4,7 +4,7 @@ PyInstaller spec file for SDU-Shift
 Windows EXE / macOS .app 共用ビルド設定
 
 ビルド方法（手動）:
-  pip install -r requirements.txt
+  pip install -r requirements-desktop.txt
   pyinstaller shift_tool.spec --clean --noconfirm
 """
 import sys
