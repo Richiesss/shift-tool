@@ -271,6 +271,7 @@ def create_google_form(
     items = form_info.get("items", [])
 
     date_avail_q_ids = {}
+    date_avail_item_ids = {}
     date_avail_section_ids = {}
     note_section_id = None
 
@@ -293,13 +294,16 @@ def create_google_form(
                 date_avail_section_ids[ds] = item["itemId"]
             elif title == f"{date_label}は出勤できますか？" and "questionItem" in item:
                 date_avail_q_ids[ds] = item["questionItem"]["question"]["questionId"]
+                date_avail_item_ids[ds] = item["itemId"]
 
     # 4. 2回目の batchUpdate で「いいえ（休み）」の遷移先 (goToSectionId) を設定
+    # ※ Forms API には updateQuestion リクエストはなく、updateItem リクエストを使用する必要があります。
     update_requests = []
     for i, d in enumerate(dates):
         ds = d.isoformat()
         q_id = date_avail_q_ids.get(ds)
-        if not q_id:
+        item_id = date_avail_item_ids.get(ds)
+        if not q_id or not item_id:
             continue
 
         if i < len(dates) - 1:
@@ -312,18 +316,23 @@ def create_google_form(
             continue
 
         update_requests.append({
-            "updateQuestion": {
-                "question": {
-                    "questionId": q_id,
-                    "choiceQuestion": {
-                        "type": "RADIO",
-                        "options": [
-                            {"value": "はい（出勤可能）"},
-                            {"value": "いいえ（休み）", "goToSectionId": next_section_id}
-                        ]
+            "updateItem": {
+                "item": {
+                    "itemId": item_id,
+                    "questionItem": {
+                        "question": {
+                            "questionId": q_id,
+                            "choiceQuestion": {
+                                "type": "RADIO",
+                                "options": [
+                                    {"value": "はい（出勤可能）"},
+                                    {"value": "いいえ（休み）", "goToSectionId": next_section_id}
+                                ]
+                            }
+                        }
                     }
                 },
-                "updateMask": "choiceQuestion.options"
+                "updateMask": "questionItem.question.choiceQuestion.options"
             }
         })
 
