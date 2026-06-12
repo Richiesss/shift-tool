@@ -121,7 +121,7 @@ def create_google_form(
     dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
 
     # チェックボックス用の選択肢リストを作成
-    checkbox_options = [{"value": "休み（出勤不可）"}]
+    checkbox_options = [{"value": "休み（出勤不可）"}, {"value": "有給"}]
     for p in ALL_PATTERNS:
         if p.id not in ("custom", "double") and p.start and p.end:
             label = p.label

@@ -325,6 +325,17 @@
   </div>
 </div>
 {% endif %}
+
+{% if emp_note %}
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+  <i class="bi bi-chat-left-text-fill mt-1" style="font-size: 1.1rem; color: #d97706;"></i>
+  <div>
+    <div class="fw-semibold" style="color: #92400e;">提出時の連絡事項・手書き希望時間</div>
+    <div class="small" style="white-space: pre-wrap; color: #78350f;">{{ emp_note }}</div>
+  </div>
+</div>
+{% endif %}
+
 <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
   <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
   {% if next_idx is not none %}

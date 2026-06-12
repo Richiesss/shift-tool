@@ -22,6 +22,8 @@ _LABEL_TO_ID: dict[str, Optional[str]] = {
     "休み": None,
     "カスタム（備考に時刻を記入）": "custom",
     "カスタム": "custom",
+    "有給": "paid_leave",
+    "有給休暇": "paid_leave",
 }
 for _p in ALL_PATTERNS:
     _LABEL_TO_ID[_p.label] = _p.id
@@ -632,6 +634,12 @@ def _process_checkbox_fmt(
         return ShiftRequest(
             employee_id=emp.id, date=date_str,
             pattern_id=None, custom_start=None, custom_end=None, note=note,
+        )
+
+    if "有給" in val:
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id="paid_leave", custom_start=None, custom_end=None, note=note,
         )
 
     # 選択肢のカンマ区切りを配列にパース

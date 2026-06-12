@@ -165,6 +165,14 @@ def input(period_id):
         except Exception:
             pass
 
+    # 選択されているスタッフの提出時の備考（note）を取得する
+    emp_note = ""
+    if current_emp:
+        for r in requests_list:
+            if r.employee_id == current_emp.id and r.note:
+                emp_note = r.note
+                break
+
     # Google 連携情報
     google_token = repo.get_google_token()
     is_google_linked = google_token is not None
@@ -195,6 +203,7 @@ def input(period_id):
         holidays=holiday_set(dates),
         is_google_linked=is_google_linked,
         has_google_credentials=has_google_credentials,
+        emp_note=emp_note,
     )
 
 
@@ -294,12 +303,19 @@ def import_csv(period_id):
     n_new  = sum(1 for r in result.requests if (r.employee_id, r.date) not in existing_keys)
     n_skip = len(result.requests) - n_new
 
+    notes_dict = {}
+    emp_map = {e.id: e.name for e in employees}
+    for r in result.requests:
+        if r.note and r.employee_id in emp_map:
+            notes_dict[emp_map[r.employee_id]] = r.note
+
     return render_template(
         "shifts/import_preview.html",
         period=period, token=token, merge=merge,
         matched=result.matched, unmatched=result.unmatched_names,
         warnings=result.warnings,
         n_total=len(result.requests), n_new=n_new, n_skip=n_skip,
+        notes=notes_dict,
     )
 
 
@@ -443,11 +459,18 @@ def google_sync(period_id):
             "note": r.note
         })
         
+    notes_dict = {}
+    emp_map = {e.id: e.name for e in employees}
+    for r in result.requests:
+        if r.note and r.employee_id in emp_map:
+            notes_dict[emp_map[r.employee_id]] = r.note
+
     payload = {
         "requests": requests_data,
         "matched": result.matched,
         "unmatched_names": result.unmatched_names,
-        "warnings": result.warnings
+        "warnings": result.warnings,
+        "notes": notes_dict
     }
     
     with open(tmp_path, "w", encoding="utf-8") as f:
@@ -463,6 +486,7 @@ def google_sync(period_id):
         matched=result.matched, unmatched=result.unmatched_names,
         warnings=result.warnings,
         n_total=len(result.requests), n_new=n_new, n_skip=n_skip,
+        notes=notes_dict,
     )
 
 
