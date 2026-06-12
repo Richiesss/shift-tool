@@ -353,6 +353,49 @@
           ※ 認証時のリダイレクトURIには、以下のURLをGoogle Cloud Consoleの「承認済みのリダイレクトURI」に設定してください：<br>
           <code class="user-select-all">{{ url_for('settings.google_callback', _external=True) }}</code>
         </div>
+
+        <div class="mt-3">
+          <a class="text-decoration-none small d-inline-flex align-items-center gap-1" data-bs-toggle="collapse" href="#googleCredentialsHelp" role="button" aria-expanded="false">
+            <i class="bi bi-question-circle"></i> Google クライアントID・シークレットの取得手順（クリックで展開）
+          </a>
+          <div class="collapse" id="googleCredentialsHelp">
+            <div class="card card-body mt-2 p-3 bg-light border small text-muted" style="background-color: var(--card-bg-hover) !important; border-color: var(--border) !important;">
+              <ol class="mb-0 ps-3">
+                <li class="mb-2">
+                  <strong>Google Cloud Console にアクセス</strong><br>
+                  <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> にアクセスし、Googleアカウントでログインします。
+                </li>
+                <li class="mb-2">
+                  <strong>プロジェクトの作成と選択</strong><br>
+                  画面上部のプロジェクト選択ドロップダウンから「新しいプロジェクト」を作成（または既存のプロジェクトを選択）します。
+                </li>
+                <li class="mb-2">
+                  <strong>API の有効化</strong><br>
+                  左側メニューの「APIとサービス」＞「ライブラリ」から、以下の2つのAPIを検索して有効化します。<br>
+                  ・<code>Google Forms API</code><br>
+                  ・<code>Google Drive API</code>
+                </li>
+                <li class="mb-2">
+                  <strong>OAuth 同意画面の設定</strong><br>
+                  左側メニューの「APIとサービス」＞「OAuth 同意画面」を開き、User Type で「外部」を選択して「作成」を押します。<br>
+                  アプリ名や連絡先メールアドレスなどの必須項目を入力し、「保存して次へ」を進めます。（スコープは変更不要です）<br>
+                  最後の「テストユーザー」画面で、<strong>「+ ADD USERS」を押して連携させたい店長の Gmail アドレスを必ず登録</strong>してください（※アプリ承認前は登録されたテストユーザーのみ接続可能です）。
+                </li>
+                <li class="mb-2">
+                  <strong>認証情報の作成</strong><br>
+                  左側メニューの「APIとサービス」＞「認証情報」を開き、上部の「+ 認証情報を作成」から「OAuth 2.0 クライアント ID」を選択します。<br>
+                  ・アプリケーションの種類: <code>ウェブ アプリケーション</code><br>
+                  ・名前: <code>SDU-Shift</code> など<br>
+                  ・承認済みのリダイレクト URI: 上記のコピーしたリダイレクトURIを追加
+                </li>
+                <li>
+                  <strong>ID とシークレットの取得</strong><br>
+                  「作成」を押すと画面に「クライアント ID」と「クライアント シークレット」が表示されます。それらをコピーして上記の入力欄に貼り付け、この設定画面の右上にある「保存」ボタンを押してください。
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
