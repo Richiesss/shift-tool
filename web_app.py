@@ -3,6 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
+import logging
 from datetime import timedelta
 from flask import Flask, g, session, redirect, url_for, request
 from flask_compress import Compress
@@ -11,15 +12,25 @@ from cache import cache
 from db.database import initialize_db
 from auth import APP_PASSWORD, SESSION_VERSION
 
+logger = logging.getLogger(__name__)
+
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
-    
+
     # リバースプロキシ背後でのプロキシヘッダー（X-Forwarded-Protoなど）を正しく認識させる
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        if APP_PASSWORD:
+            logger.warning(
+                "SECRET_KEY が未設定のため固定のデフォルト値を使用します。"
+                "本番環境では環境変数 SECRET_KEY を設定してください。"
+            )
+        secret_key = "dev-secret-key-change-in-prod"
+    app.secret_key = secret_key
     Compress(app)
     cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
 

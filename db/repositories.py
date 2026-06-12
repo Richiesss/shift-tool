@@ -259,6 +259,28 @@ def _save_fixed_unavailable_dates(conn, emp: Employee):
 
 # ── シフト期間 ──────────────────────────────────────────────────────────
 
+def try_start_generation(period_id: int) -> bool:
+    """生成中ステータスへの遷移をアトミックに行う（二重起動防止）。
+    既に gen_status='generating' の場合は何もせず False を返す。"""
+    from db.database import Connection
+    conn = Connection()
+    cur = conn.execute(
+        "UPDATE schedule_periods SET gen_status='generating', gen_message=''"
+        " WHERE id=? AND gen_status != 'generating'",
+        (period_id,)
+    )
+    started = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    if started:
+        try:
+            cache.delete_memoized(get_period, period_id)
+            cache.delete_memoized(get_all_periods)
+        except Exception:
+            pass
+    return started
+
+
 def update_period_gen_status(period_id: int, status: str, message: str = ""):
     """app_context / キャッシュ不要な低レベル DB 更新（コールバックスレッドから安全に呼べる）"""
     from db.database import Connection

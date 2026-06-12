@@ -7,6 +7,7 @@ from utils.constants import TimeSlot, Position
 from optimizer import forecast
 from utils.holidays import holiday_set
 from utils.reservation import tiered_extra
+from utils.form_helpers import safe_int
 
 
 def _compute_staffing(assignments, employees, dates, constraints,
@@ -260,18 +261,14 @@ def index(period_id):
     all_employees    = repo.get_all_employees(active_only=True)
     constraints      = repo.get_shift_constraints()
     reservation_counts = repo.get_reservation_counts(period_id)
-    try:
-        reserv_thresh_b  = int(repo.get_app_setting("reserv_threshold_breakfast",  "100"))
-        reserv_extra_b   = int(repo.get_app_setting("reserv_extra_breakfast",      "1"))
-        reserv_thresh_b2 = int(repo.get_app_setting("reserv_threshold_breakfast2", "0"))
-        reserv_extra_b2  = int(repo.get_app_setting("reserv_extra_breakfast2",     "0"))
-        reserv_thresh_d  = int(repo.get_app_setting("reserv_threshold_dinner",     "25"))
-        reserv_extra_d   = int(repo.get_app_setting("reserv_extra_dinner",         "1"))
-        reserv_thresh_d2 = int(repo.get_app_setting("reserv_threshold_dinner2",    "0"))
-        reserv_extra_d2  = int(repo.get_app_setting("reserv_extra_dinner2",        "0"))
-    except Exception:
-        reserv_thresh_b = 100; reserv_extra_b = 1; reserv_thresh_b2 = 0; reserv_extra_b2 = 0
-        reserv_thresh_d = 25;  reserv_extra_d = 1; reserv_thresh_d2 = 0; reserv_extra_d2 = 0
+    reserv_thresh_b  = safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100)
+    reserv_extra_b   = safe_int(repo.get_app_setting("reserv_extra_breakfast",      "1"), 1)
+    reserv_thresh_b2 = safe_int(repo.get_app_setting("reserv_threshold_breakfast2", "0"), 0)
+    reserv_extra_b2  = safe_int(repo.get_app_setting("reserv_extra_breakfast2",     "0"), 0)
+    reserv_thresh_d  = safe_int(repo.get_app_setting("reserv_threshold_dinner",     "25"), 25)
+    reserv_extra_d   = safe_int(repo.get_app_setting("reserv_extra_dinner",         "1"), 1)
+    reserv_thresh_d2 = safe_int(repo.get_app_setting("reserv_threshold_dinner2",    "0"), 0)
+    reserv_extra_d2  = safe_int(repo.get_app_setting("reserv_extra_dinner2",        "0"), 0)
     reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
     reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
     staffing = _compute_staffing(
@@ -593,18 +590,14 @@ def stats_multi():
 
     # 人員不足の発生頻度（朝食/ディナー × ホール/キッチン）
     constraints = repo.get_shift_constraints()
-    try:
-        reserv_thresh_b  = int(repo.get_app_setting("reserv_threshold_breakfast",  "100"))
-        reserv_extra_b   = int(repo.get_app_setting("reserv_extra_breakfast",      "1"))
-        reserv_thresh_b2 = int(repo.get_app_setting("reserv_threshold_breakfast2", "0"))
-        reserv_extra_b2  = int(repo.get_app_setting("reserv_extra_breakfast2",     "0"))
-        reserv_thresh_d  = int(repo.get_app_setting("reserv_threshold_dinner",     "25"))
-        reserv_extra_d   = int(repo.get_app_setting("reserv_extra_dinner",         "1"))
-        reserv_thresh_d2 = int(repo.get_app_setting("reserv_threshold_dinner2",    "0"))
-        reserv_extra_d2  = int(repo.get_app_setting("reserv_extra_dinner2",        "0"))
-    except Exception:
-        reserv_thresh_b = 100; reserv_extra_b = 1; reserv_thresh_b2 = 0; reserv_extra_b2 = 0
-        reserv_thresh_d = 25;  reserv_extra_d = 1; reserv_thresh_d2 = 0; reserv_extra_d2 = 0
+    reserv_thresh_b  = safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100)
+    reserv_extra_b   = safe_int(repo.get_app_setting("reserv_extra_breakfast",      "1"), 1)
+    reserv_thresh_b2 = safe_int(repo.get_app_setting("reserv_threshold_breakfast2", "0"), 0)
+    reserv_extra_b2  = safe_int(repo.get_app_setting("reserv_extra_breakfast2",     "0"), 0)
+    reserv_thresh_d  = safe_int(repo.get_app_setting("reserv_threshold_dinner",     "25"), 25)
+    reserv_extra_d   = safe_int(repo.get_app_setting("reserv_extra_dinner",         "1"), 1)
+    reserv_thresh_d2 = safe_int(repo.get_app_setting("reserv_threshold_dinner2",    "0"), 0)
+    reserv_extra_d2  = safe_int(repo.get_app_setting("reserv_extra_dinner2",        "0"), 0)
     reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
     reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
     shortage_summary = _compute_shortage_summary(

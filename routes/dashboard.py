@@ -3,6 +3,7 @@ from collections import defaultdict
 from flask import Blueprint, render_template, url_for
 from db import repositories as repo
 from utils.constants import TimeSlot, Position
+from utils.submission import submitted_employee_ids
 
 bp = Blueprint("dashboard", __name__)
 
@@ -95,7 +96,8 @@ def index():
                 )
 
         # ── 希望未提出スタッフ ──
-        submitted_ids = {r.employee_id for r in requests}
+        # （社員・朝食/ディナーともに「おまかせ」のスタッフは希望入力画面と同様に提出済み扱い）
+        submitted_ids = submitted_employee_ids(all_staff, requests)
         unsubmitted   = [e for e in all_staff if e.id not in submitted_ids]
 
         # ── 期間情報 ──

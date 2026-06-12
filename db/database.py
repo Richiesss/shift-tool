@@ -82,6 +82,9 @@ class _PgCursor:
         return _Row(dict(r)) if r is not None else None
     def fetchall(self):
         return [_Row(dict(r)) for r in self._cur.fetchall()]
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
 
 
 class Connection:
@@ -443,6 +446,17 @@ def initialize_db():
             "UPDATE employees SET output_position = primary_position"
             " WHERE primary_position IS NOT NULL"
             " AND (output_position IS NULL OR output_position != primary_position)"
+        )
+    except Exception:
+        pass
+
+    # 既存データの custom_start/custom_end 不整合を修正:
+    # パターン変更で「カスタム」以外になったのに古い custom_start/custom_end が残っているレコードをクリア
+    try:
+        conn.execute(
+            "UPDATE shift_requests SET custom_start=NULL, custom_end=NULL"
+            " WHERE pattern_id != 'custom'"
+            " AND (custom_start IS NOT NULL OR custom_end IS NOT NULL)"
         )
     except Exception:
         pass

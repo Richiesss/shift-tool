@@ -6,6 +6,7 @@ from models.schedule import SchedulePeriod, ShiftRequest
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
 from utils.constants import EmploymentType
 from utils.holidays import holiday_set
+from utils.submission import submitted_employee_ids
 
 PAT_CATS = {
     'b_short': 'b', 'b_std': 'b', 'b_long': 'b', 'b_half': 'b',
@@ -149,12 +150,7 @@ def input(period_id):
     #   どの曜日もどの時間帯でアサインされても構わないと表明済みのため、
     #   希望シフトの提出が不要＝常に「入力済み」として扱う
     filled_emp_ids = {r.employee_id for r in requests_list}
-    filled_count = sum(
-        1 for e in employees
-        if e.id in filled_emp_ids
-        or e.employment_type == EmploymentType.FULL_TIME
-        or (e.always_available_breakfast and e.always_available_dinner)
-    )
+    filled_count = len(submitted_employee_ids(employees, requests_list))
 
     # アルバイトの場合のみ過去パターン提案を計算
     top_patterns = []
@@ -249,6 +245,11 @@ def save(period_id):
                 continue
             cs = request.form.get(f"custom_start_{emp.id}_{d}") or None
             ce = request.form.get(f"custom_end_{emp.id}_{d}") or None
+            if pid != "custom":
+                # 「カスタム」以外のパターンでは custom_start/custom_end を持たせない
+                # （非表示になっただけで値が残った古い入力欄の値が混入するのを防ぐ）
+                cs = None
+                ce = None
             new_requests.append(ShiftRequest(
                 employee_id=emp.id,
                 date=str(d),
@@ -278,6 +279,19 @@ def import_csv_form(period_id):
     return render_template("shifts/import_csv.html", period=period, employees=employees)
 
 
+def _cleanup_stale_previews(max_age_sec: int = 3600):
+    """確定せず離脱したCSV/Google同期プレビューの一時ファイルを掃除する"""
+    import glob, os, tempfile, time
+    now = time.time()
+    for pattern in ("sdu_csv_*.csv", "sdu_google_*.json"):
+        for path in glob.glob(os.path.join(tempfile.gettempdir(), pattern)):
+            try:
+                if now - os.path.getmtime(path) > max_age_sec:
+                    os.remove(path)
+            except OSError:
+                pass
+
+
 def _csv_tmp_path(token: str) -> str:
     """プレビュー用に保存したCSVの一時パスを返す（トークンは英数字のみ許可）"""
     import tempfile, os, re
@@ -298,6 +312,7 @@ def import_csv(period_id):
         flash("CSVファイルを選択してください", "error")
         return redirect(url_for("shifts.import_csv_form", period_id=period_id))
     merge = request.form.get("merge", "fill")
+    _cleanup_stale_previews()
     import uuid
     token = uuid.uuid4().hex
     tmp_path = _csv_tmp_path(token)
@@ -356,6 +371,10 @@ def import_csv_confirm(period_id):
         return redirect(url_for("shifts.import_csv_form", period_id=period_id))
 
     if merge == "overwrite":
+        # 取込対象従業員の既存レコードを先に削除（Webフォーム保存と同様にdelete→insertで上書きする）
+        affected_emp_ids = {r.employee_id for r in result.requests}
+        for emp_id in affected_emp_ids:
+            repo.delete_shift_requests_for_employee(period_id, emp_id)
         repo.save_shift_requests(period_id, result.requests)
     else:
         # fill: 既存データがない日付のみ追加
@@ -538,6 +557,7 @@ def google_sync(period_id):
         return redirect(url_for("shifts.input", period_id=period_id))
 
     # 一時保存用のトークンを発行して結果を JSON ファイルに保存
+    _cleanup_stale_previews()
     import uuid, json
     token = uuid.uuid4().hex
     tmp_path = _google_tmp_path(token)
@@ -623,6 +643,10 @@ def google_sync_confirm(period_id):
         ))
 
     if merge == "overwrite":
+        # 取込対象従業員の既存レコードを先に削除（Webフォーム保存と同様にdelete→insertで上書きする）
+        affected_emp_ids = {r.employee_id for r in requests}
+        for emp_id in affected_emp_ids:
+            repo.delete_shift_requests_for_employee(period_id, emp_id)
         repo.save_shift_requests(period_id, requests)
     else:
         # fill: 既存データがない日付のみ追加

@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from db import repositories as repo
 from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE, SolveProgressCallback
 from utils.solver_logger import logger, log_path
+from utils.submission import submitted_employee_ids
 
 bp = Blueprint("generate", __name__, url_prefix="/generate")
 
@@ -13,12 +14,11 @@ def index():
     periods = repo.get_all_periods()
     active_employees = repo.get_all_employees(active_only=True)
     employees_count  = len(active_employees)
-    active_ids       = {e.id for e in active_employees}
     # 各期間の前提条件チェック情報を事前計算
     period_checklist = {}
     for p in periods:
         requests     = repo.get_shift_requests(p.id)
-        filled       = len({r.employee_id for r in requests if r.employee_id in active_ids})
+        filled       = len(submitted_employee_ids(active_employees, requests))
         counts       = repo.get_reservation_counts(p.id)
         has_counts   = any(
             c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
@@ -47,9 +47,8 @@ def checklist(period_id):
     """チェックリストを最新状態で返す軽量 API"""
     active_employees = repo.get_all_employees(active_only=True)
     employees_count  = len(active_employees)
-    active_ids       = {e.id for e in active_employees}
     requests_list    = repo.get_shift_requests(period_id)
-    filled           = len({r.employee_id for r in requests_list if r.employee_id in active_ids})
+    filled           = len(submitted_employee_ids(active_employees, requests_list))
     counts          = repo.get_reservation_counts(period_id)
     has_counts      = any(
         c.get("breakfast", 0) > 0 or c.get("dinner", 0) > 0
@@ -92,8 +91,9 @@ def run():
         balance_scale=_scale("balance_scale"),
     )
 
-    # 生成中ステータスに更新してバックグラウンドで実行
-    repo.update_period_gen_status(period_id, "generating", "")
+    # 生成中ステータスへの遷移をアトミックに行う（同時POSTによる二重起動を防止）
+    if not repo.try_start_generation(period_id):
+        return redirect(url_for("generate.wait", period_id=period_id))
     app = current_app._get_current_object()
 
     def _run_solver():

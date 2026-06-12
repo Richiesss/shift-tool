@@ -11,6 +11,7 @@ from utils.constants import (
 from utils.solver_logger import logger
 from utils.reservation import tiered_extra, effective_min_max
 from utils.shift_patterns import is_long_breakfast_pattern
+from utils.form_helpers import safe_int
 
 
 @dataclass
@@ -202,27 +203,19 @@ def solve(
     shift_constraints      = repo.get_shift_constraints()
     band_constraints       = repo.get_breakfast_band_constraints()
     reservation_counts     = repo.get_reservation_counts(period.id)
-    try:
-        reserv_thresh_b  = int(repo.get_app_setting("reserv_threshold_breakfast",  "100"))
-        reserv_extra_b   = int(repo.get_app_setting("reserv_extra_breakfast",      "1"))
-        reserv_thresh_b2 = int(repo.get_app_setting("reserv_threshold_breakfast2", "0"))
-        reserv_extra_b2  = int(repo.get_app_setting("reserv_extra_breakfast2",     "0"))
-        reserv_thresh_d  = int(repo.get_app_setting("reserv_threshold_dinner",     "25"))
-        reserv_extra_d   = int(repo.get_app_setting("reserv_extra_dinner",         "1"))
-        reserv_thresh_d2 = int(repo.get_app_setting("reserv_threshold_dinner2",    "0"))
-        reserv_extra_d2  = int(repo.get_app_setting("reserv_extra_dinner2",        "0"))
-    except Exception:
-        reserv_thresh_b = 100; reserv_extra_b = 1; reserv_thresh_b2 = 0; reserv_extra_b2 = 0
-        reserv_thresh_d = 25;  reserv_extra_d = 1; reserv_thresh_d2 = 0; reserv_extra_d2 = 0
+    reserv_thresh_b  = safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100)
+    reserv_extra_b   = safe_int(repo.get_app_setting("reserv_extra_breakfast",      "1"), 1)
+    reserv_thresh_b2 = safe_int(repo.get_app_setting("reserv_threshold_breakfast2", "0"), 0)
+    reserv_extra_b2  = safe_int(repo.get_app_setting("reserv_extra_breakfast2",     "0"), 0)
+    reserv_thresh_d  = safe_int(repo.get_app_setting("reserv_threshold_dinner",     "25"), 25)
+    reserv_extra_d   = safe_int(repo.get_app_setting("reserv_extra_dinner",         "1"), 1)
+    reserv_thresh_d2 = safe_int(repo.get_app_setting("reserv_threshold_dinner2",    "0"), 0)
+    reserv_extra_d2  = safe_int(repo.get_app_setting("reserv_extra_dinner2",        "0"), 0)
     reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
     reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
 
-    try:
-        max_consecutive_days = int(repo.get_app_setting("max_consecutive_days", "6"))
-        min_days_off         = int(repo.get_app_setting("min_days_off", "5"))
-    except Exception:
-        max_consecutive_days = 6
-        min_days_off = 5
+    max_consecutive_days = safe_int(repo.get_app_setting("max_consecutive_days", "6"), 6)
+    min_days_off         = safe_int(repo.get_app_setting("min_days_off", "5"), 5)
 
     # ── ログ: 制約設定 & 充足前チェック ──────────────────────────────────
     logger.info("  [制約設定]")
@@ -669,6 +662,7 @@ def solve(
             for pos in positions:
                 c = shift_constraints.get((slot, pos), {})
                 base_min = c.get("min", 0)
+                min_leader = c.get("min_leader", 0)
                 if slot == TimeSlot.BREAKFAST:
                     base_min += tiered_extra(rc.get("breakfast", 0), reserv_tiers_b)
                 elif slot == TimeSlot.DINNER:
@@ -678,6 +672,7 @@ def solve(
                 # 専任（primary_position が設定されている）のみをカウント。
                 # 両対応の従業員はソルバーが柔軟に配置するためソフト誘導に任せる。
                 pt_avail = 0
+                pt_leader_avail = 0
                 for emp in active_employees:
                     if emp.employment_type == EmploymentType.FULL_TIME:
                         continue
@@ -694,6 +689,8 @@ def solve(
                         slot_ok = req_map.get((emp.id, ds, slot.value), False)
                     if slot_ok:
                         pt_avail += 1
+                        if emp.is_leader(pos.value, slot):
+                            pt_leader_avail += 1
 
                 # FT も専任のみカウント（両対応 FT の二重計上回避）
                 ft_avail = 0
@@ -712,12 +709,17 @@ def solve(
 
                 slot_pos = f"{ds} {slot.value}/{pos.value}"
 
-                if slot == TimeSlot.BREAKFAST and pt_avail >= base_min:
+                # 朝食でPTが最低人数を満たしていても、リーダー要件(min_leader)を満たす
+                # PTリーダーが不足する場合はFTを全面禁止しない（#41）。
+                # FT禁止 × リーダー最低配置数のハード制約が衝突してPhase1が
+                # 恒常的にINFEASIBLEになるのを防ぐため、ソフト誘導に委ねる。
+                if (slot == TimeSlot.BREAKFAST and pt_avail >= base_min
+                        and pt_leader_avail >= min_leader):
                     # 朝食：PT が充足 → FT を物理的に配置禁止
                     for emp in active_employees:
                         if emp.employment_type == EmploymentType.FULL_TIME:
                             model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
-                    logger.info(f"    {slot_pos}: PT={pt_avail}≥min={base_min} → FT配置禁止（ハード）")
+                    logger.info(f"    {slot_pos}: PT={pt_avail}≥min={base_min}, リーダーPT={pt_leader_avail}≥min_leader={min_leader} → FT配置禁止（ハード）")
                 elif slot == TimeSlot.DINNER and ft_avail >= base_min:
                     # ディナー：FT が充足 → PT を物理的に配置禁止
                     for emp in active_employees:
@@ -726,8 +728,13 @@ def solve(
                     logger.info(f"    {slot_pos}: FT={ft_avail}≥min={base_min} → PT配置禁止（ハード）")
                 else:
                     # 充足しない場合はソフトペナルティで誘導
-                    shortage_type = "PT不足" if slot == TimeSlot.BREAKFAST else "FT不足"
-                    logger.info(f"    {slot_pos}: {shortage_type}(PT={pt_avail},FT={ft_avail},min={base_min}) → ソフト誘導")
+                    if slot == TimeSlot.BREAKFAST and pt_avail >= base_min:
+                        shortage_type = f"リーダーPT不足(min_leader={min_leader})"
+                    elif slot == TimeSlot.BREAKFAST:
+                        shortage_type = "PT不足"
+                    else:
+                        shortage_type = "FT不足"
+                    logger.info(f"    {slot_pos}: {shortage_type}(PT={pt_avail},FT={ft_avail},min={base_min},リーダーPT={pt_leader_avail}) → ソフト誘導")
                     BREAKFAST_FT_COST = 500_000
                     DINNER_PT_COST    = 300_000
                     for emp in active_employees:
@@ -772,7 +779,9 @@ def solve(
         _log_employee_analysis(result_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints)
         _log_assignment_summary(result_assignments, date_strs)
-        _check_warnings(result_assignments, date_strs, warnings)
+        _check_warnings(result_assignments, date_strs, warnings,
+                        reservation_counts=reservation_counts,
+                        reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d)
         if warnings:
             for w in warnings:
                 logger.warning(f"  [警告] {w}")
@@ -811,7 +820,9 @@ def solve(
         )
         _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints)
-        _check_warnings(best_assignments, date_strs, best_warnings)
+        _check_warnings(best_assignments, date_strs, best_warnings,
+                        reservation_counts=reservation_counts,
+                        reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d)
         _log_assignment_summary(best_assignments, date_strs)
         if best_warnings:
             for w in best_warnings:
@@ -1266,10 +1277,18 @@ def _solve_best_effort(
     return [], ["⚠️ ベストエフォート生成にも失敗しました。希望シフトの入力状況を確認してください。"]
 
 
-def _check_warnings(assignments: list[ShiftAssignment], date_strs: list[str], warnings: list[str]):
+def _check_warnings(
+    assignments: list[ShiftAssignment], date_strs: list[str], warnings: list[str],
+    reservation_counts: dict | None = None,
+    reserv_tiers_b: list[tuple[int, int]] | None = None,
+    reserv_tiers_d: list[tuple[int, int]] | None = None,
+):
     from collections import defaultdict
     from db import repositories as repo
     shift_constraints = repo.get_shift_constraints()
+    reservation_counts = reservation_counts or {}
+    reserv_tiers_b = reserv_tiers_b or []
+    reserv_tiers_d = reserv_tiers_d or []
     count = defaultdict(int)
     for a in assignments:
         count[(a.date, a.time_slot.value, a.position.value)] += 1
@@ -1278,11 +1297,22 @@ def _check_warnings(assignments: list[ShiftAssignment], date_strs: list[str], wa
         d = date.fromisoformat(ds)
         dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
         label = f"{d.month}/{d.day}({dow_labels[d.weekday()]})"
+        rc = reservation_counts.get(ds, {})
+        b_count = rc.get("breakfast", 0)
+        d_count = rc.get("dinner",    0)
         for slot in TimeSlot:
             for pos in Position:
                 c = count[(ds, slot.value, pos.value)]
                 constraint = shift_constraints.get((slot, pos), {})
-                if c == constraint.get("min", 0):
+                # 予約客数による増員後の実効最低人数と比較する
+                if slot == TimeSlot.BREAKFAST:
+                    extra = tiered_extra(b_count, reserv_tiers_b)
+                elif slot == TimeSlot.DINNER:
+                    extra = tiered_extra(d_count, reserv_tiers_d)
+                else:
+                    extra = 0
+                min_req, _ = effective_min_max(constraint, extra)
+                if c == min_req:
                     warnings.append(
                         f"{label} {slot.short_label()} {pos.label()}: "
                         f"最低人数ちょうど（{c}名）— 欠員リスクあり"

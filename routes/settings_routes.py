@@ -182,11 +182,12 @@ def backup():
     """全データをJSONでダウンロード"""
     from db.database import Connection
     conn = Connection()
+    # google_tokens（Google連携のOAuthトークン）は機密情報のため意図的に対象外とする
     tables = [
         "employees","fixed_patterns","fixed_unavailable_dates",
         "schedule_periods","shift_requests","shift_assignments",
-        "reservation_counts","schedule_notes","staff_notes","cell_notes","shift_constraints",
-        "breakfast_band_constraints","app_settings",
+        "reservation_counts","customer_count_history","schedule_notes","staff_notes","cell_notes",
+        "shift_constraints","breakfast_band_constraints","app_settings","assignment_log",
     ]
     data = {}
     for t in tables:
@@ -221,12 +222,12 @@ def restore():
     from db.database import Connection
     from db.seeder import _get_schema
     conn = Connection()
-    # 依存順でリストア
+    # 依存順でリストア（google_tokens はバックアップ対象外のため含めない）
     restore_order = [
         "employees","fixed_patterns","fixed_unavailable_dates",
         "schedule_periods","shift_requests","shift_assignments",
-        "reservation_counts","schedule_notes","staff_notes","cell_notes","shift_constraints",
-        "breakfast_band_constraints","app_settings",
+        "reservation_counts","customer_count_history","schedule_notes","staff_notes","cell_notes",
+        "shift_constraints","breakfast_band_constraints","app_settings","assignment_log",
     ]
     try:
         for table in restore_order:
@@ -247,7 +248,7 @@ def restore():
                     pass
         # シーケンスリセット（PostgreSQL）
         if conn.backend == "postgres":
-            for t in ["employees","schedule_periods","shift_requests","shift_assignments"]:
+            for t in ["employees","schedule_periods","shift_requests","shift_assignments","assignment_log"]:
                 try:
                     conn.execute(f"SELECT setval(pg_get_serial_sequence('{t}','id'), COALESCE((SELECT MAX(id) FROM {t}),1))")
                 except Exception:

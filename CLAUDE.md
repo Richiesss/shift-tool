@@ -54,8 +54,11 @@ python web_app.py
 
 ### Web版（本番相当）
 ```bash
-gunicorn 'web_app:create_app()' --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+gunicorn 'web_app:create_app()' --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 120
 ```
+※ Flask-Caching の `SimpleCache` はプロセスローカルのため、`workers` を2以上にすると
+ワーカー間でキャッシュ無効化（`delete_memoized`）が伝播せず古いデータが表示される（#37）。
+並列度はワーカー数ではなく `--threads` で確保すること。
 
 ### テストデータ投入
 ```bash

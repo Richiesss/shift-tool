@@ -1,3 +1,4 @@
+import hmac
 import logging
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, make_response
@@ -38,10 +39,9 @@ def login_post():
     raw_next = request.form.get("next") or request.args.get("next") or ""
     next_url = _safe_next(raw_next)
 
-    logger.warning("LOGIN attempt: input_len=%d, expected_len=%d, match=%s",
-                   len(pwd), len(APP_PASSWORD), pwd == APP_PASSWORD)
+    logger.info("LOGIN attempt")
 
-    if APP_PASSWORD and pwd == APP_PASSWORD:
+    if APP_PASSWORD and hmac.compare_digest(pwd, APP_PASSWORD):
         session.clear()
         session["authenticated"] = True
         session["sv"] = SESSION_VERSION
