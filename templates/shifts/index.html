@@ -56,6 +56,11 @@
         <span class="badge {{ 'bg-success' if period.status == 'confirmed' else 'bg-secondary' }}">
           {{ '確定' if period.status == 'confirmed' else '下書き' }}
         </span>
+        {% set sub = submitted_counts.get(period.id, 0) %}
+        <span class="badge {{ 'bg-success' if sub >= n_active else 'bg-warning text-dark' if sub else 'bg-secondary' }}"
+              title="希望シフトを提出済みのスタッフ数 / 在籍スタッフ数">
+          <i class="bi bi-person-check me-1"></i>提出 {{ sub }}/{{ n_active }}
+        </span>
       </div>
       <a href="{{ url_for('shifts.input', period_id=period.id) }}"
          class="btn btn-outline-primary btn-sm flex-shrink-0">

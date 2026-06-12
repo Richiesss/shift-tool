@@ -491,6 +491,22 @@ def save_staff_note(period_id):
     return jsonify({"ok": True})
 
 
+@bp.post("/<int:period_id>/undo")
+def undo_change(period_id):
+    """直前の手動割当変更を取り消す"""
+    period = repo.get_period(period_id)
+    if period and period.status == "confirmed":
+        return jsonify({"ok": False, "error": "確定済みのシフトは変更できません。変更するには確定を解除してください。"}), 403
+    entry = repo.undo_last_assignment_change(period_id)
+    if not entry:
+        return jsonify({"ok": False, "error": "取り消せる変更がありません"}), 404
+    slot_jp = "朝食" if entry["time_slot"] == "breakfast" else "ディナー"
+    act_jp  = "追加" if entry["action"] == "add" else "削除"
+    name    = entry.get("emp_name") or f"ID{entry['employee_id']}"
+    return jsonify({"ok": True,
+                    "message": f"{entry['date']} {slot_jp}「{name}」の{act_jp}を取り消しました"})
+
+
 @bp.post("/<int:period_id>/reservation")
 def save_reservation(period_id):
     """予約客数（朝食見込・夜予約）のインライン保存"""

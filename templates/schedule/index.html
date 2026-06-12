@@ -11,6 +11,9 @@
   .sched-grid th, .sched-grid td { white-space: nowrap; padding: .3rem .4rem; vertical-align: middle; min-width: 62px; }
   /* 左固定（横スクロール） */
   .sched-grid .emp-col { position: sticky; left: 0; background: white; z-index: 1; min-width: 90px; font-weight: 600; }
+  /* 確定中は割当セルをロック表示（クリックは「解除して編集」確認に流す） */
+  .sched-locked .cell-half { cursor: not-allowed !important; opacity: .8; }
+  .sched-locked .cell-half:hover { background: inherit !important; }
   /* 上固定（縦スクロール） */
   .sched-grid thead th { position: sticky; top: 0; z-index: 2; background: #1e293b; color: white; }
   /* 左上セル：縦横両方固定 */
@@ -224,6 +227,11 @@
        title="PDF出力{{ draft_hint }}" aria-label="PDF出力">
       <i class="bi bi-file-earmark-pdf"></i>
     </a>
+    {% if period.status != 'confirmed' %}
+    <button class="btn btn-outline-light btn-sm" onclick="undoLastChange()" title="直前の変更を元に戻す" aria-label="直前の変更を元に戻す">
+      <i class="bi bi-arrow-counterclockwise"></i>
+    </button>
+    {% endif %}
     <button class="btn btn-outline-light btn-sm" onclick="openHistory({{ period.id }})" title="変更履歴" aria-label="変更履歴">
       <i class="bi bi-clock-history"></i>
     </button>
@@ -258,7 +266,7 @@
       <form id="confirm-form" method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" style="display:none"></form>
       {% else %}
       <span class="badge bg-success flex-shrink-0"><i class="bi bi-lock-fill me-1"></i>確定済</span>
-      <form method="post" action="{{ url_for('schedule.unconfirm', period_id=period.id) }}" class="flex-shrink-0">
+      <form id="unconfirm-form" method="post" action="{{ url_for('schedule.unconfirm', period_id=period.id) }}" class="flex-shrink-0">
         <button class="btn btn-outline-danger btn-sm">
           <i class="bi bi-lock-fill me-1"></i>確定解除
         </button>
@@ -343,7 +351,7 @@
   </div>
 
   <!-- シフトグリッド（朝食・ディナーを1つの表にまとめて表示） -->
-  <div class="sched-grid">
+  <div class="sched-grid {{ 'sched-locked' if period.status == 'confirmed' else '' }}">
     <table class="table table-bordered table-sm mb-0">
       <thead>
         <tr>
@@ -816,9 +824,26 @@ function openConfirmDialog() {
   new bootstrap.Modal(document.getElementById('confirmDialog')).show();
 }
 
+async function undoLastChange() {
+  try {
+    const res = await fetch(`/schedule/${PERIOD_ID}/undo`, {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      showToast(data.message, 'success');
+      setTimeout(() => location.reload(), 700);
+    } else {
+      showToast(data.error || '取り消しに失敗しました', 'warning');
+    }
+  } catch (e) {
+    showToast('取り消しに失敗しました', 'danger');
+  }
+}
+
 function openAssignModal(cell) {
   if (IS_CONFIRMED) {
-    showToast('確定済みのシフトは変更できません。変更するには確定を解除してください。', 'warning');
+    if (confirm('このシフトは確定済みです。\n確定を解除して編集しますか？')) {
+      document.getElementById('unconfirm-form').submit();
+    }
     return;
   }
   _cell = cell;

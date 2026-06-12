@@ -926,6 +926,45 @@ def save_shift_constraints(constraints: dict):
 
 # ── 変更履歴ログ ─────────────────────────────────────────────────────────
 
+def undo_last_assignment_change(period_id: int) -> dict | None:
+    """直近の手動割当変更を1件取り消し、取り消した内容を返す（履歴がなければ None）。
+
+    - add(追加)のログ → その割当を削除
+    - remove(削除)のログ → その割当を再追加（応援の時間指定までは復元しない）
+    取り消したログ行自体も削除するため、連続実行で履歴を遡れる。
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """SELECT l.*, e.name AS emp_name
+               FROM assignment_log l
+               LEFT JOIN employees e ON e.id = l.employee_id
+               WHERE l.period_id = ?
+               ORDER BY l.id DESC LIMIT 1""",
+            (period_id,)
+        ).fetchone()
+        if not row:
+            return None
+        if row["action"] == "add":
+            conn.execute(
+                "DELETE FROM shift_assignments WHERE period_id=? AND employee_id=? AND date=? AND time_slot=?",
+                (period_id, row["employee_id"], row["date"], row["time_slot"])
+            )
+        elif row["action"] == "remove" and row["position"]:
+            conn.execute(
+                """INSERT INTO shift_assignments (period_id, employee_id, date, time_slot, position)
+                   VALUES (?,?,?,?,?)
+                   ON CONFLICT(period_id, employee_id, date, time_slot) DO UPDATE SET
+                       position=excluded.position""",
+                (period_id, row["employee_id"], row["date"], row["time_slot"], row["position"])
+            )
+        conn.execute("DELETE FROM assignment_log WHERE id=?", (row["id"],))
+        conn.commit()
+        return dict(row._d) if hasattr(row, "_d") else dict(row)
+    finally:
+        conn.close()
+
+
 def get_assignment_log(period_id: int, limit: int = 50) -> list[dict]:
     """手動割当の変更履歴を新しい順で返す"""
     conn = get_connection()

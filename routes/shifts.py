@@ -27,10 +27,19 @@ def index():
     recent  = sorted_periods[:4]
     older   = sorted_periods[4:]
     show_all = request.args.get("all", type=int, default=0)
+    shown = recent if not show_all else sorted_periods
+    # 提出状況バッジ用: {period_id: 提出済みスタッフ数}
+    n_active = len(repo.get_all_employees(active_only=True))
+    submitted_counts = {
+        p.id: len({r.employee_id for r in repo.get_shift_requests(p.id)})
+        for p in shown
+    }
     return render_template("shifts/index.html",
-                           periods=recent if not show_all else sorted_periods,
+                           periods=shown,
                            has_older=bool(older),
-                           show_all=show_all)
+                           show_all=show_all,
+                           submitted_counts=submitted_counts,
+                           n_active=n_active)
 
 
 @bp.post("/<int:period_id>/delete")
@@ -235,8 +244,17 @@ def import_csv_form(period_id):
     return render_template("shifts/import_csv.html", period=period, employees=employees)
 
 
+def _csv_tmp_path(token: str) -> str:
+    """プレビュー用に保存したCSVの一時パスを返す（トークンは英数字のみ許可）"""
+    import tempfile, os, re
+    if not re.fullmatch(r"[0-9a-f]{32}", token or ""):
+        raise ValueError("不正なトークンです")
+    return os.path.join(tempfile.gettempdir(), f"sdu_csv_{token}.csv")
+
+
 @bp.post("/<int:period_id>/import")
 def import_csv(period_id):
+    """CSVを解析してプレビューを表示する（この時点では取込まない）"""
     period = repo.get_period(period_id)
     if not period:
         return redirect(url_for("shifts.index"))
@@ -246,20 +264,54 @@ def import_csv(period_id):
         flash("CSVファイルを選択してください", "error")
         return redirect(url_for("shifts.import_csv_form", period_id=period_id))
     merge = request.form.get("merge", "fill")
+    import uuid
+    token = uuid.uuid4().hex
+    tmp_path = _csv_tmp_path(token)
     try:
-        import tempfile, os
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
-            f.save(tmp.name)
-            tmp_path = tmp.name
+        f.save(tmp_path)
         from utils.forms_csv_parser import parse_forms_csv
         result = parse_forms_csv(tmp_path, period, employees)
-        os.unlink(tmp_path)
     except Exception as e:
         flash(f"CSVの解析に失敗しました: {e}", "error")
         return redirect(url_for("shifts.import_csv_form", period_id=period_id))
 
     if not result.requests:
         flash("取込み可能なデータがありませんでした", "warning")
+        return redirect(url_for("shifts.import_csv_form", period_id=period_id))
+
+    # fillモードで実際に追加される件数（既存と重複する分はスキップされる）
+    existing_keys = {(r.employee_id, r.date) for r in repo.get_shift_requests(period_id)}
+    n_new  = sum(1 for r in result.requests if (r.employee_id, r.date) not in existing_keys)
+    n_skip = len(result.requests) - n_new
+
+    return render_template(
+        "shifts/import_preview.html",
+        period=period, token=token, merge=merge,
+        matched=result.matched, unmatched=result.unmatched_names,
+        warnings=result.warnings,
+        n_total=len(result.requests), n_new=n_new, n_skip=n_skip,
+    )
+
+
+@bp.post("/<int:period_id>/import/confirm")
+def import_csv_confirm(period_id):
+    """プレビュー確認後にCSV取込を実行する"""
+    import os
+    period = repo.get_period(period_id)
+    if not period:
+        return redirect(url_for("shifts.index"))
+    employees = repo.get_all_employees(active_only=True)
+    merge = request.form.get("merge", "fill")
+    try:
+        tmp_path = _csv_tmp_path(request.form.get("token", ""))
+        if not os.path.exists(tmp_path):
+            flash("プレビューの有効期限が切れました。もう一度ファイルを選択してください", "warning")
+            return redirect(url_for("shifts.import_csv_form", period_id=period_id))
+        from utils.forms_csv_parser import parse_forms_csv
+        result = parse_forms_csv(tmp_path, period, employees)
+        os.unlink(tmp_path)
+    except Exception as e:
+        flash(f"CSVの取込に失敗しました: {e}", "error")
         return redirect(url_for("shifts.import_csv_form", period_id=period_id))
 
     if merge == "overwrite":
