@@ -1054,16 +1054,20 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
         date_r = r["date"]
         pat_id = r["pattern_id"]
 
+        if pat_id == "double":
+            # ダブル: 朝食部(6:00-11:00)=5h + ディナー部(17:00-23:00)=6h を
+            # 時間帯ごとに独立して計上する（片方のみ割当の場合も正確に集計するため）
+            if r["breakfast"]:
+                hour_map[(pid_r, eid_r, date_r, "breakfast")] = (5.0, _early_overlap(6.0, 11.0))
+            if r["dinner"]:
+                hour_map[(pid_r, eid_r, date_r, "dinner")] = (6.0, 0.0)
+            continue
+
         if pat_id == "custom" and r["custom_start"] and r["custom_end"]:
             sh = _parse_hm(r["custom_start"])
             eh = _parse_hm(r["custom_end"])
             hrs   = max(0.0, eh - sh)
             early = _early_overlap(sh, eh)
-        elif pat_id == "double":
-            # ダブル: 朝食部(6:00-11:00) + ディナー部(17:00-23:00) = 11h
-            # 早朝重複は朝食部の 6:00-11:00 と 5:30-9:00 の重複
-            hrs   = 11.0
-            early = _early_overlap(6.0, 11.0)
         elif pat_id and pat_id in PATTERN_MAP:
             p = PATTERN_MAP[pat_id]
             if p.start and p.end:
@@ -1079,11 +1083,7 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
         if r["breakfast"]:
             hour_map[(pid_r, eid_r, date_r, "breakfast")] = (hrs, early)
         if r["dinner"]:
-            # ダブルはディナー側を 0 にして重複計上を避ける
-            if pat_id == "double":
-                hour_map[(pid_r, eid_r, date_r, "dinner")] = (0.0, 0.0)
-            else:
-                hour_map[(pid_r, eid_r, date_r, "dinner")] = (hrs, early)
+            hour_map[(pid_r, eid_r, date_r, "dinner")] = (hrs, early)
 
     # グローバル賃金設定
     base_wage   = int(settings.get("base_hourly_wage",        "0") or 0)

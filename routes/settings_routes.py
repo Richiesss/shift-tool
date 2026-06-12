@@ -5,6 +5,7 @@ from cache import cache
 from db import repositories as repo
 from optimizer import forecast
 from utils.constants import TimeSlot, Position
+from utils.form_helpers import safe_int
 from utils.google_forms_api import get_oauth_credentials
 
 bp = Blueprint("settings", __name__, url_prefix="/settings")
@@ -62,9 +63,9 @@ def save():
     for (slot, pos) in constraints:
         prefix = f"{slot.value}_{pos.value}"
         new_constraints[(slot, pos)] = {
-            "min": int(request.form.get(f"min_{prefix}", 0)),
-            "max": int(request.form.get(f"max_{prefix}", 0)),
-            "min_leader": int(request.form.get(f"ml_{prefix}", 0)),
+            "min": safe_int(request.form.get(f"min_{prefix}")),
+            "max": safe_int(request.form.get(f"max_{prefix}")),
+            "min_leader": safe_int(request.form.get(f"ml_{prefix}")),
         }
     repo.save_shift_constraints(new_constraints)
 
@@ -96,9 +97,9 @@ def save():
     for (band, pos) in band_constraints:
         prefix = f"{band}_{pos}"
         new_band[(band, pos)] = {
-            "min":        int(request.form.get(f"band_min_{prefix}", 0)),
-            "max":        int(request.form.get(f"band_max_{prefix}", 0)),
-            "min_leader": int(request.form.get(f"band_ml_{prefix}", 0)),
+            "min":        safe_int(request.form.get(f"band_min_{prefix}")),
+            "max":        safe_int(request.form.get(f"band_max_{prefix}")),
+            "min_leader": safe_int(request.form.get(f"band_ml_{prefix}")),
         }
     repo.save_breakfast_band_constraints(new_band)
 

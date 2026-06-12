@@ -169,8 +169,20 @@ def parse_forms_csv(
     result = ImportResult()
     name_to_emp: dict[str, Employee] = {e.name: e for e in employees}
 
+    # エンコーディングを判定（UTF-8 (BOM付き含む) で読めなければ cp932 で再試行）
+    encoding = "utf-8-sig"
     try:
-        with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        with open(csv_path, encoding=encoding) as f:
+            f.read()
+    except UnicodeDecodeError:
+        encoding = "cp932"
+        result.warnings.append(
+            "UTF-8 で読み込めなかったため cp932 で再試行しました。"
+            "次回からは CSV を UTF-8 で保存することを推奨します。"
+        )
+
+    try:
+        with open(csv_path, encoding=encoding, newline="") as f:
             reader = csv.DictReader(f)
             headers = list(reader.fieldnames or [])
 
@@ -268,17 +280,8 @@ def parse_forms_csv(
 
                 result.matched[name] = result.matched.get(name, 0) + row_count
 
-    except UnicodeDecodeError:
-        try:
-            with open(csv_path, encoding="cp932", newline="") as f2:
-                reader2 = csv.DictReader(f2)
-                # 簡易リトライ: cp932 でそのまま再帰
-                result.warnings.append(
-                    "UTF-8 で読み込めなかったため cp932 で再試行しました。"
-                    "次回からは CSV を UTF-8 で保存することを推奨します。"
-                )
-        except Exception as e:
-            result.warnings.append(f"文字コードエラー: {e}。CSV を UTF-8 で保存し直してください。")
+    except UnicodeDecodeError as e:
+        result.warnings.append(f"文字コードエラー: {e}。CSV を UTF-8 で保存し直してください。")
     except Exception as e:
         result.warnings.append(f"CSV 解析エラー: {e}")
 

@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from cache import cache
 from db import repositories as repo
 from optimizer import forecast
+from utils.form_helpers import safe_int
 from utils.holidays import holiday_set
 
 bp = Blueprint("customers", __name__, url_prefix="/customers")
@@ -27,8 +28,8 @@ def index(period_id):
     periods  = repo.get_all_periods()
     dates    = period.date_range()
     counts   = repo.get_reservation_counts(period_id)
-    thresh_b = int(repo.get_app_setting("reserv_threshold_breakfast", "100"))
-    thresh_d = int(repo.get_app_setting("reserv_threshold_dinner",    "25"))
+    thresh_b = safe_int(repo.get_app_setting("reserv_threshold_breakfast", "100"), 100)
+    thresh_d = safe_int(repo.get_app_setting("reserv_threshold_dinner",    "25"), 25)
     gen         = repo.get_period_gen_status(period_id)
     needs_regen = gen.get("needs_regen", False)
 
@@ -64,8 +65,8 @@ def save(period_id):
     forecast_changed = False
     for d in dates:
         ds = str(d)
-        new_b  = int(request.form.get(f"b_{ds}", 0) or 0)
-        new_dn = int(request.form.get(f"d_{ds}", 0) or 0)
+        new_b  = safe_int(request.form.get(f"b_{ds}"))
+        new_dn = safe_int(request.form.get(f"d_{ds}"))
         new_special = 1 if request.form.get(f"special_{ds}") else 0
         old    = old_counts.get(ds, {})
         if new_b != old.get("breakfast", 0) or new_dn != old.get("dinner", 0):
@@ -140,8 +141,8 @@ def save_history():
         b  = request.form.get(f"b_{ds}", "")
         dn = request.form.get(f"d_{ds}", "")
         entries[ds] = {
-            "breakfast": int(b) if b else 0,
-            "dinner":    int(dn) if dn else 0,
+            "breakfast": safe_int(b),
+            "dinner":    safe_int(dn),
         }
     repo.save_customer_count_history(entries)
     cache.delete_memoized(forecast.predict_customer_counts_cached)

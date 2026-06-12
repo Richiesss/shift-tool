@@ -71,6 +71,11 @@ def new_period():
         start = date(year, month, 16)
         end   = date(year, month, last_day)
 
+    existing = next((p for p in repo.get_all_periods() if p.start_date == str(start)), None)
+    if existing:
+        flash(f"{existing.start_date} 〜 {existing.end_date} の期間は既に作成されています", "error")
+        return redirect(url_for("shifts.input", period_id=existing.id))
+
     period = SchedulePeriod(id=None, start_date=str(start), end_date=str(end))
     period = repo.save_period(period)
     return redirect(url_for("shifts.input", period_id=period.id))
@@ -221,12 +226,20 @@ def save(period_id):
     emp_id_filter = request.form.get("save_emp_id", type=int)
     target_emps = [e for e in employees if emp_id_filter is None or e.id == emp_id_filter]
 
+    # 既存の備考（Googleフォーム等から取り込まれた連絡事項）を従業員ごとに保持する
+    existing_requests = repo.get_shift_requests(period_id)
+    emp_notes = {
+        emp.id: next((r.note for r in existing_requests if r.employee_id == emp.id and r.note), "")
+        for emp in target_emps
+    }
+
     # 保存対象従業員の旧データを先に削除（UPSERT のみでは空日付の旧レコードが残存する）
     for emp in target_emps:
         repo.delete_shift_requests_for_employee(period_id, emp.id)
 
     new_requests = []
     for emp in target_emps:
+        note = emp_notes.get(emp.id, "")
         for d in dates:
             pid = request.form.get(f"pattern_{emp.id}_{d}")
             # フォームに存在しない（= 未送信）日付のみスキップ。
@@ -242,7 +255,9 @@ def save(period_id):
                 pattern_id=pid or None,
                 custom_start=cs,
                 custom_end=ce,
+                note=note,
             ))
+            note = ""  # 備考は従業員ごとに最初の1行のみへ付与する
 
     repo.save_shift_requests(period_id, new_requests)
     flash("希望シフトを保存しました", "success")

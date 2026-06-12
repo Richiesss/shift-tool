@@ -193,12 +193,14 @@ def _get_shift_cells(
         return s, "-", e, "assigned"
 
     # 時刻取得（パターンから）
-    if req and req.pattern_id == "double":
+    # 「ダブル」は朝食・ディナー両方が割当済みの場合のみ通し表示にする。
+    # 片方のみの割当の場合は実際の割当時間帯を表示する。
+    if req and req.pattern_id == "double" and b_raw and d_raw:
         s, e = "6", "23"
     elif req and req.pattern_id == "custom" and req.custom_start and req.custom_end:
         s = _to_decimal(req.custom_start)
         e = _to_decimal(req.custom_end)
-    elif req and req.pattern_id:
+    elif req and req.pattern_id and req.pattern_id != "double":
         p = PATTERN_MAP.get(req.pattern_id)
         if p and p.start and p.end:
             s = _to_decimal(p.start)
