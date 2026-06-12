@@ -48,6 +48,64 @@ def get_credentials_from_json(credentials_json_str: str) -> Credentials:
     return creds
 
 
+DOW_LABELS = ["月", "火", "水", "木", "金", "土", "日"]
+
+# 各日設問の共通ヒント（設問下に表示される短い説明）
+DATE_QUESTION_HINT = (
+    "出勤できる時間帯にチェック（朝食・ディナー両方可なら両方チェック）。"
+    "休み・有給の場合はその項目のみ選択してください。"
+)
+
+
+def _date_question_title(d: date, holidays: set[str]) -> str:
+    """各日設問のタイトルを返す。土曜=🔵 / 日曜・祝日=🔴 のマーカーで視認性を上げる。
+    末尾の「の出勤希望時間」と「M月D日」表記は回答パーサが依存しているため変更しないこと。"""
+    ds = d.isoformat()
+    is_h = ds in holidays
+    if is_h or d.weekday() == 6:
+        mark = "🔴"
+    elif d.weekday() == 5:
+        mark = "🔵"
+    else:
+        mark = ""
+    label = f"{d.month}月{d.day}日（{DOW_LABELS[d.weekday()]}）"
+    if is_h:
+        label += "【祝】"
+    return f"{mark}{label} の出勤希望時間"
+
+
+def _week_chunks(dates: list[date]) -> list[list[date]]:
+    """日付リストを週（月曜始まり）ごとのまとまりに分割する"""
+    chunks: list[list[date]] = []
+    cur: list[date] = []
+    for d in dates:
+        if cur and d.weekday() == 0:
+            chunks.append(cur)
+            cur = []
+        cur.append(d)
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def _week_label(idx: int, chunk: list[date]) -> tuple[str, str]:
+    """週セクションの見出しと説明を返す"""
+    s, e = chunk[0], chunk[-1]
+    title = f"第{idx + 1}週（{s.month}/{s.day}〜{e.month}/{e.day}）"
+    desc = "この週の出勤希望を入力してください。"
+    return title, desc
+
+
+def _email_settings_request() -> dict:
+    """メール収集なし（ログイン不要で回答できる状態）を明示する設定リクエスト"""
+    return {
+        "updateSettings": {
+            "settings": {"emailCollectionType": "DO_NOT_COLLECT"},
+            "updateMask": "emailCollectionType",
+        }
+    }
+
+
 def create_google_form(
     period: SchedulePeriod,
     employees: list[Employee],
@@ -55,7 +113,11 @@ def create_google_form(
 ) -> tuple[str, str]:
     """
     指定期間用の Google フォームを自動作成し、(form_id, form_url) を返す。
-    ユーザー体験(UX)向上のため、1ページで各日の出勤希望時間をチェックボックスで複数選択できる構成で生成します。
+
+    UX設計:
+    - 週ごとにページを分割（pageBreakItem）して進捗バーを表示し、スクロール量を抑える
+    - 各日の出勤希望時間はチェックボックスで複数選択（土曜=🔵 / 日曜・祝日=🔴 マーカー付き）
+    - メール収集なし（emailCollectionType=DO_NOT_COLLECT）でログインなしでも回答できる
     """
     creds = get_credentials_from_json(credentials_json_str)
     forms_service = build("forms", "v1", credentials=creds)
@@ -69,7 +131,8 @@ def create_google_form(
         "   - 朝食の中、またはディナーの中で入れる時間が複数ある場合は、一番希望する時間帯を1つだけ選んでください。\n"
         "3. 出勤できない日、または有給を希望する日はそれぞれ「休み（出勤不可）」または「有給」を選択してください。\n"
         "4. 選択肢にない時間帯を希望する場合は「その他」を選択し、最後の備考欄に具体的な希望時間を記入してください。\n"
-        "   （記入例: 4/1 10:00〜16:00）"
+        "   （記入例: 4/1 10:00〜16:00）\n"
+        "※ 週ごとにページが分かれています。「次へ」で進んでください。"
     )
 
     # 1. フォームを作成
@@ -96,6 +159,9 @@ def create_google_form(
         }
     })
 
+    # メール収集なし（ログイン不要で回答できる状態を保証）
+    requests.append(_email_settings_request())
+
     # Q1: お名前 (必須プルダウン)
     emp_names = [e.name for e in employees]
     requests.append({
@@ -117,11 +183,10 @@ def create_google_form(
         }
     })
 
-    # 各日の出勤可否と時間帯の質問
+    # 各日の出勤可否と時間帯の質問（週ごとにページ分割）
     dates = list(period.date_range())
     from utils.holidays import holiday_set
     holidays = holiday_set(dates)
-    dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
 
     # チェックボックス用の選択肢リストを作成
     checkbox_options = [{"value": "休み（出勤不可）"}, {"value": "有給"}]
@@ -132,37 +197,51 @@ def create_google_form(
                 checkbox_options.append({"value": f"朝食: {label}"})
             if p.covers_dinner():
                 checkbox_options.append({"value": f"ディナー: {label}"})
-    
+
     checkbox_options.append({"value": "その他（備考欄に時刻を記入）"})
 
     idx = 1
-    for d in dates:
-        ds = d.isoformat()
-        dow = dow_labels[d.weekday()]
-        is_h = ds in holidays
-        date_label = f"{d.month}月{d.day}日（{dow}）"
-        if is_h:
-            date_label += "【祝】"
+    for w_i, chunk in enumerate(_week_chunks(dates)):
+        w_title, w_desc = _week_label(w_i, chunk)
+        if w_i == 0:
+            # 1ページ目はテキスト見出しで週を示す（ページ区切りは2週目から）
+            requests.append({
+                "createItem": {
+                    "item": {"title": w_title, "description": w_desc, "textItem": {}},
+                    "location": {"index": idx}
+                }
+            })
+        else:
+            # 2週目以降は改ページ（進捗バーが表示され、スクロール量が減る）
+            requests.append({
+                "createItem": {
+                    "item": {"title": w_title, "description": w_desc, "pageBreakItem": {}},
+                    "location": {"index": idx}
+                }
+            })
+        idx += 1
 
-        # 出勤希望時間 (チェックボックス)
-        requests.append({
-            "createItem": {
-                "item": {
-                    "title": f"{date_label} の出勤希望時間",
-                    "questionItem": {
-                        "question": {
-                            "required": True,
-                            "choiceQuestion": {
-                                "type": "CHECKBOX",
-                                "options": checkbox_options
+        for d in chunk:
+            # 出勤希望時間 (チェックボックス、土曜=🔵/日曜・祝=🔴)
+            requests.append({
+                "createItem": {
+                    "item": {
+                        "title": _date_question_title(d, holidays),
+                        "description": DATE_QUESTION_HINT,
+                        "questionItem": {
+                            "question": {
+                                "required": True,
+                                "choiceQuestion": {
+                                    "type": "CHECKBOX",
+                                    "options": checkbox_options
+                                }
                             }
                         }
-                    }
-                },
-                "location": {"index": idx}
-            }
-        })
-        idx += 1
+                    },
+                    "location": {"index": idx}
+                }
+            })
+            idx += 1
 
     # QLast: 備考質問 (長文記述式)
     requests.append({
@@ -268,20 +347,14 @@ def update_google_form(
                 checkbox_options.append({"value": f"ディナー: {label}"})
     checkbox_options.append({"value": "その他（備考欄に時刻を記入）"})
 
-    # 日付ごとのラベル判定用
+    # 日付ごとのタイトル判定用（(month, day) → 新形式タイトル）
     dates = list(period.date_range())
     from utils.holidays import holiday_set
     holidays = holiday_set(dates)
-    dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
-    date_labels = []
-    for d in dates:
-        ds = d.isoformat()
-        dow = dow_labels[d.weekday()]
-        is_h = ds in holidays
-        date_label = f"{d.month}月{d.day}日（{dow}）"
-        if is_h:
-            date_label += "【祝】"
-        date_labels.append((ds, date_label))
+    title_by_md = {(d.month, d.day): _date_question_title(d, holidays) for d in dates}
+
+    # メール収集なし設定を再適用（旧フォームにも反映される）
+    requests.append(_email_settings_request())
 
     # 各アイテムの更新リクエストを構築
     for idx, item in enumerate(items):
@@ -318,12 +391,19 @@ def update_google_form(
             continue
 
         # B. 日付ごとのチェックボックスの更新
-        for ds, date_label in date_labels:
-            if title == f"{date_label} の出勤希望時間":
+        # 旧形式（マーカーなし）のタイトルにも一致するよう「M月D日」を抽出して照合し、
+        # タイトル・説明も最新形式（🔵/🔴マーカー+ヒント文）に更新する
+        import re as _re
+        m = _re.search(r'(\d{1,2})月(\d{1,2})日', title)
+        if m and "出勤希望時間" in title:
+            new_title = title_by_md.get((int(m.group(1)), int(m.group(2))))
+            if new_title:
                 requests.append({
                     "updateItem": {
                         "item": {
                             "itemId": item_id,
+                            "title": new_title,
+                            "description": DATE_QUESTION_HINT,
                             "questionItem": {
                                 "question": {
                                     "questionId": q_id,
@@ -338,13 +418,50 @@ def update_google_form(
                         "location": {
                             "index": idx
                         },
-                        "updateMask": "questionItem.question.choiceQuestion.options"
+                        "updateMask": "title,description,questionItem.question.choiceQuestion.options"
                     }
                 })
-                break
 
     if requests:
         forms_service.forms().batchUpdate(
             formId=form_id,
             body={"requests": requests}
         ).execute()
+
+
+def get_form_accepting_responses(
+    form_id: str,
+    credentials_json_str: str,
+) -> Optional[bool]:
+    """フォームが回答を受け付けているかを返す。
+    公開設定に対応していない（レガシー）フォームの場合は None を返す。"""
+    creds = get_credentials_from_json(credentials_json_str)
+    forms_service = build("forms", "v1", credentials=creds)
+    form = forms_service.forms().get(formId=form_id).execute()
+    publish = form.get("publishSettings", {}).get("publishState")
+    if publish is None:
+        return None
+    return bool(publish.get("isAcceptingResponses"))
+
+
+def set_form_accepting_responses(
+    form_id: str,
+    credentials_json_str: str,
+    accepting: bool,
+) -> None:
+    """フォームの回答受付を開始/停止する（締切管理）。
+    停止すると回答者には「回答の受付は終了しました」と表示される。"""
+    creds = get_credentials_from_json(credentials_json_str)
+    forms_service = build("forms", "v1", credentials=creds)
+    forms_service.forms().setPublishSettings(
+        formId=form_id,
+        body={
+            "publishSettings": {
+                "publishState": {
+                    "isPublished": True,
+                    "isAcceptingResponses": accepting,
+                }
+            },
+            "updateMask": "publishState.isAcceptingResponses",
+        },
+    ).execute()

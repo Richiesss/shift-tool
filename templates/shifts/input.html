@@ -301,6 +301,37 @@
                     </div>
                   </div>
 
+                  <!-- 回答受付の締切管理 -->
+                  <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                    <span class="small text-muted">回答受付:</span>
+                    <span id="accepting-badge" class="badge bg-secondary">確認中…</span>
+                    <form method="post" action="{{ url_for('shifts.google_set_accepting', period_id=period.id) }}" class="ms-auto d-flex gap-1">
+                      <button type="submit" name="accepting" value="0" class="btn btn-xs btn-outline-danger py-0 px-2" style="font-size:.7rem"
+                              onclick="return confirm('回答の受付を締め切りますか？\n以降スタッフはフォームに回答できなくなります。')">
+                        <i class="bi bi-stop-circle me-1"></i>締め切る
+                      </button>
+                      <button type="submit" name="accepting" value="1" class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:.7rem">
+                        <i class="bi bi-play-circle me-1"></i>再開する
+                      </button>
+                    </form>
+                  </div>
+                  <script>
+                  // 受付状態を非同期で取得してバッジに反映
+                  fetch("{{ url_for('shifts.google_accepting_status', period_id=period.id) }}")
+                    .then(r => r.json())
+                    .then(d => {
+                      const b = document.getElementById('accepting-badge');
+                      if (!b) return;
+                      if (d.ok && d.accepting === true)  { b.className = 'badge bg-success';  b.textContent = '受付中'; }
+                      else if (d.ok && d.accepting === false) { b.className = 'badge bg-danger'; b.textContent = '締切済み'; }
+                      else { b.className = 'badge bg-secondary'; b.textContent = '不明'; }
+                    })
+                    .catch(() => {
+                      const b = document.getElementById('accepting-badge');
+                      if (b) { b.className = 'badge bg-secondary'; b.textContent = '不明'; }
+                    });
+                  </script>
+
                   <form method="post" action="{{ url_for('shifts.google_sync', period_id=period.id) }}" class="d-flex align-items-center gap-2 flex-wrap">
                     <div class="form-check form-check-inline mb-0">
                       <input class="form-check-input" type="radio" name="merge" value="fill" id="g-fill" checked>

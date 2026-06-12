@@ -1,6 +1,6 @@
 import calendar
 from datetime import date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
@@ -446,6 +446,42 @@ def google_update_form(period_id):
     except Exception as e:
         flash(f"Google フォームの更新に失敗しました: {e}", "error")
 
+    return redirect(url_for("shifts.input", period_id=period_id))
+
+
+@bp.get("/<int:period_id>/google/accepting_status")
+def google_accepting_status(period_id):
+    """フォームの回答受付状態をJSONで返す（画面の非同期表示用）"""
+    period = repo.get_period(period_id)
+    google_token = repo.get_google_token()
+    if not period or not period.google_form_id or not google_token:
+        return jsonify({"ok": False}), 404
+    try:
+        from utils.google_forms_api import get_form_accepting_responses
+        accepting = get_form_accepting_responses(period.google_form_id, google_token)
+        return jsonify({"ok": True, "accepting": accepting})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.post("/<int:period_id>/google/accepting")
+def google_set_accepting(period_id):
+    """フォームの回答受付を締め切る/再開する"""
+    period = repo.get_period(period_id)
+    if not period or not period.google_form_id:
+        flash("Google フォームが作成されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+    google_token = repo.get_google_token()
+    if not google_token:
+        flash("Googleアカウントとの連携が設定されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+    accepting = request.form.get("accepting") == "1"
+    try:
+        from utils.google_forms_api import set_form_accepting_responses
+        set_form_accepting_responses(period.google_form_id, google_token, accepting)
+        flash("回答の受付を再開しました。" if accepting else "回答の受付を締め切りました。", "success")
+    except Exception as e:
+        flash(f"受付状態の変更に失敗しました（このフォームが公開設定に対応していない可能性があります）: {e}", "error")
     return redirect(url_for("shifts.input", period_id=period_id))
 
 
