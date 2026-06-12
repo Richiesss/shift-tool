@@ -113,7 +113,10 @@ def google_login():
         flash("Google Client ID または Client Secret が設定されていません。", "error")
         return redirect(url_for("settings.index"))
 
-    redirect_uri = url_for("settings.google_callback", _external=True)
+    is_dev = os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG") == "1"
+    scheme = "http" if is_dev else "https"
+    redirect_uri = url_for("settings.google_callback", _external=True, _scheme=scheme)
+
     flow = get_oauth_credentials(client_id, client_secret, redirect_uri)
     authorization_url, state = flow.authorization_url(
         access_type='offline',
@@ -132,11 +135,19 @@ def google_callback():
         return redirect(url_for("settings.index"))
 
     client_id, client_secret = _get_google_client_credentials()
-    redirect_uri = url_for("settings.google_callback", _external=True)
+    is_dev = os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG") == "1"
+    scheme = "http" if is_dev else "https"
+    redirect_uri = url_for("settings.google_callback", _external=True, _scheme=scheme)
 
     flow = get_oauth_credentials(client_id, client_secret, redirect_uri)
     try:
-        flow.fetch_token(authorization_response=request.url)
+        # プロキシ環境により request.url が http で入ってくる場合があるため、
+        # oauthlib での insecure_transport エラーを回避するために https に強制置換する
+        auth_response_url = request.url
+        if not is_dev and auth_response_url.startswith("http://"):
+            auth_response_url = auth_response_url.replace("http://", "https://", 1)
+
+        flow.fetch_token(authorization_response=auth_response_url)
         creds = flow.credentials
         repo.save_google_token(creds.to_json())
         session.pop('google_oauth_state', None)

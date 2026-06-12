@@ -14,6 +14,11 @@ from auth import APP_PASSWORD, SESSION_VERSION
 
 def create_app():
     app = Flask(__name__, template_folder="templates", static_folder="static")
+    
+    # リバースプロキシ背後でのプロキシヘッダー（X-Forwarded-Protoなど）を正しく認識させる
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
     Compress(app)
     cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
