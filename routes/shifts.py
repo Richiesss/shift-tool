@@ -165,6 +165,13 @@ def input(period_id):
         except Exception:
             pass
 
+    # Google 連携情報
+    google_token = repo.get_google_token()
+    is_google_linked = google_token is not None
+    from routes.settings_routes import _get_google_client_credentials
+    client_id, client_secret = _get_google_client_credentials()
+    has_google_credentials = bool(client_id and client_secret)
+
     return render_template(
         "shifts/input.html",
         period=period,
@@ -186,7 +193,10 @@ def input(period_id):
         PATTERN_MAP=PATTERN_MAP,
         PAT_CATS=PAT_CATS,
         holidays=holiday_set(dates),
+        is_google_linked=is_google_linked,
+        has_google_credentials=has_google_credentials,
     )
+
 
 
 @bp.post("/<int:period_id>/save")
@@ -328,3 +338,187 @@ def import_csv_confirm(period_id):
     if result.unmatched_names:
         flash(f"マッチしなかった名前: {', '.join(result.unmatched_names)}", "warning")
     return redirect(url_for("shifts.input", period_id=period_id))
+
+
+# ── Google Forms 連携 ───────────────────────────────────────────────────────
+
+def _google_tmp_path(token: str) -> str:
+    """プレビュー用に保存したGoogleレスポンス結果(JSON)の一時パスを返す（トークンは英数字のみ許可）"""
+    import tempfile, os, re
+    if not re.fullmatch(r"[0-9a-f]{32}", token or ""):
+        raise ValueError("不正なトークンです")
+    return os.path.join(tempfile.gettempdir(), f"sdu_google_{token}.json")
+
+
+@bp.post("/<int:period_id>/google/create")
+def google_create_form(period_id):
+    """Google フォームを自動作成する"""
+    period = repo.get_period(period_id)
+    if not period:
+        flash("期間が見つかりません", "error")
+        return redirect(url_for("shifts.index"))
+        
+    google_token = repo.get_google_token()
+    if not google_token:
+        flash("Googleアカウントとの連携が設定されていません。「設定」画面から連携を行ってください。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    # クライアントID/シークレットの取得
+    from routes.settings_routes import _get_google_client_credentials
+    client_id, client_secret = _get_google_client_credentials()
+    if not client_id or not client_secret:
+        flash("Google API 資格情報が設定されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    try:
+        from utils.google_forms_api import create_google_form
+        employees = repo.get_all_employees(active_only=True)
+        # アルバイトのみフォームに入力させる（社員は除外する）
+        pt_employees = [e for e in employees if e.employment_type != EmploymentType.FULL_TIME]
+        
+        # フォーム作成
+        form_id, responder_url = create_google_form(period, pt_employees, google_token)
+        
+        # 期間モデルに google_form_id を保存
+        period.google_form_id = form_id
+        repo.save_period(period)
+        
+        flash("Google フォームを自動作成しました！回答URLを配布してシフトを収集してください。", "success")
+    except Exception as e:
+        flash(f"Google フォームの作成に失敗しました: {e}", "error")
+
+    return redirect(url_for("shifts.input", period_id=period_id))
+
+
+@bp.post("/<int:period_id>/google/sync")
+def google_sync(period_id):
+    """Google フォームの回答を取得し、インポートプレビューを表示する"""
+    period = repo.get_period(period_id)
+    if not period or not period.google_form_id:
+        flash("Google フォームが作成されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    google_token = repo.get_google_token()
+    if not google_token:
+        flash("Googleアカウントとの連携が設定されていません。「設定」画面から連携を行ってください。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    # クライアントID/シークレットの取得
+    from routes.settings_routes import _get_google_client_credentials
+    client_id, client_secret = _get_google_client_credentials()
+    if not client_id or not client_secret:
+        flash("Google API 資格情報が設定されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    merge = request.form.get("merge", "fill")
+    
+    try:
+        from utils.google_forms_api import fetch_google_form_responses
+        form_schema, responses = fetch_google_form_responses(period.google_form_id, google_token)
+        
+        from utils.forms_csv_parser import parse_google_form_responses
+        employees = repo.get_all_employees(active_only=True)
+        result = parse_google_form_responses(form_schema, responses, period, employees)
+    except Exception as e:
+        flash(f"Google フォームからのデータ同期に失敗しました: {e}", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    if not result.requests:
+        flash("同期可能な回答データがありませんでした。", "warning")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    # 一時保存用のトークンを発行して結果を JSON ファイルに保存
+    import uuid, json
+    token = uuid.uuid4().hex
+    tmp_path = _google_tmp_path(token)
+    
+    requests_data = []
+    for r in result.requests:
+        requests_data.append({
+            "employee_id": r.employee_id,
+            "date": r.date,
+            "pattern_id": r.pattern_id,
+            "custom_start": r.custom_start,
+            "custom_end": r.custom_end,
+            "note": r.note
+        })
+        
+    payload = {
+        "requests": requests_data,
+        "matched": result.matched,
+        "unmatched_names": result.unmatched_names,
+        "warnings": result.warnings
+    }
+    
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+
+    existing_keys = {(r.employee_id, r.date) for r in repo.get_shift_requests(period_id)}
+    n_new  = sum(1 for r in result.requests if (r.employee_id, r.date) not in existing_keys)
+    n_skip = len(result.requests) - n_new
+
+    return render_template(
+        "shifts/google_import_preview.html",
+        period=period, token=token, merge=merge,
+        matched=result.matched, unmatched=result.unmatched_names,
+        warnings=result.warnings,
+        n_total=len(result.requests), n_new=n_new, n_skip=n_skip,
+    )
+
+
+@bp.post("/<int:period_id>/google/sync/confirm")
+def google_sync_confirm(period_id):
+    """プレビュー確認後にGoogleフォーム回答の取込を実行する"""
+    import os, json
+    period = repo.get_period(period_id)
+    if not period:
+        return redirect(url_for("shifts.index"))
+        
+    merge = request.form.get("merge", "fill")
+    token = request.form.get("token", "")
+    tmp_path = _google_tmp_path(token)
+    
+    try:
+        if not os.path.exists(tmp_path):
+            flash("プレビューの有効期限が切れました。もう一度同期を実行してください", "warning")
+            return redirect(url_for("shifts.input", period_id=period_id))
+            
+        with open(tmp_path, encoding="utf-8") as f:
+            payload = json.load(f)
+            
+        os.unlink(tmp_path)
+    except Exception as e:
+        flash(f"データの同期確定に失敗しました: {e}", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    # ShiftRequest に戻す
+    reqs_data = payload.get("requests", [])
+    requests = []
+    for r in reqs_data:
+        requests.append(ShiftRequest(
+            employee_id=r["employee_id"],
+            date=r["date"],
+            pattern_id=r["pattern_id"],
+            custom_start=r["custom_start"],
+            custom_end=r["custom_end"],
+            note=r["note"]
+        ))
+
+    if merge == "overwrite":
+        repo.save_shift_requests(period_id, requests)
+    else:
+        # fill: 既存データがない日付のみ追加
+        existing = repo.get_shift_requests(period_id)
+        existing_keys = {(r.employee_id, r.date) for r in existing}
+        new_reqs = [r for r in requests if (r.employee_id, r.date) not in existing_keys]
+        repo.save_shift_requests(period_id, new_reqs)
+
+    n_matched = len(payload.get("matched", {}))
+    flash(f"{n_matched}名分の希望シフトをGoogleフォームから同期しました", "success")
+    
+    unmatched_names = payload.get("unmatched_names", [])
+    if unmatched_names:
+        flash(f"マッチしなかった名前: {', '.join(unmatched_names)}", "warning")
+        
+    return redirect(url_for("shifts.input", period_id=period_id))
+

@@ -267,7 +267,7 @@
       <!-- 機能：客数予測 -->
       <div class="border-top pt-3 mt-3" style="border-color: var(--border) !important">
         <div class="d-flex align-items-center mb-2">
-          <div class="fw-semibold small">客数予測機能（第1弾）</div>
+          <div class="fw-semibold small">客数予測機能（第1弾・β）</div>
           <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
                 data-bs-title="客数予測（β）"
                 data-bs-content="過去の客数実績・曜日/祝日・気象データなどから朝食/ディナーの客数を予測し、客数管理ページとダッシュボードに表示します。予測精度を高めるには、客数管理画面で実績を入力し続けるか、過去客数データ入力ページから過去の実績を登録してください。緯度・経度を設定すると気象データを予測に利用できます（任意）。">?</span>
@@ -295,6 +295,66 @@
           緯度・経度を設定すると、気象データ（Open-Meteo）を客数予測の精度向上に利用します。
         </div>
       </div>
+
+      <!-- 機能：Google フォーム連携 -->
+      <div class="border-top pt-3 mt-3" style="border-color: var(--border) !important">
+        <div class="d-flex align-items-center mb-2">
+          <div class="fw-semibold small">Google フォーム連携機能（第2弾・β）</div>
+          <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+                data-bs-title="Google フォーム連携（β）"
+                data-bs-content="Google Forms APIを利用して希望シフトの提出フォームを自動生成・配布し、回答結果を1クリックで直接取り込むことができる機能です。あらかじめGoogle Cloud ConsoleでOAuth 2.0 クライアントを作成し、下記の Client ID / Client Secret を設定しておく必要があります。">?</span>
+        </div>
+
+        <!-- 連携ステータス表示 -->
+        <div class="mb-3">
+          <div class="d-flex align-items-center gap-2 p-2 rounded-2 border" style="background-color: var(--card-bg-hover); border-color: var(--border) !important;">
+            {% if is_google_linked %}
+              <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>連携中</span>
+              <span class="small text-muted">Googleアカウントと接続されています。</span>
+              <a href="{{ url_for('settings.google_disconnect') }}" class="btn btn-danger btn-sm ms-auto" onclick="return confirm('Googleアカウントとの連携を解除しますか？')">
+                連携解除
+              </a>
+            {% else %}
+              <span class="badge bg-secondary"><i class="bi bi-slash-circle-fill me-1"></i>未連携</span>
+              <span class="small text-muted">Googleアカウントと連携されていません。</span>
+              {% if has_google_credentials %}
+                <a href="{{ url_for('settings.google_login') }}" class="btn btn-primary btn-sm ms-auto">
+                  <i class="bi bi-google me-1"></i>連携する
+                </a>
+              {% else %}
+                <button type="button" class="btn btn-secondary btn-sm ms-auto" disabled>
+                  <i class="bi bi-google me-1"></i>連携する
+                </button>
+              {% endif %}
+            {% endif %}
+          </div>
+          {% if not has_google_credentials %}
+            <div class="text-danger small mt-1">
+              ※ 下記の Google OAuth クライアント設定を入力・保存した後に「連携する」ボタンが有効になります。
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- 資格情報入力フィールド -->
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">Google OAuth Client ID</label>
+            <input type="text" name="google_client_id" value="{{ google_client_id }}"
+                   class="form-control form-control-sm" placeholder="例: xxxxxxxxxxxx-xxxxxxxxxxxx.apps.googleusercontent.com">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">Google OAuth Client Secret</label>
+            <input type="password" name="google_client_secret" value="{{ google_client_secret }}"
+                   class="form-control form-control-sm" placeholder="例: GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx">
+          </div>
+        </div>
+        
+        <div class="text-muted small mt-2">
+          ※ 認証時のリダイレクトURIには、以下のURLをGoogle Cloud Consoleの「承認済みのリダイレクトURI」に設定してください：<br>
+          <code class="user-select-all">{{ url_for('settings.google_callback', _external=True) }}</code>
+        </div>
+      </div>
+
     </div>
   </div>
 </form>

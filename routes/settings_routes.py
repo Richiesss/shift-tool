@@ -1,12 +1,28 @@
-import io, json
+import io, json, os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, jsonify, session
 from cache import cache
 from db import repositories as repo
 from optimizer import forecast
 from utils.constants import TimeSlot, Position
+from utils.google_forms_api import get_oauth_credentials
 
 bp = Blueprint("settings", __name__, url_prefix="/settings")
+
+# ローカル環境のHTTPでOAuth2をテストできるようにする
+if os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG") == "1":
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
+
+def _get_google_client_credentials():
+    """環境変数またはDBから Google Client ID と Client Secret を取得する"""
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        settings = repo.get_all_app_settings()
+        client_id = settings.get("google_client_id", "")
+        client_secret = settings.get("google_client_secret", "")
+    return client_id.strip(), client_secret.strip()
 
 
 @bp.get("/")
@@ -17,6 +33,13 @@ def index():
     from utils.constants import EmploymentType
     all_employees = repo.get_all_employees(active_only=True)
     pt_employees = [e for e in all_employees if e.employment_type != EmploymentType.FULL_TIME]
+
+    # Google 連携情報
+    google_token = repo.get_google_token()
+    is_google_linked = google_token is not None
+    client_id, client_secret = _get_google_client_credentials()
+    has_google_credentials = bool(client_id and client_secret)
+
     return render_template(
         "settings/index.html",
         constraints=constraints,
@@ -25,6 +48,10 @@ def index():
         pt_employees=pt_employees,
         TimeSlot=TimeSlot,
         Position=Position,
+        is_google_linked=is_google_linked,
+        has_google_credentials=has_google_credentials,
+        google_client_id=client_id,
+        google_client_secret=client_secret,
     )
 
 
@@ -54,6 +81,7 @@ def save():
         "early_allowance_start",      "early_allowance_end",
         "max_consecutive_days",       "min_days_off",
         "store_lat",                  "store_lon",
+        "google_client_id",           "google_client_secret",
     ]
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     new_settings["customer_forecast_enabled"] = "1" if request.form.get("customer_forecast_enabled") else "0"
@@ -76,6 +104,55 @@ def save():
 
     flash("設定を保存しました", "success")
     return redirect(url_for("settings.index"))
+
+
+@bp.get("/google/login")
+def google_login():
+    client_id, client_secret = _get_google_client_credentials()
+    if not client_id or not client_secret:
+        flash("Google Client ID または Client Secret が設定されていません。", "error")
+        return redirect(url_for("settings.index"))
+
+    redirect_uri = url_for("settings.google_callback", _external=True)
+    flow = get_oauth_credentials(client_id, client_secret, redirect_uri)
+    authorization_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true',
+        prompt='consent'
+    )
+    session['google_oauth_state'] = state
+    return redirect(authorization_url)
+
+
+@bp.get("/google/callback")
+def google_callback():
+    state = session.get('google_oauth_state')
+    if not state or state != request.args.get('state'):
+        flash("OAuthのステートが一致しません。もう一度お試しください。", "error")
+        return redirect(url_for("settings.index"))
+
+    client_id, client_secret = _get_google_client_credentials()
+    redirect_uri = url_for("settings.google_callback", _external=True)
+
+    flow = get_oauth_credentials(client_id, client_secret, redirect_uri)
+    try:
+        flow.fetch_token(authorization_response=request.url)
+        creds = flow.credentials
+        repo.save_google_token(creds.to_json())
+        session.pop('google_oauth_state', None)
+        flash("Googleアカウントとの連携に成功しました！", "success")
+    except Exception as e:
+        flash(f"Googleアカウントの連携に失敗しました: {e}", "error")
+
+    return redirect(url_for("settings.index"))
+
+
+@bp.get("/google/disconnect")
+def google_disconnect():
+    repo.delete_google_token()
+    flash("Googleアカウントとの連携を解除しました。", "success")
+    return redirect(url_for("settings.index"))
+
 
 
 @bp.get("/backup")

@@ -328,6 +328,10 @@ _CREATE_TABLES = [
         precipitation REAL,
         weather_code  INTEGER
     )""",
+    """CREATE TABLE IF NOT EXISTS google_tokens (
+        key             TEXT PRIMARY KEY,
+        credentials_json TEXT NOT NULL
+    )""",
 ]
 
 _MIGRATIONS = [
@@ -356,6 +360,7 @@ _MIGRATIONS = [
     ("employees",         "kitchen_skill_breakfast",    "TEXT NOT NULL DEFAULT 'beginner'"),
     ("employees",         "kitchen_skill_dinner",       "TEXT NOT NULL DEFAULT 'beginner'"),
     ("reservation_counts", "is_special_day",            "INTEGER NOT NULL DEFAULT 0"),
+    ("schedule_periods",  "google_form_id",             "TEXT"),
 ]
 
 _INDEXES = [

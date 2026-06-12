@@ -467,3 +467,110 @@ def build_form_guide(period: SchedulePeriod, employees=None) -> str:
         "═══════════════════════════════════════════════════════",
     ]
     return "\n".join(lines)
+
+
+def parse_google_form_responses(
+    form_schema: dict,
+    responses: list[dict],
+    period: SchedulePeriod,
+    employees: list[Employee],
+) -> ImportResult:
+    """
+    Google Forms API のレスポンス (JSON) を解析して ImportResult を返す。
+    """
+    result = ImportResult()
+    name_to_emp: dict[str, Employee] = {e.name: e for e in employees}
+
+    question_id_to_title = {}
+    titles = []
+    name_col = None
+    note_col = None
+
+    items = form_schema.get("items", [])
+    for item in items:
+        title = item.get("title", "")
+        q_item = item.get("questionItem")
+        if q_item and "question" in q_item:
+            q_id = q_item["question"]["questionId"]
+            question_id_to_title[q_id] = title
+            titles.append(title)
+            
+            if "名前" in title or "氏名" in title:
+                name_col = title
+            elif "備考" in title or "連絡事項" in title:
+                note_col = title
+
+    if not name_col:
+        result.warnings.append("お名前を選択する質問が見つかりませんでした。")
+        return result
+
+    # 日付ごとの設問を特定
+    date_cols: dict[str, dict[str, str]] = {}
+    for title in titles:
+        ds = _parse_date_from_header(title, period)
+        if not ds:
+            continue
+        if ds not in date_cols:
+            date_cols[ds] = {}
+        if "出勤できますか" in title:
+            date_cols[ds]["avail"] = title
+        elif "朝食" in title and "シフト" in title:
+            date_cols[ds]["b"] = title
+        elif "ディナー" in title and "シフト" in title:
+            date_cols[ds]["d"] = title
+        else:
+            date_cols[ds]["direct"] = title
+
+    for idx, resp in enumerate(responses, start=1):
+        answers = resp.get("answers", {})
+        row = {}
+        for q_id, ans in answers.items():
+            title = question_id_to_title.get(q_id)
+            if not title:
+                continue
+            text_answers = ans.get("textAnswers", {}).get("answers", [])
+            if text_answers:
+                # 今回はラジオ・プルダウン・記述なので最初の1つを取得
+                val = text_answers[0].get("value", "")
+                row[title] = val.strip()
+
+        name = row.get(name_col, "").strip()
+        if not name:
+            result.warnings.append(f"回答{idx}: 名前が空です（スキップ）")
+            continue
+
+        emp = name_to_emp.get(name)
+        if emp is None:
+            if name not in result.unmatched_names:
+                result.unmatched_names.append(name)
+            result.warnings.append(
+                f"「{name}」はスタッフ管理に登録されていません（スキップ）"
+            )
+            continue
+
+        # 備考・カスタム時刻を解析
+        note = row.get(note_col, "").strip() if note_col else ""
+        custom_times: dict[str, tuple[str, str]] = {}
+        if note:
+            custom_times.update(_parse_custom_times(note, period))
+
+        row_count = 0
+        for date_str, cols in date_cols.items():
+            req = None
+            if "avail" in cols:
+                req = _process_new_fmt(
+                    row, date_str, cols, custom_times, note, emp, result, name
+                )
+            elif "direct" in cols:
+                req = _process_direct_fmt(
+                    row, date_str, cols["direct"], custom_times, note, emp, result, name
+                )
+
+            if req is not None:
+                result.requests.append(req)
+                row_count += 1
+
+        result.matched[name] = result.matched.get(name, 0) + row_count
+
+    return result
+

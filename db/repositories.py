@@ -310,7 +310,10 @@ def get_all_periods() -> list[SchedulePeriod]:
     conn = get_connection()
     rows = conn.execute("SELECT * FROM schedule_periods ORDER BY start_date DESC").fetchall()
     conn.close()
-    return [SchedulePeriod(id=r["id"], start_date=r["start_date"], end_date=r["end_date"], status=r["status"]) for r in rows]
+    return [SchedulePeriod(
+        id=r["id"], start_date=r["start_date"], end_date=r["end_date"], status=r["status"],
+        google_form_id=r["google_form_id"] if "google_form_id" in r.keys() else None
+    ) for r in rows]
 
 
 @cache.memoize(timeout=180)
@@ -320,20 +323,23 @@ def get_period(period_id: int) -> Optional[SchedulePeriod]:
     conn.close()
     if not row:
         return None
-    return SchedulePeriod(id=row["id"], start_date=row["start_date"], end_date=row["end_date"], status=row["status"])
+    return SchedulePeriod(
+        id=row["id"], start_date=row["start_date"], end_date=row["end_date"], status=row["status"],
+        google_form_id=row["google_form_id"] if "google_form_id" in row.keys() else None
+    )
 
 
 def save_period(period: SchedulePeriod) -> SchedulePeriod:
     conn = get_connection()
     if period.id is None:
         period.id = conn.execute_insert(
-            "INSERT INTO schedule_periods (start_date, end_date, status) VALUES (?,?,?)",
-            (period.start_date, period.end_date, period.status)
+            "INSERT INTO schedule_periods (start_date, end_date, status, google_form_id) VALUES (?,?,?,?)",
+            (period.start_date, period.end_date, period.status, period.google_form_id)
         )
     else:
         conn.execute(
-            "UPDATE schedule_periods SET start_date=?, end_date=?, status=? WHERE id=?",
-            (period.start_date, period.end_date, period.status, period.id)
+            "UPDATE schedule_periods SET start_date=?, end_date=?, status=?, google_form_id=? WHERE id=?",
+            (period.start_date, period.end_date, period.status, period.google_form_id, period.id)
         )
     conn.commit()
     conn.close()
@@ -1133,3 +1139,54 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
         bp[pid]["cost"]   += cost
 
     return result
+
+
+# ── Google API 連携 ───────────────────────────────────────────────────────
+
+def get_google_token() -> str | None:
+    """保存されている Google OAuth トークン（credentials_json）を取得する"""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT credentials_json FROM google_tokens WHERE key = 'admin'"
+        ).fetchone()
+        return row["credentials_json"] if row else None
+    finally:
+        conn.close()
+
+
+def save_google_token(credentials_json: str) -> None:
+    """Google OAuth トークン（credentials_json）を保存する"""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO google_tokens (key, credentials_json) VALUES ('admin', ?)"
+            " ON CONFLICT(key) DO UPDATE SET credentials_json=excluded.credentials_json",
+            (credentials_json,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_google_token() -> None:
+    """Google OAuth トークンを削除（連携解除）する"""
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM google_tokens WHERE key = 'admin'")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_period_google_form_id(period_id: int, google_form_id: str | None) -> None:
+    """指定期間に紐付く Google フォームIDを更新する"""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE schedule_periods SET google_form_id = ? WHERE id = ?",
+            (google_form_id, period_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()

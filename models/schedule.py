@@ -74,6 +74,7 @@ class SchedulePeriod:
     end_date: str      # YYYY-MM-DD
     status: str = "draft"
     assignments: list[ShiftAssignment] = field(default_factory=list)
+    google_form_id: Optional[str] = None
 
     def date_range(self) -> list[date]:
         from datetime import timedelta
