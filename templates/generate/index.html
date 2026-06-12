@@ -5,13 +5,19 @@
   .help-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 50%;
-    background: #e0f2fe; color: #0369a1;
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
     font-size: .68rem; font-weight: 700;
-    border: 1px solid #7dd3fc; cursor: pointer;
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    cursor: pointer;
     vertical-align: middle; margin-left: 5px;
     flex-shrink: 0; line-height: 1;
+    transition: all var(--transition);
   }
-  .help-btn:hover { background: #bae6fd; }
+  .help-btn:hover {
+    background: rgba(14, 165, 233, 0.22);
+    border-color: rgba(14, 165, 233, 0.45);
+  }
   /* ポップオーバーのスタイル調整 */
   .popover { max-width: 280px; font-size: .82rem; }
   .popover-header { font-size: .85rem; font-weight: 600; }
@@ -154,7 +160,7 @@ function applyChecklist(pid, d) {
     : 'bi bi-exclamation-circle-fill text-danger';
   rEl.querySelector('span').textContent =
     `希望シフト入力：${d.filled} / ${d.total} 人`;
-  rEl.querySelector('span').style.color = ok1 ? '#22c55e' : '#ef4444';
+  rEl.querySelector('span').className = ok1 ? 'text-success' : 'text-danger';
 
   // 客数
   const cEl = document.getElementById('chk-counts');
@@ -165,7 +171,7 @@ function applyChecklist(pid, d) {
   cEl.querySelector('span').textContent = ok2
     ? '予約客数：入力済み'
     : '予約客数：未入力（増員判定が無効になります）';
-  cEl.querySelector('span').style.color = ok2 ? '#22c55e' : '#f59e0b';
+  cEl.querySelector('span').className = ok2 ? 'text-success' : 'text-warning';
 }
 
 function updateChecklist(pid) {

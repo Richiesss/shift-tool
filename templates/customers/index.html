@@ -19,9 +19,9 @@
 
   {% if needs_regen %}
   <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
-       style="background:#1e293b;border-left:4px solid #f59e0b">
+       style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid #f59e0b">
     <i class="bi bi-arrow-repeat text-warning mt-1" style="flex-shrink:0"></i>
-    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6">
+    <div style="font-size:.85rem;color:var(--text);line-height:1.6">
       客数が更新されています。<br>
       <strong style="color:#fbbf24">生成済みのシフトへの反映には再生成が必要です。</strong>
       <a href="{{ url_for('generate.index') }}" class="btn btn-warning btn-sm ms-2 py-0 px-2"
@@ -47,9 +47,9 @@
 
   {% if forecast_enabled %}
   <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
-       style="background:#1e293b;border-left:4px solid #38bdf8">
+       style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid #38bdf8">
     <i class="bi bi-graph-up-arrow text-info mt-1" style="flex-shrink:0"></i>
-    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6;flex:1">
+    <div style="font-size:.85rem;color:var(--text);line-height:1.6;flex:1">
       未入力の日には客数予測（β）を表示しています。<br>
       <button type="button" class="btn btn-info btn-sm mt-1" onclick="applyForecast()">
         <i class="bi bi-magic me-1"></i>予測値を未入力欄に反映
@@ -154,7 +154,11 @@
 <script>
 function colorCell(input, threshold) {
   const v = parseInt(input.value) || 0;
-  input.style.background = (threshold > 0 && v >= threshold) ? '#fee2e2' : '';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const alertBg = isDark ? 'rgba(239, 68, 68, 0.25)' : '#fee2e2';
+  const alertColor = isDark ? '#f87171' : '';
+  input.style.background = (threshold > 0 && v >= threshold) ? alertBg : '';
+  input.style.color = (threshold > 0 && v >= threshold && isDark) ? alertColor : '';
   const badge = input.parentElement.querySelector('.badge');
   if (badge) {
     badge.className = 'badge badge-sm ' + (v >= threshold ? 'bg-danger' : 'bg-success');

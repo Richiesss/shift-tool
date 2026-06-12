@@ -17,14 +17,14 @@
     flex-shrink: 0;
     padding: 5px 12px;
     border-radius: 20px;
-    border: 1.5px solid #e2e8f0;
+    border: 1.5px solid var(--border);
     font-size: .8rem;
     cursor: pointer;
     text-decoration: none;
-    color: #475569;
-    background: #f8fafc;
+    color: var(--text-muted);
+    background: var(--bg-card);
     white-space: nowrap;
-    transition: background .12s;
+    transition: all var(--transition);
   }
   .emp-chip.active {
     background: #1e293b;
@@ -43,17 +43,39 @@
     color: white;
   }
 
+  [data-theme="dark"] .emp-chip {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  [data-theme="dark"] .emp-chip.active {
+    background: var(--accent);
+    color: #0f172a;
+    border-color: var(--accent);
+  }
+  [data-theme="dark"] .emp-chip.done {
+    border-color: rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.1);
+  }
+  [data-theme="dark"] .emp-chip.done.active {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #0f172a;
+  }
+
   /* ── 一括ボタン行 ──────────────────────────────────── */
   .bulk-bar {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     padding: 8px 12px;
-    border-top: 1px solid #f1f5f9;
-    border-bottom: 1px solid #f1f5f9;
-    background: #fafafa;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+    transition: background var(--transition);
   }
-  .bulk-bar .label { font-size: .75rem; color: #94a3b8; align-self: center; flex-shrink: 0; }
+  .bulk-bar .label { font-size: .75rem; color: var(--text-muted); align-self: center; flex-shrink: 0; }
 
   /* ── 日付行 ─────────────────────────────────────────── */
   .day-row {
@@ -61,11 +83,15 @@
     align-items: center;
     gap: 8px;
     padding: 5px 12px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--border);
+    transition: background var(--transition);
   }
   .day-row:last-of-type { border-bottom: none; }
-  .day-row.sat { background: #fafcff; }
-  .day-row.sun { background: #fff9f9; }
+  
+  [data-theme="light"] .day-row.sat { background: #fafcff; }
+  [data-theme="light"] .day-row.sun { background: #fff9f9; }
+  [data-theme="dark"] .day-row.sat { background: rgba(59, 130, 246, 0.06); }
+  [data-theme="dark"] .day-row.sun { background: rgba(239, 68, 68, 0.06); }
 
   .day-label {
     width: 58px;
@@ -73,42 +99,59 @@
     text-align: center;
     line-height: 1.25;
   }
-  .day-label .dt { font-size: .82rem; font-weight: 600; color: #334155; }
-  .day-label .dw { font-size: .7rem; color: #94a3b8; }
-  .day-row.sat .day-label .dt,
-  .day-row.sat .day-label .dw { color: #1e40af; }
-  .day-row.sun .day-label .dt,
-  .day-row.sun .day-label .dw { color: #dc2626; }
+  .day-label .dt { font-size: .82rem; font-weight: 600; color: var(--text); }
+  .day-label .dw { font-size: .7rem; color: var(--text-muted); }
+  
+  [data-theme="light"] .day-row.sat .day-label .dt,
+  [data-theme="light"] .day-row.sat .day-label .dw { color: #1e40af; }
+  [data-theme="light"] .day-row.sun .day-label .dt,
+  [data-theme="light"] .day-row.sun .day-label .dw { color: #dc2626; }
+  
+  [data-theme="dark"] .day-row.sat .day-label .dt,
+  [data-theme="dark"] .day-row.sat .day-label .dw { color: #60a5fa; }
+  [data-theme="dark"] .day-row.sun .day-label .dt,
+  [data-theme="dark"] .day-row.sun .day-label .dw { color: #f87171; }
 
   /* ── パターンボタン ───────────────────────────────── */
   .pat-btn {
     flex: 1;
     padding: 9px 10px;
     border-radius: 10px;
-    border: 1.5px solid rgba(0,0,0,.08);
+    border: 1.5px solid var(--border);
     font-size: .82rem;
     cursor: pointer;
     text-align: left;
     user-select: none;
     -webkit-user-select: none;
-    transition: filter .1s;
+    transition: filter .1s, background var(--transition);
     line-height: 1.3;
     min-height: 42px;
-    background: #f8fafc;
-    color: #64748b;
+    background: var(--bg-card);
+    color: var(--text-muted);
   }
   .pat-btn:active { filter: brightness(.88); }
 
-  /* パターンカテゴリ別カラー */
-  .pat-work { background: #dcfce7; color: #166534; border-color: #86efac; }
-  .pat-ofr  { background: #fecaca; color: #991b1b; border-color: #f87171; }
-  .pat-leave{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
-  .pat-am   { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .pat-pm   { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
-  .pat-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .pat-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
-  .pat-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-  .pat-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  /* パターンカテゴリ別カラー (ライトテーマ) */
+  [data-theme="light"] .pat-work { background: #dcfce7; color: #166534; border-color: #86efac; }
+  [data-theme="light"] .pat-ofr  { background: #fecaca; color: #991b1b; border-color: #f87171; }
+  [data-theme="light"] .pat-leave{ background: #fef9c3; color: #854d0e; border-color: #fde047; }
+  [data-theme="light"] .pat-am   { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  [data-theme="light"] .pat-pm   { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
+  [data-theme="light"] .pat-b    { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  [data-theme="light"] .pat-d    { background: #fed7aa; color: #c2410c; border-color: #fb923c; }
+  [data-theme="light"] .pat-db   { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+  [data-theme="light"] .pat-cust { background: #fef9c3; color: #854d0e; border-color: #fde047; }
+
+  /* パターンカテゴリ別カラー (ダークテーマ) */
+  [data-theme="dark"] .pat-work  { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
+  [data-theme="dark"] .pat-ofr   { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+  [data-theme="dark"] .pat-leave { background: rgba(234, 179, 8, 0.15); color: #facc15; border-color: rgba(234, 179, 8, 0.3); }
+  [data-theme="dark"] .pat-am    { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+  [data-theme="dark"] .pat-pm    { background: rgba(249, 115, 22, 0.15); color: #ff9d43; border-color: rgba(249, 115, 22, 0.3); }
+  [data-theme="dark"] .pat-b     { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+  [data-theme="dark"] .pat-d     { background: rgba(249, 115, 22, 0.15); color: #ff9d43; border-color: rgba(249, 115, 22, 0.3); }
+  [data-theme="dark"] .pat-db    { background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+  [data-theme="dark"] .pat-cust  { background: rgba(234, 179, 8, 0.15); color: #facc15; border-color: rgba(234, 179, 8, 0.3); }
 
   /* 展開ボタン */
   .pat-expand {
@@ -116,11 +159,11 @@
     padding: 6px 8px;
     border: none;
     background: none;
-    color: #cbd5e1;
+    color: var(--text-muted);
     cursor: pointer;
     font-size: .7rem;
   }
-  .pat-expand:hover { color: #64748b; }
+  .pat-expand:hover { color: var(--text); }
 
   /* ピッカー */
   .pat-picker {
@@ -141,10 +184,11 @@
   .save-bar {
     position: sticky;
     bottom: 0;
-    background: white;
+    background: var(--bg-card);
     padding: 10px 12px;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--border);
     z-index: 10;
+    transition: background var(--transition);
   }
 </style>
 {% endblock %}
@@ -331,11 +375,11 @@
 <!-- 全休確認モーダル -->
 <div class="modal fade" id="allOffModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:14px">
+    <div class="modal-content">
       <div class="modal-body p-4 text-center">
         <i class="bi bi-question-circle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
         <div class="fw-semibold mb-1">全て休みで保存しますか？</div>
-        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">この期間、全ての日を「休み」として保存します。</div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-bottom:1.25rem">この期間、全ての日を「休み」として保存します。</div>
         <div class="d-flex gap-2">
           <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">戻る</button>
           <button type="button" class="btn btn-warning flex-grow-1" id="all-off-proceed-btn">保存する</button>

@@ -132,7 +132,9 @@
     padding: 2px 6px; cursor: default; white-space: nowrap;
   }
   .chip-staff  { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-  .chip-leader { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+  .chip-leader { background: rgba(245, 158, 11, 0.15); }
+  [data-theme="light"] .chip-leader { color: #b45309; }
+  [data-theme="dark"] .chip-leader { color: #fbbf24; }
   
   /* 土日・祝日ヘッダーの文字色 */
   [data-theme="light"] .sched-grid thead th.sat { color: #1e40af !important; }
@@ -163,10 +165,12 @@
   .ft-off { background-color: rgba(239, 68, 68, 0.25) !important; color: #ef4444 !important; }
   /* スタッフ個別コメント表示 */
   .cell-note-badge {
-    display: block; font-size: .6rem; color: #f59e0b; line-height: 1.2;
+    display: block; font-size: .6rem; line-height: 1.2;
     margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: 58px;
   }
+  [data-theme="light"] .cell-note-badge { color: #b45309; }
+  [data-theme="dark"] .cell-note-badge { color: #fbbf24; }
   /* スタッフ名リンク */
   .emp-name-link {
     color: inherit; text-decoration: none; display: block;
@@ -329,10 +333,10 @@
   {# ── 確定済みロックバナー ── #}
   {% if period.status == 'confirmed' %}
   <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
-       style="background:#1e293b;border-left:4px solid #22c55e">
+       style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid #22c55e">
     <i class="bi bi-lock-fill text-success mt-1" style="flex-shrink:0"></i>
-    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6">
-      このシフトは<strong style="color:#86efac">確定済み</strong>です。担当の追加・削除はロックされています。<br>
+    <div style="font-size:.85rem;color:var(--text);line-height:1.6">
+      このシフトは<strong style="color:#22c55e">確定済み</strong>です。担当の追加・削除はロックされています。<br>
       変更するには「確定解除」ボタンを押してください。
     </div>
   </div>
@@ -341,10 +345,10 @@
   {# ── 再生成推奨バナー ── #}
   {% if needs_regen %}
   <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
-       style="background:#1e293b;border-left:4px solid #f59e0b">
+       style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid #f59e0b">
     <i class="bi bi-arrow-repeat text-warning mt-1" style="flex-shrink:0"></i>
-    <div style="font-size:.85rem;color:#e2e8f0;line-height:1.6">
-      このシフトの生成後に<strong style="color:#fbbf24">予約客数が更新</strong>されました。<br>
+    <div style="font-size:.85rem;color:var(--text);line-height:1.6">
+      このシフトの生成後に<strong style="color:#f59e0b">予約客数が更新</strong>されました。<br>
       増員条件が変わっている可能性があります。
       <a href="{{ url_for('generate.index') }}" class="btn btn-warning btn-sm ms-2 py-0 px-2"
          style="font-size:.78rem">再生成する</a>
@@ -1151,13 +1155,13 @@ function editNote(el) {
 <!-- 確定確認ダイアログ -->
 <div class="modal fade" id="confirmDialog" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:360px">
-    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:16px">
-      <div class="modal-header border-secondary py-2 px-3">
+    <div class="modal-content">
+      <div class="modal-header py-2 px-3" style="border-color: var(--border) !important">
         <h6 class="modal-title"><i class="bi bi-check-circle me-2"></i>シフトを確定しますか？</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body px-3 py-3" id="confirm-dialog-body"></div>
-      <div class="modal-footer border-secondary py-2">
+      <div class="modal-footer py-2" style="border-color: var(--border) !important">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">キャンセル</button>
         <button type="button" class="btn btn-success btn-sm" id="btn-do-confirm">
           <i class="bi bi-check-lg me-1"></i>確定する
@@ -1170,10 +1174,10 @@ function editNote(el) {
 <!-- 変更履歴モーダル -->
 <div class="modal fade" id="historyModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-scrollable">
-    <div class="modal-content" style="background:#1e293b;color:white;border:none">
-      <div class="modal-header" style="border-color:#334155">
+    <div class="modal-content">
+      <div class="modal-header" style="border-color: var(--border) !important">
         <h6 class="modal-title"><i class="bi bi-clock-history me-2"></i>手動変更履歴（直近60件）</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body" id="historyBody" style="max-height:70vh"></div>
     </div>

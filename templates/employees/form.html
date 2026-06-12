@@ -6,28 +6,41 @@
   .help-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 50%;
-    background: #e0f2fe; color: #0369a1;
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
     font-size: .68rem; font-weight: 700;
-    border: 1px solid #7dd3fc; cursor: pointer;
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    cursor: pointer;
     vertical-align: middle; margin-left: 5px;
     flex-shrink: 0; line-height: 1;
+    transition: all var(--transition);
   }
-  .help-btn:hover { background: #bae6fd; }
+  .help-btn:hover {
+    background: rgba(14, 165, 233, 0.22);
+    border-color: rgba(14, 165, 233, 0.45);
+  }
   .popover { max-width: 280px; font-size: .82rem; }
   .popover-header { font-size: .85rem; font-weight: 600; }
-</style>
-<style>
+
   .pos-btn {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: .7rem .5rem; border: 1.5px solid #e2e8f0;
+    padding: .7rem .5rem; border: 1.5px solid var(--border);
     border-radius: 10px; cursor: pointer; font-size: .85rem; font-weight: 500;
-    color: #64748b; transition: all .15s; user-select: none;
-    background: white; min-height: 70px;
+    color: var(--text-muted); transition: all var(--transition); user-select: none;
+    background: var(--bg-card); min-height: 70px;
   }
-  .pos-btn:hover { border-color: #94a3b8; color: #1e293b; background: #f8fafc; }
-  .pos-btn.selected { border-color: #0ea5e9; background: #f0f9ff; color: #0284c7; font-weight: 600; }
-  .pos-btn.pos-hall.selected    { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
-  .pos-btn.pos-kitchen.selected { border-color: #15803d; background: #f0fdf4; color: #15803d; }
+  .pos-btn:hover { border-color: var(--text-muted); color: var(--text); background: rgba(148, 163, 184, 0.08); }
+  
+  /* ライトテーマ用の選択状態 */
+  [data-theme="light"] .pos-btn.selected { border-color: #0ea5e9; background: #f0f9ff; color: #0284c7; font-weight: 600; }
+  [data-theme="light"] .pos-btn.pos-hall.selected    { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
+  [data-theme="light"] .pos-btn.pos-kitchen.selected { border-color: #15803d; background: #f0fdf4; color: #15803d; }
+  
+  /* ダークテーマ用の選択状態 */
+  [data-theme="dark"] .pos-btn.selected { border-color: var(--accent); background: rgba(56, 189, 248, 0.12); color: var(--accent); font-weight: 600; }
+  [data-theme="dark"] .pos-btn.pos-hall.selected    { border-color: #60a5fa; background: rgba(96, 165, 250, 0.12); color: #60a5fa; }
+  [data-theme="dark"] .pos-btn.pos-kitchen.selected { border-color: #4ade80; background: rgba(74, 222, 128, 0.12); color: #4ade80; }
+
   @media (max-width: 767px) {
     .pos-btn { padding: .4rem .25rem; min-height: 60px; font-size: .78rem; }
     .pos-btn i { font-size: 1.1rem !important; }

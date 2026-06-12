@@ -222,6 +222,17 @@
     }
     .btn-loading { pointer-events: none; opacity: .75; }
 
+    /* ── モーダル ─────────────────────────────────────── */
+    .modal-content {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: var(--text);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg) !important;
+      box-shadow: var(--shadow-lg);
+    }
+
     /* ── ボトムナビ ───────────────────────────────────── */
     .bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0;
@@ -436,7 +447,7 @@
     <i class="bi {{ icon }}"></i>
     <div>
       <div>{{ label }}</div>
-      <div style="font-size:.73rem;color:#64748b;font-weight:400;margin-top:1px">{{ desc }}</div>
+      <div style="font-size:.73rem;color:#94a3b8;font-weight:400;margin-top:1px">{{ desc }}</div>
     </div>
   </a>
   {% endfor %}
@@ -445,7 +456,7 @@
     <i class="bi bi-moon-stars-fill theme-toggle-icon"></i>
     <div>
       <div class="theme-text">ダークモード</div>
-      <div style="font-size:.73rem;color:#64748b;font-weight:400;margin-top:1px">外観テーマの切り替え</div>
+      <div style="font-size:.73rem;color:#94a3b8;font-weight:400;margin-top:1px">外観テーマの切り替え</div>
     </div>
   </a>
   {% if auth_enabled %}
@@ -454,7 +465,7 @@
     <i class="bi bi-box-arrow-right" style="color:#f87171"></i>
     <div>
       <div style="color:#f87171">ログアウト</div>
-      <div style="font-size:.73rem;color:#64748b;font-weight:400;margin-top:1px">アクセスを終了する</div>
+      <div style="font-size:.73rem;color:#94a3b8;font-weight:400;margin-top:1px">アクセスを終了する</div>
     </div>
   </a>
   {% endif %}
@@ -466,11 +477,11 @@
 <!-- 未保存離脱ガードモーダル（全ページ共通） -->
 <div class="modal fade" id="unsavedModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content" style="background:#1e293b;color:white;border:none;border-radius:14px">
+    <div class="modal-content">
       <div class="modal-body p-4 text-center">
         <i class="bi bi-exclamation-triangle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
         <div class="fw-semibold mb-1">未保存の変更があります</div>
-        <div style="color:#94a3b8;font-size:.85rem;margin-bottom:1.25rem">保存せずに移動しますか？</div>
+        <div class="text-muted small mb-3">保存せずに移動しますか？</div>
         <div class="d-flex gap-2">
           <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">戻る</button>
           <button class="btn btn-danger flex-grow-1" id="unsaved-proceed-btn">移動する</button>
@@ -502,6 +513,7 @@
     const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const initialTheme = savedTheme || (systemDark ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', initialTheme);
+    document.documentElement.setAttribute('data-bs-theme', initialTheme);
     
     window.addEventListener('DOMContentLoaded', () => {
       updateThemeUI(initialTheme);
@@ -511,6 +523,7 @@
       const current = document.documentElement.getAttribute('data-theme');
       const next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
+      document.documentElement.setAttribute('data-bs-theme', next);
       localStorage.setItem('theme', next);
       updateThemeUI(next);
     };

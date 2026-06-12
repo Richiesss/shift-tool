@@ -5,13 +5,19 @@
   .help-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 50%;
-    background: #e0f2fe; color: #0369a1;
+    background: rgba(14, 165, 233, 0.12);
+    color: var(--accent);
     font-size: .68rem; font-weight: 700;
-    border: 1px solid #7dd3fc; cursor: pointer;
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    cursor: pointer;
     vertical-align: middle; margin-left: 5px;
     flex-shrink: 0; line-height: 1;
+    transition: all var(--transition);
   }
-  .help-btn:hover { background: #bae6fd; }
+  .help-btn:hover {
+    background: rgba(14, 165, 233, 0.22);
+    border-color: rgba(14, 165, 233, 0.45);
+  }
   .popover { max-width: 280px; font-size: .82rem; }
   .popover-header { font-size: .85rem; font-weight: 600; }
 </style>

@@ -187,7 +187,9 @@
   .ah-red   .ah-icon, .ah-red   .ah-title { color: #ef4444; }
   .ah-red   .ah-count { background: rgba(239, 68, 68, 0.15); color: #f87171; }
   .ah-amber .ah-icon, .ah-amber .ah-title { color: #f59e0b; }
-  .ah-amber .ah-count { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+  .ah-amber .ah-count { background: rgba(245, 158, 11, 0.15); }
+  [data-theme="light"] .ah-amber .ah-count { color: #b45309; }
+  [data-theme="dark"] .ah-amber .ah-count { color: #fbbf24; }
   .alert-chevron { color: var(--text-muted); font-size: .75rem; transition: transform .2s; }
   .alert-chevron.open { transform: rotate(180deg); }
   .alert-body {
@@ -201,8 +203,10 @@
   }
   .day-chip {
     background: rgba(245, 158, 11, 0.12); border-radius: 4px;
-    padding: 3px 8px; font-size: .78rem; color: #fbbf24; font-weight: 600;
+    padding: 3px 8px; font-size: .78rem; font-weight: 600;
   }
+  [data-theme="light"] .day-chip { color: #b45309; }
+  [data-theme="dark"] .day-chip { color: #fbbf24; }
 </style>
 {% endblock %}
 

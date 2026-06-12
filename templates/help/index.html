@@ -3,19 +3,20 @@
 {% block head %}
 <style>
   .help-hero {
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    color: white; padding: 2rem 1rem 1.5rem; text-align: center;
-    border-bottom: 1px solid #334155;
+    background: var(--dark-card-bg);
+    color: var(--dark-card-text); padding: 2rem 1rem 1.5rem; text-align: center;
+    border-bottom: 1px solid var(--border);
   }
   .help-hero .app-icon { font-size: 3rem; margin-bottom: .5rem; }
   .help-hero h2 { font-size: 1.3rem; font-weight: 700; margin: 0 0 .25rem; }
-  .help-hero p  { color: #94a3b8; font-size: .85rem; margin: 0; }
+  .help-hero p  { color: var(--text-muted); font-size: .85rem; margin: 0; }
 
   .help-section { margin-bottom: 1rem; }
 
   .help-card {
-    background: white; border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden;
+    background: var(--bg-card); border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm); overflow: hidden;
   }
   .help-card-header {
     display: flex; align-items: center; gap: .75rem;
@@ -23,53 +24,56 @@
     border-bottom: 1px solid transparent;
     transition: background .15s; user-select: none;
   }
-  .help-card-header:hover { background: #f8fafc; }
-  .help-card-header.open  { border-bottom-color: #e2e8f0; }
+  .help-card-header:hover { background: rgba(148, 163, 184, 0.08); }
+  .help-card-header.open  { border-bottom-color: var(--border); }
   .help-card-icon {
     width: 36px; height: 36px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.1rem; flex-shrink: 0;
   }
   .help-card-title { font-weight: 600; font-size: .95rem; flex-grow: 1; }
-  .help-card-chevron { color: #94a3b8; font-size: .8rem; transition: transform .2s; }
+  .help-card-chevron { color: var(--text-muted); font-size: .8rem; transition: transform .2s; }
   .help-card-chevron.open { transform: rotate(180deg); }
-  .help-card-body { padding: 1rem; display: none; font-size: .88rem; line-height: 1.7; }
+  .help-card-body { padding: 1rem; display: none; font-size: .88rem; line-height: 1.7; color: var(--text); }
   .help-card-body.open { display: block; }
 
   .step-list { list-style: none; padding: 0; margin: 0; }
   .step-list li {
     display: flex; gap: .75rem; padding: .5rem 0;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--border);
   }
   .step-list li:last-child { border-bottom: none; }
   .step-num {
-    width: 22px; height: 22px; background: #0ea5e9; color: white;
+    width: 22px; height: 22px; background: var(--accent); color: #020617;
     border-radius: 50%; font-size: .72rem; font-weight: 700;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     margin-top: 2px;
   }
-  .tip-box {
-    background: #f0f9ff; border-left: 3px solid #0ea5e9;
+  [data-theme="dark"] .step-num { color: #0f172a; }
+
+  .tip-box, .warn-box, .info-box {
     border-radius: 0 8px 8px 0; padding: .6rem .85rem;
-    font-size: .82rem; color: #0c4a6e; margin-top: .75rem;
+    font-size: .82rem; margin-top: .75rem;
   }
-  .warn-box {
-    background: #fffbeb; border-left: 3px solid #f59e0b;
-    border-radius: 0 8px 8px 0; padding: .6rem .85rem;
-    font-size: .82rem; color: #78350f; margin-top: .75rem;
-  }
-  .info-box {
-    background: #f0fdf4; border-left: 3px solid #22c55e;
-    border-radius: 0 8px 8px 0; padding: .6rem .85rem;
-    font-size: .82rem; color: #14532d; margin-top: .75rem;
-  }
+  
+  /* tip-box / warn-box / info-box (ライトテーマ) */
+  [data-theme="light"] .tip-box  { background: #f0f9ff; color: #0c4a6e; border-left: 3px solid #0ea5e9; }
+  [data-theme="light"] .warn-box { background: #fffbeb; color: #78350f; border-left: 3px solid #f59e0b; }
+  [data-theme="light"] .info-box { background: #f0fdf4; color: #14532d; border-left: 3px solid #22c55e; }
+  
+  /* tip-box / warn-box / info-box (ダークテーマ) */
+  [data-theme="dark"] .tip-box  { background: rgba(14, 165, 233, 0.12); color: #38bdf8; border-left: 3px solid #0ea5e9; }
+  [data-theme="dark"] .warn-box { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border-left: 3px solid #f59e0b; }
+  [data-theme="dark"] .info-box { background: rgba(34, 197, 94, 0.12); color: #4ade80; border-left: 3px solid #22c55e; }
+
   kbd {
-    background: #1e293b; color: white; border-radius: 4px;
+    background: var(--bg-card); color: var(--text); border-radius: 4px;
     padding: 1px 6px; font-size: .78rem; font-family: monospace;
+    border: 1px solid var(--border);
   }
   .sub-heading {
     font-size: .72rem; font-weight: 700; letter-spacing: .05em;
-    text-transform: uppercase; color: #64748b;
+    text-transform: uppercase; color: var(--text-muted);
     margin: 1rem 0 .5rem;
   }
   .sub-heading:first-child { margin-top: 0; }
