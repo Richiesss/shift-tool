@@ -406,6 +406,49 @@ def google_create_form(period_id):
     return redirect(url_for("shifts.input", period_id=period_id))
 
 
+@bp.post("/<int:period_id>/google/update")
+def google_update_form(period_id):
+    """Google フォームの内容（タイトル・説明・選択肢）を更新する"""
+    period = repo.get_period(period_id)
+    if not period or not period.google_form_id:
+        flash("Google フォームが作成されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    google_token = repo.get_google_token()
+    if not google_token:
+        flash("Googleアカウントとの連携が設定されていません。「設定」画面から連携を行ってください。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    # クライアントID/シークレットの取得
+    from routes.settings_routes import _get_google_client_credentials
+    client_id, client_secret = _get_google_client_credentials()
+    if not client_id or not client_secret:
+        flash("Google API 資格情報が設定されていません。", "error")
+        return redirect(url_for("shifts.input", period_id=period_id))
+
+    custom_title = request.form.get("title", "").strip()
+    custom_desc = request.form.get("description", "").strip()
+
+    try:
+        from utils.google_forms_api import update_google_form
+        employees = repo.get_all_employees(active_only=True)
+        pt_employees = [e for e in employees if e.employment_type != EmploymentType.FULL_TIME]
+
+        update_google_form(
+            period.google_form_id,
+            period,
+            pt_employees,
+            google_token,
+            custom_title=custom_title if custom_title else None,
+            custom_description=custom_desc if custom_desc else None,
+        )
+        flash("Google フォームの内容を最新の状態に更新しました！", "success")
+    except Exception as e:
+        flash(f"Google フォームの更新に失敗しました: {e}", "error")
+
+    return redirect(url_for("shifts.input", period_id=period_id))
+
+
 @bp.post("/<int:period_id>/google/sync")
 def google_sync(period_id):
     """Google フォームの回答を取得し、インポートプレビューを表示する"""

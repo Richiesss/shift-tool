@@ -211,3 +211,140 @@ def fetch_google_form_responses(
     responses = resp_data.get("responses", [])
 
     return form_schema, responses
+
+
+def update_google_form(
+    form_id: str,
+    period: SchedulePeriod,
+    employees: list[Employee],
+    credentials_json_str: str,
+    custom_title: Optional[str] = None,
+    custom_description: Optional[str] = None,
+) -> None:
+    """
+    既存の Google フォームの内容を更新する。
+    - タイトルや説明文（注意事項）の更新
+    - お名前リストの最新化
+    - 各日のチェックボックス選択肢の最新化
+    """
+    creds = get_credentials_from_json(credentials_json_str)
+    forms_service = build("forms", "v1", credentials=creds)
+
+    # 現在のフォームの構造を取得
+    form_info = forms_service.forms().get(formId=form_id).execute()
+    items = form_info.get("items", [])
+
+    requests = []
+
+    # 1. フォームの基本情報の更新
+    info_update = {}
+    update_masks = []
+    if custom_title:
+        info_update["title"] = custom_title
+        update_masks.append("title")
+    if custom_description:
+        info_update["description"] = custom_description
+        update_masks.append("description")
+
+    if info_update:
+        requests.append({
+            "updateFormInfo": {
+                "info": info_update,
+                "updateMask": ",".join(update_masks)
+            }
+        })
+
+    # お名前リストの準備
+    emp_names = [e.name for e in employees]
+
+    # チェックボックス用の選択肢リストを作成
+    checkbox_options = [{"value": "休み（出勤不可）"}, {"value": "有給"}]
+    for p in ALL_PATTERNS:
+        if p.id not in ("custom", "double") and p.start and p.end:
+            label = p.label
+            if p.covers_breakfast():
+                checkbox_options.append({"value": f"朝食: {label}"})
+            if p.covers_dinner():
+                checkbox_options.append({"value": f"ディナー: {label}"})
+    checkbox_options.append({"value": "その他（備考欄に時刻を記入）"})
+
+    # 日付ごとのラベル判定用
+    dates = list(period.date_range())
+    from utils.holidays import holiday_set
+    holidays = holiday_set(dates)
+    dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
+    date_labels = []
+    for d in dates:
+        ds = d.isoformat()
+        dow = dow_labels[d.weekday()]
+        is_h = ds in holidays
+        date_label = f"{d.month}月{d.day}日（{dow}）"
+        if is_h:
+            date_label += "【祝】"
+        date_labels.append((ds, date_label))
+
+    # 各アイテムの更新リクエストを構築
+    for idx, item in enumerate(items):
+        title = item.get("title", "")
+        item_id = item.get("itemId")
+        q_item = item.get("questionItem")
+        if not q_item or "question" not in q_item:
+            continue
+        q_id = q_item["question"]["questionId"]
+
+        # A. お名前の更新
+        if title == "お名前":
+            requests.append({
+                "updateItem": {
+                    "item": {
+                        "itemId": item_id,
+                        "questionItem": {
+                            "question": {
+                                "questionId": q_id,
+                                "required": True,
+                                "choiceQuestion": {
+                                    "type": "DROP_DOWN",
+                                    "options": [{"value": name} for name in emp_names]
+                                }
+                            }
+                        }
+                    },
+                    "location": {
+                        "index": idx
+                    },
+                    "updateMask": "questionItem.question.choiceQuestion.options"
+                }
+            })
+            continue
+
+        # B. 日付ごとのチェックボックスの更新
+        for ds, date_label in date_labels:
+            if title == f"{date_label} の出勤希望時間":
+                requests.append({
+                    "updateItem": {
+                        "item": {
+                            "itemId": item_id,
+                            "questionItem": {
+                                "question": {
+                                    "questionId": q_id,
+                                    "required": True,
+                                    "choiceQuestion": {
+                                        "type": "CHECKBOX",
+                                        "options": checkbox_options
+                                    }
+                                }
+                            }
+                        },
+                        "location": {
+                            "index": idx
+                        },
+                        "updateMask": "questionItem.question.choiceQuestion.options"
+                    }
+                })
+                break
+
+    if requests:
+        forms_service.forms().batchUpdate(
+            formId=form_id,
+            body={"requests": requests}
+        ).execute()
