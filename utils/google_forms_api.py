@@ -453,6 +453,7 @@ def set_form_accepting_responses(
     停止すると回答者には「回答の受付は終了しました」と表示される。"""
     creds = get_credentials_from_json(credentials_json_str)
     forms_service = build("forms", "v1", credentials=creds)
+    # publishState は部分更新不可（isPublished と isAcceptingResponses を必ず両方指定）
     forms_service.forms().setPublishSettings(
         formId=form_id,
         body={
@@ -462,6 +463,6 @@ def set_form_accepting_responses(
                     "isAcceptingResponses": accepting,
                 }
             },
-            "updateMask": "publishState.isAcceptingResponses",
+            "updateMask": "publishState",
         },
     ).execute()
