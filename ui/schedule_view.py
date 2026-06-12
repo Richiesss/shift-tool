@@ -1180,6 +1180,7 @@ class NoteEditDialog(QDialog):
         layout.addWidget(QLabel(f"日付: {d.month}月{d.day}日 ({dow})"))
 
         self._edit = QLineEdit(current_note)
+        self._edit.setMaxLength(200)  # 保存時の上限と揃える
         self._edit.setPlaceholderText("例: 棚卸し / 検便提出期限 / ○○研修")
         self._edit.setFixedHeight(32)
         layout.addWidget(self._edit)

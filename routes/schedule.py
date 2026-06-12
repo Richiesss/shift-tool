@@ -250,6 +250,10 @@ def index(period_id):
     notes = repo.get_schedule_notes(period_id)
     staff_notes = repo.get_staff_notes(period_id)
     shift_requests = repo.get_shift_requests(period_id)
+
+    # 出力前チェック（所属ポジション未設定・枠あふれの注意）
+    from export.excel_exporter import layout_warnings
+    export_warnings = layout_warnings(repo.get_all_employees(active_only=True))
     time_map = _build_time_map(shift_requests)
 
     # 人員充足チェック
@@ -386,6 +390,7 @@ def index(period_id):
         pos=pos,
         notes=notes,
         staff_notes=staff_notes,
+        export_warnings=export_warnings,
         time_map=time_map,
         staffing=staffing,
         shortage_groups=shortage_groups,
@@ -483,6 +488,26 @@ def save_staff_note(period_id):
     date_str = data.get("date", "")
     note = data.get("note", "")
     repo.save_staff_note(period_id, date_str, note)
+    return jsonify({"ok": True})
+
+
+@bp.post("/<int:period_id>/reservation")
+def save_reservation(period_id):
+    """予約客数（朝食見込・夜予約）のインライン保存"""
+    data = request.get_json()
+    date_str = data.get("date", "")
+    if not date_str:
+        return jsonify({"ok": False, "error": "日付が指定されていません"}), 400
+    try:
+        breakfast = max(0, int(data.get("breakfast") or 0))
+        dinner    = max(0, int(data.get("dinner") or 0))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "数値を入力してください"}), 400
+    # 既存の特別日フラグは維持する
+    current = repo.get_reservation_counts(period_id).get(date_str, {})
+    repo.save_reservation_count(
+        period_id, date_str, breakfast, dinner,
+        is_special_day=current.get("is_special_day", 0))
     return jsonify({"ok": True})
 
 

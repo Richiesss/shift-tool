@@ -205,25 +205,25 @@
   </div>
   <div class="ms-auto d-flex gap-1">
     {% if period %}
-    {% if period.status == 'confirmed' %}
-    <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm" title="Excel出力" aria-label="Excel出力">
-      <i class="bi bi-file-earmark-spreadsheet"></i>
-    </a>
-    <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm" title="PDF出力" aria-label="PDF出力">
-      <i class="bi bi-file-earmark-pdf"></i>
-    </a>
-    {% else %}
-    <button class="btn btn-outline-secondary btn-sm" style="opacity:.45;cursor:not-allowed"
-            title="Excel出力" aria-label="Excel出力"
-            onclick="showToast('エクスポートするには先に「確定」ボタンを押してください', 'warning')">
-      <i class="bi bi-file-earmark-spreadsheet"></i>
-    </button>
-    <button class="btn btn-outline-secondary btn-sm" style="opacity:.45;cursor:not-allowed"
-            title="PDF出力" aria-label="PDF出力"
-            onclick="showToast('エクスポートするには先に「確定」ボタンを押してください', 'warning')">
-      <i class="bi bi-file-earmark-pdf"></i>
+    {% set draft_hint = '' if period.status == 'confirmed' else '（未確定のため「(案)」付きで出力されます）' %}
+    {% if export_warnings %}
+    <button class="btn btn-outline-warning btn-sm" title="出力前の注意があります" aria-label="出力前の注意"
+            onclick="{% for w in export_warnings %}showToast({{ w | tojson }}, 'warning');{% endfor %}">
+      <i class="bi bi-exclamation-triangle"></i>
     </button>
     {% endif %}
+    <a href="{{ url_for('export.pdf', period_id=period.id, inline=1) }}" target="_blank"
+       class="btn btn-outline-light btn-sm" title="PDFプレビュー（別タブ）{{ draft_hint }}" aria-label="PDFプレビュー">
+      <i class="bi bi-eye"></i>
+    </a>
+    <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm"
+       title="Excel出力{{ draft_hint }}" aria-label="Excel出力">
+      <i class="bi bi-file-earmark-spreadsheet"></i>
+    </a>
+    <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm"
+       title="PDF出力{{ draft_hint }}" aria-label="PDF出力">
+      <i class="bi bi-file-earmark-pdf"></i>
+    </a>
     <button class="btn btn-outline-light btn-sm" onclick="openHistory({{ period.id }})" title="変更履歴" aria-label="変更履歴">
       <i class="bi bi-clock-history"></i>
     </button>
@@ -396,8 +396,12 @@
           {% set res_b = reservation_counts.get(ds, {}).get('breakfast', 0) %}
           {% set res_d = reservation_counts.get(ds, {}).get('dinner', 0) %}
           <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.7rem;line-height:1.3;color:#94a3b8">
-            <div><i class="bi bi-sunrise"></i> {{ res_b if res_b else '—' }}</div>
-            <div><i class="bi bi-moon-stars"></i> {{ res_d if res_d else '—' }}</div>
+            <div class="res-cell" style="cursor:pointer" title="クリックで予約客数を編集（朝食見込・夜予約欄に印字されます）"
+                 data-date="{{ ds }}" data-b="{{ res_b }}" data-d="{{ res_d }}"
+                 onclick="editReservation(this)">
+              <div><i class="bi bi-sunrise"></i> <span class="res-b">{{ res_b if res_b else '—' }}</span></div>
+              <div><i class="bi bi-moon-stars"></i> <span class="res-d">{{ res_d if res_d else '—' }}</span></div>
+            </div>
           </td>
           {% endfor %}
         </tr>
@@ -609,7 +613,7 @@
         <!-- ④ コメント -->
         <div class="asgn-section">
           <div class="asgn-section-label">コメント（任意）</div>
-          <textarea id="cell-note-input" rows="2"
+          <textarea id="cell-note-input" rows="2" maxlength="100"
                     class="form-control form-control-sm"
                     style="background:#0f172a;border-color:#334155;color:#e2e8f0;resize:none;font-size:.82rem"
                     placeholder="初日・オムレツ担当・休憩15:00〜 など（100文字以内）"
@@ -1001,6 +1005,53 @@ async function openHistory(periodId) {
   }
 }
 
+function editReservation(el) {
+  if (el.querySelector('input')) return;  // 編集中は無視
+  const date = el.dataset.date;
+  const curB = el.dataset.b === '0' ? '' : el.dataset.b;
+  const curD = el.dataset.d === '0' ? '' : el.dataset.d;
+  const orig = el.innerHTML;
+  el.innerHTML = `
+    <div class="d-flex flex-column gap-1" style="min-width:54px">
+      <input type="number" min="0" max="999" class="form-control form-control-sm res-in-b"
+             style="font-size:.7rem;padding:1px 4px" placeholder="朝" value="${curB}">
+      <input type="number" min="0" max="999" class="form-control form-control-sm res-in-d"
+             style="font-size:.7rem;padding:1px 4px" placeholder="夜" value="${curD}">
+    </div>`;
+  const inB = el.querySelector('.res-in-b');
+  const inD = el.querySelector('.res-in-d');
+  inB.focus();
+  let saved = false;
+  function save() {
+    if (saved) return; saved = true;
+    const b = parseInt(inB.value || '0', 10) || 0;
+    const d = parseInt(inD.value || '0', 10) || 0;
+    el.dataset.b = b; el.dataset.d = d;
+    el.innerHTML = `
+      <div><i class="bi bi-sunrise"></i> <span class="res-b">${b || '—'}</span></div>
+      <div><i class="bi bi-moon-stars"></i> <span class="res-d">${d || '—'}</span></div>`;
+    fetch(`/schedule/${PERIOD_ID}/reservation`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({date, breakfast: b, dinner: d})
+    }).then(r => {
+      el.style.transition = 'background .15s';
+      el.style.background = r.ok ? '#bbf7d0' : '#fecaca';
+      setTimeout(() => { el.style.background = ''; }, 800);
+    }).catch(() => {
+      el.style.background = '#fecaca';
+      setTimeout(() => { el.style.background = ''; }, 1500);
+    });
+  }
+  function cancelIfOutside(ev) {
+    if (!el.contains(ev.relatedTarget)) save();
+  }
+  inB.addEventListener('blur', cancelIfOutside);
+  inD.addEventListener('blur', cancelIfOutside);
+  inB.addEventListener('keydown', e => { if (e.key === 'Enter') inD.focus(); if (e.key === 'Escape') { saved = true; el.innerHTML = orig; } });
+  inD.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { saved = true; el.innerHTML = orig; } });
+}
+
 function editNote(el) {
   const date = el.dataset.date;
   const periodId = el.dataset.period;
@@ -1008,6 +1059,7 @@ function editNote(el) {
   const current = el.textContent.trim();
   const input = document.createElement('input');
   input.type = 'text'; input.value = current;
+  input.maxLength = 200;  // 保存時の上限と揃える（超過分は黙って切り捨てられるため）
   input.className = 'form-control form-control-sm'; input.style.minWidth = '80px';
   el.replaceWith(input); input.focus();
   function save() {

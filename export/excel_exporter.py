@@ -268,6 +268,43 @@ def _hours_formula(row: int, n: int) -> str:
     return "=" + "+".join(terms)
 
 
+# ── 出力前チェック ────────────────────────────────────────────────────────
+
+def layout_warnings(employees: list[Employee]) -> list[str]:
+    """シフト表出力時のレイアウト上の注意点を返す（出力画面での事前警告用）。
+
+    - キッチン/ホールいずれかの所属スタッフが0名
+    - グループの枠数(K社員2/K A・P18/H社員3/H A・P16)を超えて行追加が発生する
+    """
+    def _out_pos(e):
+        return e.output_position or e.primary_position
+
+    def _is_ft(e):
+        return e.employment_type == EmploymentType.FULL_TIME
+
+    kitchen = [e for e in employees if _out_pos(e) == PrimaryPosition.KITCHEN]
+    hall    = [e for e in employees if _out_pos(e) != PrimaryPosition.KITCHEN]
+
+    warnings: list[str] = []
+    if not kitchen:
+        warnings.append("キッチン所属のスタッフが0名です（全員ホール枠に出力されます）。"
+                        "従業員の「所属ポジション」を確認してください")
+    if not hall:
+        warnings.append("ホール所属のスタッフが0名です。"
+                        "従業員の「所属ポジション」を確認してください")
+    groups = [
+        ("キッチン社員",  [e for e in kitchen if _is_ft(e)],     K_FT_SLOTS),
+        ("キッチンA・P", [e for e in kitchen if not _is_ft(e)], K_PT_SLOTS),
+        ("ホール社員",    [e for e in hall if _is_ft(e)],        H_FT_SLOTS),
+        ("ホールA・P",   [e for e in hall if not _is_ft(e)],    H_PT_SLOTS),
+    ]
+    for label, emps, slots in groups:
+        if len(emps) > slots:
+            warnings.append(f"{label}が{len(emps)}名で枠数({slots})を超えるため、"
+                            f"行を追加して出力します")
+    return warnings
+
+
 # ── メイン出力 ────────────────────────────────────────────────────────────
 
 def export_excel(
@@ -340,7 +377,8 @@ def export_excel(
     start_d = date.fromisoformat(period.start_date)
     end_d   = date.fromisoformat(period.end_date)
     half    = "前半" if start_d.day <= 15 else "後半"
-    title   = f"{start_d.month}月      　　　　 {half}"
+    draft   = "" if period.status == "confirmed" else "(案)"
+    title   = f"{start_d.month}月      　　　　 {half}{draft}"
     for r in (R_DATE1, r_date2, r_date3):
         for c in (C_NAME_L, c_name_r):
             cell = ws.cell(r, c)

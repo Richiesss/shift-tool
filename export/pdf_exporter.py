@@ -280,7 +280,8 @@ def export_pdf(
     # ── タイトル ───────────────────────────────────────────────────────
     start_d = date.fromisoformat(period.start_date)
     half    = "前半" if start_d.day <= 15 else "後半"
-    title   = f"{start_d.month}月　{half}"
+    draft   = "" if period.status == "confirmed" else "(案)"
+    title   = f"{start_d.month}月　{half}{draft}"
 
     # ── 縮尺計算（A4横1ページフィットの再現）───────────────────────────
     page_w, page_h = landscape(A4)
