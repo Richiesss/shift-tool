@@ -70,7 +70,7 @@
 
       <div class="mb-3">
         <label class="form-label fw-semibold">雇用形態</label>
-        <select name="employment_type" class="form-select">
+        <select name="employment_type" class="form-select" onchange="onEmploymentTypeChange()">
           {% for et in employment_types %}
           <option value="{{ et.value }}" {{ 'selected' if emp and emp.employment_type == et else '' }}>
             {{ et.label() }}
@@ -79,7 +79,6 @@
         </select>
       </div>
 
-      {% if emp and emp.employment_type.value == 'part_time' or not emp %}
       <div id="pt-only-fields">
         <div class="mb-3">
           <label class="form-label fw-semibold">個人昇給額
@@ -107,7 +106,6 @@
           </div>
         </div>
       </div>
-      {% endif %}
 
       <!-- 所属ポジション -->
       <div class="mb-3">
@@ -241,7 +239,6 @@
             {{ 'checked' if emp and emp.can_cleanup else '' }}>
           <label class="form-check-label" for="cc">朝食片付け対応可（〜11:30）</label>
         </div>
-        {% if emp and emp.employment_type.value == 'part_time' or not emp %}
         <div id="omakase-fields" class="d-flex flex-column gap-2">
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_breakfast" id="aab"
@@ -267,12 +264,10 @@
           </button>
         </div>
         </div>
-        {% else %}
-        <div class="text-muted small">
+        <div id="ft-note" class="text-muted small">
           <i class="bi bi-info-circle me-1"></i>
           正社員は休み希望（有休・固定休）の日以外、もともと常にいつでも出勤可能として扱われるため、「おまかせ」設定はありません。
         </div>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -397,7 +392,15 @@ function selectOutputPos(val) {
   document.getElementById('op-kitchen-btn').classList.toggle('selected', val === 'kitchen');
 }
 
+function onEmploymentTypeChange() {
+  const isPt = document.querySelector('select[name="employment_type"]').value === 'part_time';
+  document.getElementById('pt-only-fields').style.display = isPt ? '' : 'none';
+  document.getElementById('omakase-fields').style.display = isPt ? '' : 'none';
+  document.getElementById('ft-note').style.display = isPt ? 'none' : '';
+}
+
 onPositionChange();
+onEmploymentTypeChange();
 
 function setBothOmakase() {
   document.getElementById('aab').checked = true;

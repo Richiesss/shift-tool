@@ -73,7 +73,10 @@
     </div>
   </div>
   {% else %}
-  <div class="text-center text-muted py-4">期間がありません</div>
+  <div class="text-center text-muted py-4">
+    <i class="bi bi-calendar3 fs-1 d-block mb-2"></i>
+    期間がありません
+  </div>
   {% endfor %}
 
   {% if has_older and not show_all %}

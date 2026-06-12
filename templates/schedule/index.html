@@ -287,7 +287,10 @@
   {% if not period %}
   <div class="text-center text-muted py-5">
     <i class="bi bi-calendar-x fs-1 d-block mb-2"></i>
-    シフト期間がありません
+    <div class="mb-2">シフト期間がありません</div>
+    <a href="{{ url_for('shifts.index') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>期間を作成する
+    </a>
   </div>
   {% else %}
 
@@ -652,6 +655,9 @@
               <span style="color:#64748b;font-size:.85rem">〜</span>
               <input type="time" id="reinf-end"   class="form-control form-control-sm reinf-time">
             </div>
+            <div id="reinf-time-error" class="text-danger small mt-1 d-none">
+              <i class="bi bi-exclamation-circle me-1"></i>開始時刻と終了時刻の両方を入力してください
+            </div>
           </div>
         </div>
 
@@ -839,6 +845,9 @@ function setTimeMode(mode) {
   document.getElementById('opt-default').classList.toggle('selected', mode === 'default');
   document.getElementById('opt-custom').classList.toggle('selected',  mode === 'custom');
   document.getElementById('custom-time-section').style.display = mode === 'custom' ? 'block' : 'none';
+  document.getElementById('reinf-start').classList.remove('is-invalid');
+  document.getElementById('reinf-end').classList.remove('is-invalid');
+  document.getElementById('reinf-time-error').classList.add('d-none');
 }
 
 function applyPreset(start, end, el) {
@@ -948,10 +957,12 @@ function doSubmit() {
     if (!start || !end) {
       document.getElementById('reinf-start').classList.add('is-invalid');
       document.getElementById('reinf-end').classList.add('is-invalid');
+      document.getElementById('reinf-time-error').classList.remove('d-none');
       return;
     }
     document.getElementById('reinf-start').classList.remove('is-invalid');
     document.getElementById('reinf-end').classList.remove('is-invalid');
+    document.getElementById('reinf-time-error').classList.add('d-none');
     callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot,
                  position: _selectedPos, action: 'add',
                  is_reinforcement: true, reinf_start: start, reinf_end: end });
