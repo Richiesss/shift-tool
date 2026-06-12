@@ -8,11 +8,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: sdu-shift-db
-          property: connectionString
+        sync: false
+      - key: DISABLE_STATEMENT_TIMEOUT
+        value: "true"
     autoDeploy: true
-
-databases:
-  - name: sdu-shift-db
-    plan: free

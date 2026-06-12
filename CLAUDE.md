@@ -63,6 +63,13 @@ python scripts/seed_test_data.py           # データを追加
 python scripts/seed_test_data.py --reset   # 全データ削除後に追加
 ```
 
+### SQLite から Supabase (PostgreSQL) へのデータ移行
+```bash
+python scripts/migrate_to_supabase.py --pg-url "postgresql://postgres.[username]:[password]@db.[project-ref].supabase.co:5432/postgres"
+```
+※ `--sqlite-path` で任意の SQLite ファイルパスを指定可能。移行後は自動的に PostgreSQL 側の SERIAL シーケンスが同期される。
+
+
 ### Dockerビルド（HuggingFace Spaces向け）
 `Dockerfile` を使用、`app_port: 8080`。
 
@@ -72,7 +79,8 @@ python scripts/seed_test_data.py --reset   # 全データ削除後に追加
 
 - **DB抽象化に従う**: `db/database.py` の `Connection` はSQLiteとPostgreSQL両対応。生のSQLは**SQLite方言**で書く（`?`プレースホルダ、`INTEGER PRIMARY KEY AUTOINCREMENT`など）。`_to_pg()`が自動的にPostgreSQL構文へ変換するため、PostgreSQL固有の構文を直接書かない。
 - **環境変数**:
-  - `DATABASE_URL` — 設定時はPostgreSQL（Render）、未設定時はSQLite（デスクトップ/HF Spaces）
+  - `DATABASE_URL` — 設定時はPostgreSQL（Render/Supabase）、未設定時はSQLite（デスクトップ/HF Spaces）
+  - `DISABLE_STATEMENT_TIMEOUT` — Supabase等のトランザクションプール経由で接続する場合に `true` に設定し、SET statement_timeout によるエラーを防止する
   - `APP_PASSWORD` — Web版の共有パスワード認証。空文字なら認証自体が無効になる
   - `SECRET_KEY` — Flaskセッション用シークレット
   - `SOLVER_LOG_PATH` — ソルバーのログ出力先（`utils/solver_logger.py`）

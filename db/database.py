@@ -4,7 +4,14 @@ import sys
 import threading
 from pathlib import Path
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+# DATABASE_URL は環境変数を動的に反映させるため、__getattr__ で取得可能にします
+def __getattr__(name):
+    if name == "DATABASE_URL":
+        return os.environ.get("DATABASE_URL", "")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+# Global flag to dynamically disable statement timeout if it is not supported by the pooler
+_disable_statement_timeout = os.environ.get("DISABLE_STATEMENT_TIMEOUT", "").lower() in ("true", "1", "yes")
 
 # SQLite fallback path (desktop / dev)
 if getattr(sys, "frozen", False):
@@ -28,7 +35,7 @@ def _get_pg_pool():
     with _pg_pool_lock:
         if _pg_pool is None or _pg_pool.closed:
             import psycopg2.pool
-            url = DATABASE_URL
+            url = os.environ.get("DATABASE_URL", "")
             if url.startswith("postgres://"):
                 url = "postgresql://" + url[len("postgres://"):]
             # keepalives: プール内で再利用される接続が裏側で切断されていた場合に
@@ -79,7 +86,8 @@ class _PgCursor:
 
 class Connection:
     def __init__(self):
-        if DATABASE_URL:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if db_url:
             import psycopg2.extras
             self._pool = _get_pg_pool()
             self._conn = self._pool.getconn()
@@ -100,6 +108,9 @@ class Connection:
     def _set_statement_timeout(self):
         """クエリが何らかの理由でハング/ロック待ちになっても
         gunicorn の worker timeout（120秒）より先にDB側で打ち切る"""
+        global _disable_statement_timeout
+        if _disable_statement_timeout:
+            return
         try:
             cur = self._conn.cursor()
             cur.execute("SET statement_timeout = 15000")
@@ -114,6 +125,8 @@ class Connection:
                 self._conn.rollback()
             except Exception:
                 pass
+            # 一度失敗したら、以降はタイムアウト設定をスキップする（トランザクションプール対策）
+            _disable_statement_timeout = True
 
     def _pg_execute(self, sql: str, params):
         import psycopg2
@@ -123,6 +136,16 @@ class Connection:
                 cur = self._conn.cursor(cursor_factory=self._factory)
                 cur.execute(sql, params)
                 return cur
+            except psycopg2.errors.QueryCanceled:
+                # statement_timeout によるクエリキャンセル（SQLSTATE 57014）。
+                # QueryCanceled は OperationalError のサブクラスだが、接続自体は
+                # 健全なので再接続リトライはせず、トランザクションをロールバック
+                # してそのまま再送出する（再試行しても同じクエリは再度タイムアウトする）
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+                raise
             except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
                 # 接続切断（Neonのアイドルタイムアウト等で「connection already
                 # closed」になるケースを含む）— プールから破棄して新しい接続を
