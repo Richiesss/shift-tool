@@ -1,5 +1,8 @@
 """CP-SATによるシフト最適化エンジン"""
 from __future__ import annotations
+import os
+import time
+import threading
 from dataclasses import dataclass
 from datetime import date
 from ortools.sat.python import cp_model
@@ -29,6 +32,26 @@ PRIORITY_SCALE = {"低": 0.1, "中": 1.0, "高": 10.0}
 # 連続勤務日数チェックのスライディングウィンドウ幅（Issue #5・#23）
 CONSECUTIVE_WINDOW = 7
 
+# 解の改善が止まってからこの秒数で探索を打ち切る（Issue #48）
+PHASE1_STALL_TIMEOUT = 6.0
+PHASE2_STALL_TIMEOUT = 12.0
+
+# 最適値とのギャップがこの割合以内なら探索を打ち切る（Issue #48）
+RELATIVE_GAP_LIMIT = 0.01
+
+
+def _solver_workers() -> int:
+    """CP-SATの並列探索ワーカー数を返す（Issue #48）。
+    環境変数 SOLVER_WORKERS で明示指定可能。未設定時はCPUコア数に応じて自動設定
+    （上限4。HF Spaces等のCPU制限環境でもメモリを圧迫しない範囲とする）。"""
+    env = os.environ.get("SOLVER_WORKERS", "")
+    if env:
+        try:
+            return max(1, int(env))
+        except ValueError:
+            pass
+    return max(1, min(4, os.cpu_count() or 1))
+
 
 @dataclass
 class SolverConfig:
@@ -38,7 +61,49 @@ class SolverConfig:
     balance_scale: float = 1.0         # 人員バランス均等化
 
 
-class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
+class _StallTrackingCallback(cp_model.CpSolverSolutionCallback):
+    """解が見つかった時刻（壁時計時間）を記録するベースクラス（Issue #48）。
+    `_solve_with_stall_watchdog` がこの記録を監視し、改善が一定時間止まったら
+    探索を打ち切る。"""
+
+    def __init__(self):
+        super().__init__()
+        self._last_solution_wall_clock: float | None = None
+
+    def on_solution_callback(self):
+        self._last_solution_wall_clock = time.time()
+
+    def last_solution_time(self) -> float | None:
+        return self._last_solution_wall_clock
+
+
+def _solve_with_stall_watchdog(
+    solver: cp_model.CpSolver,
+    model: cp_model.CpModel,
+    callback: _StallTrackingCallback,
+    stall_timeout: float,
+) -> int:
+    """解が見つかってから stall_timeout 秒間改善が無ければ探索を打ち切る（Issue #48）。
+    最初の解が見つかるまでは max_time_in_seconds の制限のみが働く。
+    小規模モデルで「良い解はすぐ見つかるが最適性の証明に時間がかかる」ケースに対応。"""
+    stop_event = threading.Event()
+
+    def _watchdog():
+        while not stop_event.wait(1.0):
+            last = callback.last_solution_time()
+            if last is not None and time.time() - last >= stall_timeout:
+                solver.stop_search()
+                return
+
+    watchdog = threading.Thread(target=_watchdog, daemon=True)
+    watchdog.start()
+    try:
+        return solver.solve(model, callback)
+    finally:
+        stop_event.set()
+
+
+class SolveProgressCallback(_StallTrackingCallback):
     """解が見つかるたびに DB の gen_message を更新するコールバック"""
 
     def __init__(self, period_id: int, max_time: float = 10.0):
@@ -49,9 +114,10 @@ class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
         self._last_update = 0.0
 
     def on_solution_callback(self):
+        super().on_solution_callback()
         self._n += 1
         elapsed = self.WallTime()
-        if elapsed - self._last_update < 1.5:
+        if elapsed - self._last_update < 3.0:
             return
         self._last_update = elapsed
         pct = min(90, int(elapsed / self._max_time * 100))
@@ -69,7 +135,7 @@ class SolveProgressCallback(cp_model.CpSolverSolutionCallback):
             pass
 
 
-class Phase2ProgressCallback(cp_model.CpSolverSolutionCallback):
+class Phase2ProgressCallback(_StallTrackingCallback):
     """フェーズ2用: 解発見のたびにログとDBステータスを更新する"""
 
     def __init__(self, period_id: int | None, max_time: float = 45.0):
@@ -80,9 +146,10 @@ class Phase2ProgressCallback(cp_model.CpSolverSolutionCallback):
         self._last_update = 0.0
 
     def on_solution_callback(self):
+        super().on_solution_callback()
         self._n += 1
         elapsed = self.WallTime()
-        if elapsed - self._last_update < 2.0:
+        if elapsed - self._last_update < 3.0:
             return
         self._last_update = elapsed
         pct = min(90, int(elapsed / self._max_time * 100))
@@ -175,7 +242,6 @@ def solve(
       3b. アルバイト希望を通す             weight=100 × pt_pref_scale
       4. 人員バランス均等化                 weight=10 × balance_scale
     """
-    import time
     t0 = time.time()
     if config is None:
         config = SolverConfig()
@@ -807,11 +873,15 @@ def solve(
     # ── 求解 ────────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 25.0
-    solver.parameters.num_search_workers = 1
+    solver.parameters.num_search_workers = _solver_workers()
+    solver.parameters.relative_gap_limit = RELATIVE_GAP_LIMIT
     solver.parameters.log_search_progress = False
     logger.info(f"  [CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s "
-                f"workers={solver.parameters.num_search_workers}")
-    status = solver.solve(model, progress_callback) if progress_callback else solver.solve(model)
+                f"workers={solver.parameters.num_search_workers} "
+                f"gap_limit={solver.parameters.relative_gap_limit} "
+                f"stall_timeout={PHASE1_STALL_TIMEOUT}s")
+    cb = progress_callback or _StallTrackingCallback()
+    status = _solve_with_stall_watchdog(solver, model, cb, PHASE1_STALL_TIMEOUT)
 
     elapsed = time.time() - t0
     status_name = solver.status_name(status)
@@ -1069,7 +1139,6 @@ def _solve_best_effort(
     prev_tail: dict[int, list[int]] | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
-    import time
     if config is None:
         config = SolverConfig()
     if shift_constraints is None:
@@ -1313,11 +1382,14 @@ def _solve_best_effort(
     MAX_TIME_P2 = 45.0
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = MAX_TIME_P2
-    solver.parameters.num_search_workers = 1
+    solver.parameters.num_search_workers = _solver_workers()
+    solver.parameters.relative_gap_limit = RELATIVE_GAP_LIMIT
     solver.parameters.log_search_progress = False
     cb = Phase2ProgressCallback(period_id, max_time=MAX_TIME_P2)
-    logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={MAX_TIME_P2}s")
-    status = solver.solve(model, cb)
+    logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={MAX_TIME_P2}s "
+                f"workers={solver.parameters.num_search_workers} "
+                f"stall_timeout={PHASE2_STALL_TIMEOUT}s")
+    status = _solve_with_stall_watchdog(solver, model, cb, PHASE2_STALL_TIMEOUT)
     status_name = solver.status_name(status)
     try:
         nb = solver.num_branches() if callable(solver.num_branches) else solver.num_branches
