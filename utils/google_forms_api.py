@@ -266,16 +266,17 @@ def create_google_form(
         body={"requests": requests}
     ).execute()
 
-    # 3. 遷移先IDを設定する (ステップ2: 作成されたアイテムを取得してIDを特定)
+    # 3. 遷移先IDを設定する (ステップ2: 作成されたアイテムを取得してIDとインデックスを特定)
     form_info = forms_service.forms().get(formId=form_id).execute()
     items = form_info.get("items", [])
 
     date_avail_q_ids = {}
     date_avail_item_ids = {}
+    date_avail_item_indexes = {}
     date_avail_section_ids = {}
     note_section_id = None
 
-    for item in items:
+    for idx, item in enumerate(items):
         title = item.get("title", "")
         
         if title == "その他連絡事項" and "pageBreakItem" in item:
@@ -295,15 +296,17 @@ def create_google_form(
             elif title == f"{date_label}は出勤できますか？" and "questionItem" in item:
                 date_avail_q_ids[ds] = item["questionItem"]["question"]["questionId"]
                 date_avail_item_ids[ds] = item["itemId"]
+                date_avail_item_indexes[ds] = idx
 
     # 4. 2回目の batchUpdate で「いいえ（休み）」の遷移先 (goToSectionId) を設定
-    # ※ Forms API には updateQuestion リクエストはなく、updateItem リクエストを使用する必要があります。
+    # ※ Forms API の updateItem リクエストには location が必須です。
     update_requests = []
     for i, d in enumerate(dates):
         ds = d.isoformat()
         q_id = date_avail_q_ids.get(ds)
         item_id = date_avail_item_ids.get(ds)
-        if not q_id or not item_id:
+        item_idx = date_avail_item_indexes.get(ds)
+        if not q_id or not item_id or item_idx is None:
             continue
 
         if i < len(dates) - 1:
@@ -331,6 +334,9 @@ def create_google_form(
                             }
                         }
                     }
+                },
+                "location": {
+                    "index": item_idx
                 },
                 "updateMask": "questionItem.question.choiceQuestion.options"
             }
