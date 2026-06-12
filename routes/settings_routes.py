@@ -124,6 +124,11 @@ def google_login():
         prompt='consent'
     )
     session['google_oauth_state'] = state
+    
+    # PKCE 用の code_verifier をセッションに保存
+    if hasattr(flow, 'code_verifier') and flow.code_verifier:
+        session['google_code_verifier'] = flow.code_verifier
+        
     return redirect(authorization_url)
 
 
@@ -140,6 +145,11 @@ def google_callback():
     redirect_uri = url_for("settings.google_callback", _external=True, _scheme=scheme)
 
     flow = get_oauth_credentials(client_id, client_secret, redirect_uri)
+    
+    # セッションから code_verifier を復元
+    if 'google_code_verifier' in session:
+        flow.code_verifier = session.pop('google_code_verifier')
+
     try:
         # プロキシ環境により request.url が http で入ってくる場合があるため、
         # oauthlib での insecure_transport エラーを回避するために https に強制置換する
