@@ -242,32 +242,40 @@
     </div>
     {% endif %}
   </div>
-  <div class="ms-auto d-flex gap-1">
+  <div class="ms-auto d-flex gap-1 align-items-center">
     {% if period %}
-    {% set draft_hint = '' if period.status == 'confirmed' else '（未確定のため「(案)」付きで出力されます）' %}
+    {% set draft_hint = '' if period.status == 'confirmed' else ' (案)' %}
     {% if export_warnings %}
     <button class="btn btn-outline-warning btn-sm" title="出力前の注意があります" aria-label="出力前の注意"
             onclick="{% for w in export_warnings %}showToast({{ w | tojson }}, 'warning');{% endfor %}">
       <i class="bi bi-exclamation-triangle"></i>
     </button>
     {% endif %}
-    <a href="{{ url_for('export.pdf', period_id=period.id, inline=1) }}" target="_blank"
-       class="btn btn-outline-light btn-sm" title="PDFプレビュー（別タブ）{{ draft_hint }}" aria-label="PDFプレビュー">
-      <i class="bi bi-eye"></i>
-    </a>
-    <a href="{{ url_for('export.excel', period_id=period.id) }}" class="btn btn-outline-light btn-sm"
-       title="Excel出力{{ draft_hint }}" aria-label="Excel出力">
-      <i class="bi bi-file-earmark-spreadsheet"></i>
-    </a>
-    <a href="{{ url_for('export.pdf', period_id=period.id) }}" class="btn btn-outline-light btn-sm"
-       title="PDF出力{{ draft_hint }}" aria-label="PDF出力">
-      <i class="bi bi-file-earmark-pdf"></i>
-    </a>
-    {% if period.status != 'confirmed' %}
-    <button class="btn btn-outline-light btn-sm" onclick="undoLastChange()" title="直前の変更を元に戻す" aria-label="直前の変更を元に戻す">
-      <i class="bi bi-arrow-counterclockwise"></i>
-    </button>
-    {% endif %}
+    
+    <!-- 出力ドロップダウン -->
+    <div class="dropdown">
+      <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="出力メニュー">
+        <i class="bi bi-download me-1"></i>出力
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end" style="min-width: 180px;">
+        <li>
+          <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.pdf', period_id=period.id, inline=1) }}" target="_blank">
+            <i class="bi bi-eye text-primary"></i>PDFプレビュー{{ draft_hint }}
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.excel', period_id=period.id) }}">
+            <i class="bi bi-file-earmark-spreadsheet text-success"></i>Excel出力{{ draft_hint }}
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.pdf', period_id=period.id) }}">
+            <i class="bi bi-file-earmark-pdf text-danger"></i>PDF出力{{ draft_hint }}
+          </a>
+        </li>
+      </ul>
+    </div>
+
     <button class="btn btn-outline-light btn-sm" onclick="openHistory({{ period.id }})" title="変更履歴" aria-label="変更履歴">
       <i class="bi bi-clock-history"></i>
     </button>
@@ -858,21 +866,6 @@ function openConfirmDialog() {
   document.getElementById('confirm-dialog-body').innerHTML = html;
   document.getElementById('btn-do-confirm').onclick = () => document.getElementById('confirm-form').submit();
   new bootstrap.Modal(document.getElementById('confirmDialog')).show();
-}
-
-async function undoLastChange() {
-  try {
-    const res = await fetch(`/schedule/${PERIOD_ID}/undo`, {method: 'POST'});
-    const data = await res.json();
-    if (data.ok) {
-      showToast(data.message, 'success');
-      setTimeout(() => location.reload(), 700);
-    } else {
-      showToast(data.error || '取り消しに失敗しました', 'warning');
-    }
-  } catch (e) {
-    showToast('取り消しに失敗しました', 'danger');
-  }
 }
 
 function openAssignModal(cell) {
