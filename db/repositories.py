@@ -818,6 +818,36 @@ def save_schedule_note(period_id: int, date_str: str, note: str):
     conn.close()
 
 
+def get_staff_notes(period_id: int) -> dict[str, str]:
+    """期間の社員向けお知らせ（メモ2欄）を {date_str: note} で返す"""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT date, note FROM staff_notes WHERE period_id=? ORDER BY date",
+        (period_id,)
+    ).fetchall()
+    conn.close()
+    return {r["date"]: r["note"] for r in rows if r["note"]}
+
+
+def save_staff_note(period_id: int, date_str: str, note: str):
+    """社員向けお知らせを保存。空文字の場合は削除。200文字以内に制限"""
+    note = note.strip()[:200]
+    conn = get_connection()
+    if note:
+        conn.execute(
+            """INSERT INTO staff_notes (period_id, date, note) VALUES (?,?,?)
+               ON CONFLICT(period_id, date) DO UPDATE SET note=excluded.note""",
+            (period_id, date_str, note)
+        )
+    else:
+        conn.execute(
+            "DELETE FROM staff_notes WHERE period_id=? AND date=?",
+            (period_id, date_str)
+        )
+    conn.commit()
+    conn.close()
+
+
 def get_cell_notes(period_id: int) -> dict[tuple[int, str], str]:
     """スタッフ個別コメントを {(employee_id, date): note} で返す"""
     conn = get_connection()

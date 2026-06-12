@@ -402,9 +402,9 @@
           {% endfor %}
         </tr>
 
-        <!-- メモ行 -->
+        <!-- メモ1行（全体向けのお知らせ） -->
         <tr class="table-light">
-          <td class="emp-col small text-muted">メモ</td>
+          <td class="emp-col small text-muted" title="全体向けのお知らせ。シフト表のメモ1欄に印字されます">メモ1<br><span style="font-size:.65rem">(全体)</span></td>
           {% for d in dates %}
           {% set ds = d|string %}
           {% set dow = d.weekday() %}
@@ -412,8 +412,23 @@
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           <td class="text-center {{ day_cls }}" style="min-width:70px">
             <span class="note-cell d-block small text-muted" style="cursor:pointer;min-height:18px"
-              data-date="{{ ds }}" data-period="{{ period.id }}"
+              data-date="{{ ds }}" data-period="{{ period.id }}" data-endpoint="note"
               onclick="editNote(this)">{{ notes.get(ds, '') or '' }}</span>
+          </td>
+          {% endfor %}
+        </tr>
+        <!-- メモ2行（社員向けのお知らせ） -->
+        <tr class="table-light">
+          <td class="emp-col small text-muted" title="社員向けのお知らせ。シフト表のメモ2欄に印字されます">メモ2<br><span style="font-size:.65rem">(社員)</span></td>
+          {% for d in dates %}
+          {% set ds = d|string %}
+          {% set dow = d.weekday() %}
+          {% set is_holiday = ds in holidays %}
+          {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
+          <td class="text-center {{ day_cls }}" style="min-width:70px">
+            <span class="note-cell d-block small text-muted" style="cursor:pointer;min-height:18px"
+              data-date="{{ ds }}" data-period="{{ period.id }}" data-endpoint="staff_note"
+              onclick="editNote(this)">{{ staff_notes.get(ds, '') or '' }}</span>
           </td>
           {% endfor %}
         </tr>
@@ -989,6 +1004,7 @@ async function openHistory(periodId) {
 function editNote(el) {
   const date = el.dataset.date;
   const periodId = el.dataset.period;
+  const endpoint = el.dataset.endpoint || 'note';  // note=メモ1(全体) / staff_note=メモ2(社員)
   const current = el.textContent.trim();
   const input = document.createElement('input');
   input.type = 'text'; input.value = current;
@@ -1001,10 +1017,11 @@ function editNote(el) {
     span.style.cssText = 'cursor:pointer;min-height:18px';
     span.dataset.date = date;
     span.dataset.period = periodId;
+    span.dataset.endpoint = endpoint;
     span.onclick = function(){ editNote(this); };
     span.textContent = note;
     input.replaceWith(span);
-    fetch(`/schedule/${periodId}/note`, {
+    fetch(`/schedule/${periodId}/${endpoint}`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({date, note})

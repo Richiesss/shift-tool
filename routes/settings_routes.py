@@ -86,7 +86,7 @@ def backup():
     tables = [
         "employees","fixed_patterns","fixed_unavailable_dates",
         "schedule_periods","shift_requests","shift_assignments",
-        "reservation_counts","schedule_notes","shift_constraints",
+        "reservation_counts","schedule_notes","staff_notes","cell_notes","shift_constraints",
         "breakfast_band_constraints","app_settings",
     ]
     data = {}
@@ -126,7 +126,7 @@ def restore():
     restore_order = [
         "employees","fixed_patterns","fixed_unavailable_dates",
         "schedule_periods","shift_requests","shift_assignments",
-        "reservation_counts","schedule_notes","shift_constraints",
+        "reservation_counts","schedule_notes","staff_notes","cell_notes","shift_constraints",
         "breakfast_band_constraints","app_settings",
     ]
     try:

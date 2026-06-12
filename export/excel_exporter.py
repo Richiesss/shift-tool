@@ -280,7 +280,8 @@ def export_excel(
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
     req_map  = {(r.employee_id, r.date): r for r in requests}
-    notes    = repo.get_schedule_notes(period.id)        # 日付メモ → メモ1欄
+    notes    = repo.get_schedule_notes(period.id)        # 全体向けお知らせ → メモ1欄
+    staff_notes = repo.get_staff_notes(period.id)        # 社員向けお知らせ → メモ2欄
     reserves = repo.get_reservation_counts(period.id)    # 予約客数 → 朝食見込・夜予約
     cell_notes = repo.get_cell_notes(period.id)          # スタッフ個別コメント → 区切りセル
 
@@ -374,7 +375,7 @@ def export_excel(
                 ws.cell(r, cc).fill = day_fill
                 ws.cell(r + 1, cc).fill = day_fill
         ws.cell(R_MEMO1, col).value = note
-        ws.cell(R_MEMO2, col).value = None
+        ws.cell(R_MEMO2, col).value = staff_notes.get(ds, "") or None
         ws.cell(R_BF,  col).value = bf
         ws.cell(R_DIN, col).value = din
         # 2ブロック目の朝食見込・夜予約は1ブロック目を参照する式（テンプレート流儀）

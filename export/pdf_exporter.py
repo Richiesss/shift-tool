@@ -247,9 +247,10 @@ def export_pdf(
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
     req_map  = {(r.employee_id, r.date): r for r in requests}
-    notes    = repo.get_schedule_notes(period.id)
-    reserves = repo.get_reservation_counts(period.id)
-    cell_notes = repo.get_cell_notes(period.id)       # スタッフ個別コメント → 区切りセル
+    notes       = repo.get_schedule_notes(period.id)  # 全体向けお知らせ → メモ1欄
+    staff_notes = repo.get_staff_notes(period.id)     # 社員向けお知らせ → メモ2欄
+    reserves    = repo.get_reservation_counts(period.id)
+    cell_notes  = repo.get_cell_notes(period.id)      # スタッフ個別コメント → 区切りセル
 
     font = _register_font()
 
@@ -401,11 +402,14 @@ def export_pdf(
         _span(c0, R_BF,    c0 + 2, R_BF)
         _span(c0, R_DIN,   c0 + 2, R_DIN)
         if i < n:
-            ds   = dates[i].isoformat()
-            note = notes.get(ds, "")
-            res  = reserves.get(ds, {})
+            ds    = dates[i].isoformat()
+            note  = notes.get(ds, "")
+            note2 = staff_notes.get(ds, "")
+            res   = reserves.get(ds, {})
             if note:
                 data[R_MEMO1][c0] = Paragraph(note, memo_style)
+            if note2:
+                data[R_MEMO2][c0] = Paragraph(note2, memo_style)
             if res.get("breakfast") is not None:
                 data[R_BF][c0] = str(res["breakfast"])
             if res.get("dinner") is not None:

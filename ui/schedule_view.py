@@ -164,18 +164,21 @@ class ScheduleView(QWidget):
         notes_table = None
         if slot == TimeSlot.BREAKFAST:
             notes_table = QTableWidget()
-            notes_table.setRowCount(1)
+            notes_table.setRowCount(2)  # 行0=メモ1(全体向け) / 行1=メモ2(社員向け)
             notes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
             notes_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
             notes_table.verticalHeader().setVisible(False)
             notes_table.horizontalHeader().setVisible(False)
             notes_table.setShowGrid(True)
-            notes_table.setFixedHeight(26)
+            notes_table.setFixedHeight(48)
             notes_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             notes_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             notes_table.setRowHeight(0, 22)
-            notes_table.setToolTip("クリックしてその日の備考を入力できます。PDF の備考欄に反映されます。")
-            notes_table.cellClicked.connect(lambda r, c: self._on_note_cell_clicked(c))
+            notes_table.setRowHeight(1, 22)
+            notes_table.setToolTip(
+                "クリックして入力できます。メモ1=全体向けのお知らせ、メモ2=社員向けのお知らせ。\n"
+                "シフト表のメモ1・メモ2欄に反映されます。")
+            notes_table.cellClicked.connect(lambda r, c: self._on_note_cell_clicked(r, c))
             vbox.addWidget(notes_table)
 
         # 従業員テーブル（スクロール可）
@@ -344,6 +347,7 @@ class ScheduleView(QWidget):
             for r in requests
         }
         self._notes = repo.get_schedule_notes(self._period.id)
+        self._staff_notes = repo.get_staff_notes(self._period.id)
 
     # ── 描画 ──────────────────────────────────────────────────────────────
 
@@ -692,28 +696,31 @@ class ScheduleView(QWidget):
         for c_i in range(n_cols):
             self._notes_table.setColumnWidth(c_i, self.emp_table_b.columnWidth(c_i))
         c = theme.c
-        for col_idx, ds in enumerate(col_date_strs):
-            if col_idx == 0 or ds is None:
-                text = "備考" if col_idx == 0 else ""
-                item = QTableWidgetItem(text)
-                item.setBackground(QBrush(QColor(c["surface2"])))
-                item.setFont(QFont("", 8, QFont.Weight.Bold))
-                item.setForeground(QBrush(QColor(c["text3"])))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-            else:
-                note = self._notes.get(ds, "")
-                item = QTableWidgetItem(note)
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                item.setFont(QFont("", 8))
-                if note:
-                    item.setBackground(QBrush(QColor("#FFFDE7")))
-                    item.setForeground(QBrush(QColor(c["text"])))
-                else:
-                    item.setBackground(QBrush(QColor(c["bg"])))
+        # 行0=メモ1(全体向け) / 行1=メモ2(社員向け)
+        rows = [("メモ1(全体)", self._notes), ("メモ2(社員)", self._staff_notes)]
+        for row_idx, (label, notes_map) in enumerate(rows):
+            for col_idx, ds in enumerate(col_date_strs):
+                if col_idx == 0 or ds is None:
+                    text = label if col_idx == 0 else ""
+                    item = QTableWidgetItem(text)
+                    item.setBackground(QBrush(QColor(c["surface2"])))
+                    item.setFont(QFont("", 8, QFont.Weight.Bold))
                     item.setForeground(QBrush(QColor(c["text3"])))
-            self._notes_table.setItem(0, col_idx, item)
+                    item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                else:
+                    note = notes_map.get(ds, "")
+                    item = QTableWidgetItem(note)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    item.setFont(QFont("", 8))
+                    if note:
+                        item.setBackground(QBrush(QColor("#FFFDE7")))
+                        item.setForeground(QBrush(QColor(c["text"])))
+                    else:
+                        item.setBackground(QBrush(QColor(c["bg"])))
+                        item.setForeground(QBrush(QColor(c["text3"])))
+                self._notes_table.setItem(row_idx, col_idx, item)
 
-    def _on_note_cell_clicked(self, col: int):
+    def _on_note_cell_clicked(self, row: int, col: int):
         if not self._period or not self._col_date_strs_b:
             return
         if col == 0 or col >= len(self._col_date_strs_b) - 1:
@@ -721,14 +728,19 @@ class ScheduleView(QWidget):
         ds = self._col_date_strs_b[col]
         if not ds:
             return
-        dlg = NoteEditDialog(ds, self._notes.get(ds, ""), parent=self)
+        is_staff = (row == 1)  # 行1=メモ2(社員向け)
+        notes_map = self._staff_notes if is_staff else self._notes
+        dlg = NoteEditDialog(ds, notes_map.get(ds, ""), is_staff=is_staff, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             note = dlg.note
-            repo.save_schedule_note(self._period.id, ds, note)
-            if note:
-                self._notes[ds] = note
+            if is_staff:
+                repo.save_staff_note(self._period.id, ds, note)
             else:
-                self._notes.pop(ds, None)
+                repo.save_schedule_note(self._period.id, ds, note)
+            if note:
+                notes_map[ds] = note
+            else:
+                notes_map.pop(ds, None)
             self._render_notes_row()
 
     # ── イベント ──────────────────────────────────────────────────────────
@@ -1155,11 +1167,12 @@ class _TimetableWidget(QWidget):
 # ── 備考編集ダイアログ ────────────────────────────────────────────────────
 
 class NoteEditDialog(QDialog):
-    def __init__(self, date_str: str, current_note: str, parent=None):
+    def __init__(self, date_str: str, current_note: str, is_staff: bool = False, parent=None):
         super().__init__(parent)
         d = date.fromisoformat(date_str)
         dow = DAY_OF_WEEK_LABELS[d.weekday()]
-        self.setWindowTitle(f"{d.month}/{d.day}({dow}) 備考編集")
+        kind = "メモ2(社員向け)" if is_staff else "メモ1(全体向け)"
+        self.setWindowTitle(f"{d.month}/{d.day}({dow}) {kind}編集")
         self.setFixedWidth(400)
 
         layout = QVBoxLayout(self)
@@ -1171,7 +1184,10 @@ class NoteEditDialog(QDialog):
         self._edit.setFixedHeight(32)
         layout.addWidget(self._edit)
 
-        hint = QLabel("PDF 出力時のキッチン上段・備考欄に印字されます。空欄で保存すると削除されます。")
+        hint = QLabel(
+            "シフト表のメモ2欄(社員向けのお知らせ)に印字されます。空欄で保存すると削除されます。"
+            if is_staff else
+            "シフト表のメモ1欄(全体向けのお知らせ)に印字されます。空欄で保存すると削除されます。")
         hint.setStyleSheet("font-size:11px; color:#6b7280;")
         hint.setWordWrap(True)
         layout.addWidget(hint)

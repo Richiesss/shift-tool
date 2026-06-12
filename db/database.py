@@ -271,6 +271,13 @@ _CREATE_TABLES = [
         note      TEXT NOT NULL DEFAULT '',
         UNIQUE(period_id, date)
     )""",
+    """CREATE TABLE IF NOT EXISTS staff_notes (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        period_id INTEGER NOT NULL REFERENCES schedule_periods(id) ON DELETE CASCADE,
+        date      TEXT NOT NULL,
+        note      TEXT NOT NULL DEFAULT '',
+        UNIQUE(period_id, date)
+    )""",
     """CREATE TABLE IF NOT EXISTS reservation_counts (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,
         period_id INTEGER NOT NULL REFERENCES schedule_periods(id) ON DELETE CASCADE,
@@ -358,6 +365,7 @@ _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_fixed_unavail_emp        ON fixed_unavailable_dates(employee_id)",
     "CREATE INDEX IF NOT EXISTS idx_reservation_period       ON reservation_counts(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_schedule_notes_period    ON schedule_notes(period_id)",
+    "CREATE INDEX IF NOT EXISTS idx_staff_notes_period       ON staff_notes(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_assignment_log_period     ON assignment_log(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_cell_notes_period          ON cell_notes(period_id)",
 ]

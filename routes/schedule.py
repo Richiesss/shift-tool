@@ -248,6 +248,7 @@ def index(period_id):
     pos   = request.args.get("pos",  "hall")
     today = _date.today().isoformat()
     notes = repo.get_schedule_notes(period_id)
+    staff_notes = repo.get_staff_notes(period_id)
     shift_requests = repo.get_shift_requests(period_id)
     time_map = _build_time_map(shift_requests)
 
@@ -384,6 +385,7 @@ def index(period_id):
         asgn_map=asgn_map,
         pos=pos,
         notes=notes,
+        staff_notes=staff_notes,
         time_map=time_map,
         staffing=staffing,
         shortage_groups=shortage_groups,
@@ -471,6 +473,16 @@ def save_note(period_id):
     date_str = data.get("date", "")
     note = data.get("note", "")
     repo.save_schedule_note(period_id, date_str, note)
+    return jsonify({"ok": True})
+
+
+@bp.post("/<int:period_id>/staff_note")
+def save_staff_note(period_id):
+    """社員向けお知らせ（メモ2欄）の保存"""
+    data = request.get_json()
+    date_str = data.get("date", "")
+    note = data.get("note", "")
+    repo.save_staff_note(period_id, date_str, note)
     return jsonify({"ok": True})
 
 
