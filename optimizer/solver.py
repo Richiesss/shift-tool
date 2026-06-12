@@ -26,6 +26,9 @@ class SolveResult:
 # スケール係数のプリセット
 PRIORITY_SCALE = {"低": 0.1, "中": 1.0, "高": 10.0}
 
+# 連続勤務日数チェックのスライディングウィンドウ幅（Issue #5・#23）
+CONSECUTIVE_WINDOW = 7
+
 
 @dataclass
 class SolverConfig:
@@ -100,6 +103,58 @@ class Phase2ProgressCallback(cp_model.CpSolverSolutionCallback):
                 )
             except Exception:
                 pass
+
+
+def _load_prev_period_tail(
+    period: SchedulePeriod, active_employees: list[Employee], tail_len: int
+) -> dict[int, list[int]]:
+    """直前期間（period.start_dateの前日がend_dateの期間）の末尾 tail_len 日分について、
+    各従業員の出勤有無(1/0)を古い日付順のリストで返す（Issue #23）。
+    直前期間が存在しない、または確定シフトが未生成の場合は各日0として扱う。"""
+    from datetime import timedelta
+    from db import repositories as repo
+
+    prev_start = date.fromisoformat(period.start_date) - timedelta(days=1)
+    prev = next(
+        (p for p in repo.get_all_periods()
+         if p.id != period.id and p.end_date == prev_start.isoformat()),
+        None,
+    )
+    if prev is None:
+        return {}
+
+    tail_dates = [d.isoformat() for d in prev.date_range()[-tail_len:]]
+    if not tail_dates:
+        return {}
+    worked_set = {(a.employee_id, a.date) for a in repo.get_assignments(prev.id)}
+    return {
+        emp.id: [1 if (emp.id, ds) in worked_set else 0 for ds in tail_dates]
+        for emp in active_employees
+    }
+
+
+def _add_consecutive_day_constraints(
+    model: cp_model.CpModel,
+    worked_day: dict[int, dict[str, object]],
+    active_employees: list[Employee],
+    date_strs: list[str],
+    max_consecutive_days: int,
+    prev_tail: dict[int, list[int]],
+):
+    """7日間スライディングウィンドウで連続勤務日数を制限する（ハード制約 / Issue #5）。
+    直前期間末尾との連結ウィンドウもチェックし、期間境界をまたぐ連続勤務を防ぐ（Issue #23）。"""
+    for emp in active_employees:
+        for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
+            window = date_strs[i:i + CONSECUTIVE_WINDOW]
+            model.add(sum(worked_day[emp.id][d] for d in window) <= max_consecutive_days)
+
+        tail = prev_tail.get(emp.id, [])
+        for i in range(len(tail)):
+            new_days_needed = CONSECUTIVE_WINDOW - (len(tail) - i)
+            if new_days_needed > len(date_strs):
+                continue
+            terms = tail[i:] + [worked_day[emp.id][d] for d in date_strs[:new_days_needed]]
+            model.add(sum(terms) <= max_consecutive_days)
 
 
 def solve(
@@ -518,11 +573,11 @@ def solve(
             worked_day[emp.id][ds] = wd
 
     # 6c. 連続勤務日数を制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
-    CONSECUTIVE_WINDOW = 7
-    for emp in active_employees:
-        for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
-            window = date_strs[i:i + CONSECUTIVE_WINDOW]
-            model.add(sum(worked_day[emp.id][d] for d in window) <= max_consecutive_days)
+    # 直前期間末尾の出勤状況も連結してチェックし、期間境界をまたぐ連続勤務を防ぐ（Issue #23）
+    prev_tail = _load_prev_period_tail(period, active_employees, CONSECUTIVE_WINDOW - 1)
+    _add_consecutive_day_constraints(
+        model, worked_day, active_employees, date_strs, max_consecutive_days, prev_tail
+    )
 
     # 6d. 正社員は期間内（半月=2週間）で希望休含め最低日数の休みを取得（ハード制約 / Issue #4）
     if len(date_strs) > min_days_off:
@@ -817,6 +872,7 @@ def solve(
             period_id=period_id or (progress_callback._period_id if progress_callback else None),
             max_consecutive_days=max_consecutive_days,
             min_days_off=min_days_off,
+            prev_tail=prev_tail,
         )
         _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints)
@@ -1010,6 +1066,7 @@ def _solve_best_effort(
     period_id: int | None = None,
     max_consecutive_days: int = 6,
     min_days_off: int = 5,
+    prev_tail: dict[int, list[int]] | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     import time
@@ -1026,6 +1083,8 @@ def _solve_best_effort(
         reserv_tiers_d = []
     if long_breakfast_set is None:
         long_breakfast_set = set()
+    if prev_tail is None:
+        prev_tail = {}
     model = cp_model.CpModel()
 
     assign: dict = {}
@@ -1126,11 +1185,10 @@ def _solve_best_effort(
             worked_day[emp.id][ds] = wd
 
     # 連続勤務日数を制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
-    CONSECUTIVE_WINDOW = 7
-    for emp in active_employees:
-        for i in range(len(date_strs) - CONSECUTIVE_WINDOW + 1):
-            window = date_strs[i:i + CONSECUTIVE_WINDOW]
-            model.add(sum(worked_day[emp.id][d] for d in window) <= max_consecutive_days)
+    # 直前期間末尾の出勤状況も連結してチェックする（Issue #23）
+    _add_consecutive_day_constraints(
+        model, worked_day, active_employees, date_strs, max_consecutive_days, prev_tail
+    )
 
     # 正社員は期間内（半月=2週間）で希望休含め最低日数の休みを取得（ハード制約 / Issue #4）
     if len(date_strs) > min_days_off:
