@@ -388,10 +388,6 @@
     <i class="bi {{ icon }}"></i>{{ label }}
   </a>
   {% endfor %}
-  <button onclick="toggleTheme()" class="theme-toggle-btn border-0 text-start bg-transparent d-flex align-items-center gap-2 w-100" style="margin: 1px .75rem; border-radius: var(--radius-md); font-size: .88rem; font-weight: 500; font-family: inherit;">
-    <i class="bi bi-moon-stars-fill theme-toggle-icon"></i>
-    <span class="theme-text">ダークモード</span>
-  </button>
   {% if auth_enabled %}
   <a href="{{ url_for('auth.logout') }}" class="logout-btn" style="margin: 1px .75rem;">
     <i class="bi bi-box-arrow-right"></i>ログアウト
@@ -451,14 +447,6 @@
     </div>
   </a>
   {% endfor %}
-  <a href="javascript:void(0)" onclick="toggleTheme()"
-     style="border-top:1px solid rgba(255,255,255,.06)">
-    <i class="bi bi-moon-stars-fill theme-toggle-icon"></i>
-    <div>
-      <div class="theme-text">ダークモード</div>
-      <div style="font-size:.73rem;color:#94a3b8;font-weight:400;margin-top:1px">外観テーマの切り替え</div>
-    </div>
-  </a>
   {% if auth_enabled %}
   <a href="{{ url_for('auth.logout') }}" onclick="closeDrawer()"
      style="border-top:1px solid rgba(255,255,255,.06)">
@@ -529,20 +517,11 @@
     };
 
     function updateThemeUI(theme) {
-      document.querySelectorAll('.theme-toggle-icon').forEach(icon => {
-        if (theme === 'dark') {
-          icon.classList.remove('bi-moon-stars-fill');
-          icon.classList.add('bi-sun-fill');
-          icon.style.color = '#f59e0b';
-        } else {
-          icon.classList.remove('bi-sun-fill');
-          icon.classList.add('bi-moon-stars-fill');
-          icon.style.color = '#64748b';
-        }
-      });
-      document.querySelectorAll('.theme-text').forEach(el => {
-        el.textContent = theme === 'dark' ? 'ライトモード' : 'ダークモード';
-      });
+      // 設定画面のトグルスイッチの同期
+      const switchEl = document.getElementById('theme-switch');
+      if (switchEl) {
+        switchEl.checked = (theme === 'dark');
+      }
     }
   })();
 
