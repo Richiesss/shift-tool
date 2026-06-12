@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Google Forms / Drive API Integration Helper"""
 import os
 import json
@@ -54,6 +55,7 @@ def create_google_form(
 ) -> tuple[str, str]:
     """
     指定期間用の Google フォームを自動作成し、(form_id, form_url) を返す。
+    ユーザー体験(UX)向上のため、「出勤可否 (はい/いいえ)」によるセクション分岐付きの構成で生成します。
     """
     creds = get_credentials_from_json(credentials_json_str)
     forms_service = build("forms", "v1", credentials=creds)
@@ -62,9 +64,8 @@ def create_google_form(
     description = (
         "【注意事項】\n"
         "・お名前をリストから正確に選んでください。\n"
-        "・日付ごとに「出勤可否」および「希望シフト時間」を入力してください。\n"
-        "・ダブルは朝食・ディナー両方フル出勤（時間帯は固定）を表します。\n"
-        "・リストにない時間帯は「その他」を選択して、最後の備考欄に記入してください。"
+        "・日付ごとに「出勤可否」を確認します。出勤可能な日のみ希望シフト時間が表示されます。\n"
+        "・「その他」を選んだ場合は、最後の備考欄に希望する時間帯を記入してください。"
     )
 
     # 1. フォームを作成
@@ -78,7 +79,7 @@ def create_google_form(
     form_id = form["formId"]
     responder_url = form["responderUri"]
 
-    # 2. 設問バッチ作成リクエストを構築
+    # 2. 設問バッチ作成リクエストを構築 (ステップ1: すべてのアイテムを作成)
     requests = []
 
     # 説明文の設定
@@ -118,9 +119,9 @@ def create_google_form(
     holidays = holiday_set(dates)
     dow_labels = ["月", "火", "水", "木", "金", "土", "日"]
 
-    # 朝食/ディナーのシフトパターン選択肢
-    b_options = []
-    d_options = []
+    # 朝食/ディナーのシフトパターン選択肢 (先頭に「休み」を追加)
+    b_options = [{"value": "休み"}]
+    d_options = [{"value": "休み"}]
     for p in ALL_PATTERNS:
         if p.id not in ("custom", "double") and p.start and p.end:
             label = p.label
@@ -141,21 +142,31 @@ def create_google_form(
         if is_h:
             date_label += "【祝】"
 
-        # A. 出勤可否 (ラジオボタン)
+        # A. 出勤希望確認セクション (pageBreakItem)
+        requests.append({
+            "createItem": {
+                "item": {
+                    "title": f"{date_label} 出勤希望",
+                    "pageBreakItem": {}
+                },
+                "location": {"index": idx}
+            }
+        })
+        idx += 1
+
+        # B. 出勤可否質問 (ラジオボタン)
         requests.append({
             "createItem": {
                 "item": {
                     "title": f"{date_label}は出勤できますか？",
                     "questionItem": {
                         "question": {
-                            "required": False,
+                            "required": True,
                             "choiceQuestion": {
                                 "type": "RADIO",
                                 "options": [
-                                    {"value": "朝食のみ"},
-                                    {"value": "ディナーのみ"},
-                                    {"value": "ダブル（朝食＋ディナー両方）"},
-                                    {"value": "休み"}
+                                    {"value": "はい（出勤可能）"},
+                                    {"value": "いいえ（休み）"}
                                 ]
                             }
                         }
@@ -166,7 +177,19 @@ def create_google_form(
         })
         idx += 1
 
-        # B. 朝食希望 (プルダウン)
+        # C. 希望時間帯選択セクション (pageBreakItem)
+        requests.append({
+            "createItem": {
+                "item": {
+                    "title": f"{date_label} 希望時間帯選択",
+                    "pageBreakItem": {}
+                },
+                "location": {"index": idx}
+            }
+        })
+        idx += 1
+
+        # D. 朝食希望 (プルダウン)
         requests.append({
             "createItem": {
                 "item": {
@@ -186,7 +209,7 @@ def create_google_form(
         })
         idx += 1
 
-        # C. ディナー希望 (プルダウン)
+        # E. ディナー希望 (プルダウン)
         requests.append({
             "createItem": {
                 "item": {
@@ -206,7 +229,19 @@ def create_google_form(
         })
         idx += 1
 
-    # QLast: 備考 (長文記述式)
+    # QLast: 備考セクション (pageBreakItem)
+    requests.append({
+        "createItem": {
+            "item": {
+                "title": "その他連絡事項",
+                "pageBreakItem": {}
+            },
+            "location": {"index": idx}
+        }
+    })
+    idx += 1
+
+    # QLast: 備考質問 (長文記述式)
     requests.append({
         "createItem": {
             "item": {
@@ -225,11 +260,78 @@ def create_google_form(
         }
     })
 
-    # batchUpdate を実行してフォームに設問を追加
+    # batchUpdate を実行して設問を追加
     forms_service.forms().batchUpdate(
         formId=form_id,
         body={"requests": requests}
     ).execute()
+
+    # 3. 遷移先IDを設定する (ステップ2: 作成されたアイテムを取得してIDを特定)
+    form_info = forms_service.forms().get(formId=form_id).execute()
+    items = form_info.get("items", [])
+
+    date_avail_q_ids = {}
+    date_avail_section_ids = {}
+    note_section_id = None
+
+    for item in items:
+        title = item.get("title", "")
+        
+        if title == "その他連絡事項" and "pageBreakItem" in item:
+            note_section_id = item["itemId"]
+            continue
+
+        for d in dates:
+            ds = d.isoformat()
+            dow = dow_labels[d.weekday()]
+            is_h = ds in holidays
+            date_label = f"{d.month}月{d.day}日（{dow}）"
+            if is_h:
+                date_label += "【祝】"
+
+            if title == f"{date_label} 出勤希望" and "pageBreakItem" in item:
+                date_avail_section_ids[ds] = item["itemId"]
+            elif title == f"{date_label}は出勤できますか？" and "questionItem" in item:
+                date_avail_q_ids[ds] = item["questionItem"]["question"]["questionId"]
+
+    # 4. 2回目の batchUpdate で「いいえ（休み）」の遷移先 (goToSectionId) を設定
+    update_requests = []
+    for i, d in enumerate(dates):
+        ds = d.isoformat()
+        q_id = date_avail_q_ids.get(ds)
+        if not q_id:
+            continue
+
+        if i < len(dates) - 1:
+            next_ds = dates[i+1].isoformat()
+            next_section_id = date_avail_section_ids.get(next_ds)
+        else:
+            next_section_id = note_section_id
+
+        if not next_section_id:
+            continue
+
+        update_requests.append({
+            "updateQuestion": {
+                "question": {
+                    "questionId": q_id,
+                    "choiceQuestion": {
+                        "type": "RADIO",
+                        "options": [
+                            {"value": "はい（出勤可能）"},
+                            {"value": "いいえ（休み）", "goToSectionId": next_section_id}
+                        ]
+                    }
+                },
+                "updateMask": "choiceQuestion.options"
+            }
+        })
+
+    if update_requests:
+        forms_service.forms().batchUpdate(
+            formId=form_id,
+            body={"requests": update_requests}
+        ).execute()
 
     return form_id, responder_url
 

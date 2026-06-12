@@ -279,30 +279,50 @@ def _process_new_fmt(
     result: "ImportResult",
     name: str,
 ) -> "Optional[ShiftRequest]":
-    """新形式（GASフォーム）の1日分を処理して ShiftRequest を返す。"""
+    """新形式（GAS/API分岐フォーム）の1日分を処理して ShiftRequest を返す。"""
     avail_val = row.get(cols["avail"], "").strip()
     if not avail_val:
         return None  # 未回答 = スキップ
 
-    if avail_val == "休み":
+    if avail_val in ("いいえ（休み）", "いいえ", "休み"):
         return ShiftRequest(
             employee_id=emp.id, date=date_str,
             pattern_id=None, custom_start=None, custom_end=None, note=note,
         )
 
+    b_val = row.get(cols.get("b", ""), "").strip() if "b" in cols else ""
+    d_val = row.get(cols.get("d", ""), "").strip() if "d" in cols else ""
+
+    # 以前の「朝食のみ」「ディナーのみ」「ダブル」の選択肢だった場合の互換処理
     if "ダブル" in avail_val:
         return ShiftRequest(
             employee_id=emp.id, date=date_str,
             pattern_id="double", custom_start=None, custom_end=None, note=note,
         )
+    elif "朝食" in avail_val and "ディナー" not in avail_val:
+        return _resolve_time_value(b_val, date_str, custom_times, note, emp, result, name)
+    elif "ディナー" in avail_val and "朝食" not in avail_val:
+        return _resolve_time_value(d_val, date_str, custom_times, note, emp, result, name)
 
-    # 朝食のみ or ディナーのみ → 対応する時間列を読む
-    if "朝食" in avail_val:
-        time_val = row.get(cols.get("b", ""), "").strip()
+    # 新形式（はい ➔ 朝食・ディナー両方をチェック）
+    has_b = bool(b_val and b_val != "休み（出勤不可）" and "休み" not in b_val and "休み" not in b_val)
+    has_d = bool(d_val and d_val != "休み（出勤不可）" and "休み" not in d_val and "休み" not in d_val)
+
+    if has_b and has_d:
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id="double", custom_start=None, custom_end=None, note=note,
+        )
+    elif has_b:
+        return _resolve_time_value(b_val, date_str, custom_times, note, emp, result, name)
+    elif has_d:
+        return _resolve_time_value(d_val, date_str, custom_times, note, emp, result, name)
     else:
-        time_val = row.get(cols.get("d", ""), "").strip()
-
-    return _resolve_time_value(time_val, date_str, custom_times, note, emp, result, name)
+        # 時間帯に有効な値がない、または「休み」が選ばれている場合
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id=None, custom_start=None, custom_end=None, note=note,
+        )
 
 
 def _process_direct_fmt(
