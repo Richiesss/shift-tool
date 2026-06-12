@@ -274,6 +274,7 @@ def create_google_form(
     date_avail_item_ids = {}
     date_avail_item_indexes = {}
     date_avail_section_ids = {}
+    date_detail_section_ids = {}
     note_section_id = None
 
     for idx, item in enumerate(items):
@@ -297,16 +298,19 @@ def create_google_form(
                 date_avail_q_ids[ds] = item["questionItem"]["question"]["questionId"]
                 date_avail_item_ids[ds] = item["itemId"]
                 date_avail_item_indexes[ds] = idx
+            elif title == f"{date_label} 希望時間帯選択" and "pageBreakItem" in item:
+                date_detail_section_ids[ds] = item["itemId"]
 
-    # 4. 2回目の batchUpdate で「いいえ（休み）」の遷移先 (goToSectionId) を設定
-    # ※ Forms API の updateItem リクエストには location が必須です。
+    # 4. 2回目の batchUpdate で「はい（出勤可能）」と「いいえ（休み）」両方の遷移先 (goToSectionId) を設定
+    # ※ Google Forms API のラジオボタン分岐設定では、「すべての選択肢にジャンプ先を指定する」か「いずれにも指定しない」のどちらかでなければエラーになります。
     update_requests = []
     for i, d in enumerate(dates):
         ds = d.isoformat()
         q_id = date_avail_q_ids.get(ds)
         item_id = date_avail_item_ids.get(ds)
         item_idx = date_avail_item_indexes.get(ds)
-        if not q_id or not item_id or item_idx is None:
+        detail_section_id = date_detail_section_ids.get(ds)
+        if not q_id or not item_id or item_idx is None or not detail_section_id:
             continue
 
         if i < len(dates) - 1:
@@ -328,7 +332,7 @@ def create_google_form(
                             "choiceQuestion": {
                                 "type": "RADIO",
                                 "options": [
-                                    {"value": "はい（出勤可能）"},
+                                    {"value": "はい（出勤可能）", "goToSectionId": detail_section_id},
                                     {"value": "いいえ（休み）", "goToSectionId": next_section_id}
                                 ]
                             }
