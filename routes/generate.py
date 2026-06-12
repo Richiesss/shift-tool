@@ -1,5 +1,6 @@
 import logging
 import threading
+import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, make_response
 from db import repositories as repo
 from optimizer.solver import solve, SolverConfig, PRIORITY_SCALE, SolveProgressCallback
@@ -92,6 +93,52 @@ def run():
         balance_scale=_scale("balance_scale"),
     )
 
+    # Cloud Run URLが設定されている場合は、Cloud Run APIを同期的に叩く
+    cloud_run_url = os.environ.get("CLOUD_RUN_URL")
+    if cloud_run_url:
+        import urllib.request
+        import json
+        
+        api_token = os.environ.get("API_TOKEN", "")
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Token": api_token
+        }
+        data = {
+            "period_id": period_id,
+            "cost_scale": _scale("cost_scale"),
+            "pt_pref_scale": _scale("pt_pref_scale"),
+            "balance_scale": _scale("balance_scale")
+        }
+        
+        url = f"{cloud_run_url.rstrip('/')}/generate/api_run"
+        req = urllib.request.Request(
+            url, 
+            data=json.dumps(data).encode("utf-8"), 
+            headers=headers, 
+            method="POST"
+        )
+        
+        try:
+            # タイムアウト 60秒
+            with urllib.request.urlopen(req, timeout=60) as response:
+                status_code = response.getcode()
+                resp_data = json.loads(response.read().decode("utf-8"))
+                if status_code == 200:
+                    flash("シフトの自動生成が完了しました", "success")
+                else:
+                    flash(f"シフト生成に失敗しました: {resp_data.get('errors', '不明なエラー')}", "error")
+        except urllib.error.HTTPError as e:
+            try:
+                err_data = json.loads(e.read().decode("utf-8"))
+                flash(f"シフト生成に失敗しました: {err_data.get('errors', err_data.get('error', '不明なエラー'))}", "error")
+            except Exception:
+                flash(f"シフト生成に失敗しました (HTTP {e.code})", "error")
+        except Exception as e:
+            flash(f"Cloud Run との通信エラーが発生しました: {e}", "error")
+            
+        return redirect(url_for("generate.index"))
+
     # 生成中ステータスに更新してバックグラウンドで実行
     repo.update_period_gen_status(period_id, "generating", "")
     app = current_app._get_current_object()
@@ -127,6 +174,62 @@ def run():
 
     threading.Thread(target=_run_solver, daemon=True).start()
     return redirect(url_for("generate.wait", period_id=period_id))
+
+
+@bp.post("/api_run")
+def api_run():
+    # API トークンの認証
+    api_token = current_app.config.get("API_TOKEN") or os.environ.get("API_TOKEN")
+    if api_token:
+        auth_header = request.headers.get("X-API-Token")
+        if auth_header != api_token:
+            return jsonify({"error": "Unauthorized"}), 401
+            
+    period_id = request.json.get("period_id")
+    # 優先度設定
+    cost_scale = request.json.get("cost_scale", 1.0)
+    pt_pref_scale = request.json.get("pt_pref_scale", 1.0)
+    balance_scale = request.json.get("balance_scale", 1.0)
+    
+    period = repo.get_period(period_id)
+    if not period:
+        return jsonify({"error": "Period not found"}), 404
+        
+    employees = repo.get_all_employees(active_only=True)
+    requests_list = repo.get_shift_requests(period_id)
+    
+    config = SolverConfig(
+        cost_scale=cost_scale,
+        pt_pref_scale=pt_pref_scale,
+        balance_scale=balance_scale,
+    )
+    
+    # 同期的にソルバーを実行
+    repo.update_period_gen_status(period_id, "generating", "")
+    try:
+        cb = SolveProgressCallback(period_id, max_time=25.0)
+        result = solve(period, employees, requests_list, config, progress_callback=cb, period_id=period_id)
+        if result.status in ("optimal", "feasible"):
+            repo.save_assignments(period_id, result.assignments)
+            msg = f"{result.status},{result.solve_time_sec:.1f}"
+            if result.warnings:
+                msg += "|" + "|".join(result.warnings)
+            repo.update_period_gen_status(period_id, "done", msg)
+            return jsonify({
+                "status": "success",
+                "solve_status": result.status,
+                "solve_time": result.solve_time_sec,
+                "warnings": result.warnings
+            })
+        else:
+            errors = "; ".join(result.errors) if result.errors else "制約を満たすシフトが見つかりませんでした"
+            repo.update_period_gen_status(period_id, "failed", errors)
+            return jsonify({"status": "failed", "errors": errors}), 400
+    except Exception as e:
+        import traceback
+        err_msg = str(e)
+        repo.update_period_gen_status(period_id, "failed", err_msg)
+        return jsonify({"status": "error", "error": err_msg, "trace": traceback.format_exc()}), 500
 
 
 @bp.get("/wait/<int:period_id>")

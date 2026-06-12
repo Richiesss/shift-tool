@@ -49,7 +49,7 @@ def _to_pg(sql: str) -> str:
     sql = sql.replace("?", "%s")
     sql = re.sub(r"INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT", "SERIAL PRIMARY KEY",
                  sql, flags=re.IGNORECASE)
-    sql = sql.replace("DEFAULT (datetime('now','localtime'))", "DEFAULT CURRENT_TIMESTAMP")
+    sql = sql.replace("DEFAULT (datetime('now','localtime'))", "DEFAULT (CURRENT_TIMESTAMP::text)")
     # SQLite の日付関数 → PostgreSQL 相当
     sql = re.sub(
         r"strftime\('%w',\s*(\w+)\)",

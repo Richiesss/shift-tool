@@ -6,7 +6,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 from datetime import timedelta
 from flask import Flask, g, session, redirect, url_for, request
 from flask_compress import Compress
-from flask_session import Session as FlaskSession
 from cache import cache
 from db.database import initialize_db
 from auth import APP_PASSWORD, SESSION_VERSION
@@ -23,16 +22,9 @@ def create_app():
     Compress(app)
     cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
 
-    # サーバーサイドセッション（ファイルストア）
-    # Flask-Session 0.8.x では SESSION_PERMANENT / SESSION_USE_SIGNER は廃止
-    os.makedirs("/tmp/flask_sessions", exist_ok=True)
     app.config.update(
-        SESSION_TYPE="filesystem",
-        SESSION_FILE_DIR="/tmp/flask_sessions",
-        SESSION_FILE_THRESHOLD=500,
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     )
-    FlaskSession(app)
 
     initialize_db()
 
