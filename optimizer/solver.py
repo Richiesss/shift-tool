@@ -743,9 +743,14 @@ def solve(
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     # ── 求解 ────────────────────────────────────────────────────────────
+    import os
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 25.0
-    solver.parameters.num_search_workers = 1
+    try:
+        num_workers = int(os.environ.get("SOLVER_WORKERS", "1"))
+    except ValueError:
+        num_workers = 1
+    solver.parameters.num_search_workers = max(1, num_workers)
     solver.parameters.log_search_progress = False
     logger.info(f"  [CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s "
                 f"workers={solver.parameters.num_search_workers}")
@@ -1242,9 +1247,14 @@ def _solve_best_effort(
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     MAX_TIME_P2 = 45.0
+    import os
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = MAX_TIME_P2
-    solver.parameters.num_search_workers = 1
+    try:
+        num_workers = int(os.environ.get("SOLVER_WORKERS", "1"))
+    except ValueError:
+        num_workers = 1
+    solver.parameters.num_search_workers = max(1, num_workers)
     solver.parameters.log_search_progress = False
     cb = Phase2ProgressCallback(period_id, max_time=MAX_TIME_P2)
     logger.info(f"  [フェーズ2 CP-SAT 求解開始] max_time={MAX_TIME_P2}s")
