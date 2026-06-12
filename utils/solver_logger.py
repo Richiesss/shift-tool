@@ -9,10 +9,15 @@ _LOG_PATH_ENV = os.environ.get("SOLVER_LOG_PATH", "")
 
 if _LOG_PATH_ENV:
     _log_path = Path(_LOG_PATH_ENV)
+    _log_path.parent.mkdir(parents=True, exist_ok=True)
 else:
-    _log_path = Path.home() / ".shift_tool" / "solver.log"
-
-_log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        _log_path = Path.home() / ".shift_tool" / "solver.log"
+        _log_path.parent.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        # VercelやCloud Runなどのサーバーレス環境でホームに書き込めない場合のフォールバック
+        _log_path = Path("/tmp") / "solver.log"
+        _log_path.parent.mkdir(parents=True, exist_ok=True)
 
 _fmt = logging.Formatter(
     "%(asctime)s | %(levelname)-5s | %(message)s",
