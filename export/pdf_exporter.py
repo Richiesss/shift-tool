@@ -298,6 +298,7 @@ def export_pdf(
     row_heights_nat += [H_DATE] * 4
     row_heights_nat += [H_DATE] * (h_ft_n + h_pt_n)
     row_heights_nat += [H_DATE] * 2
+    row_heights_nat += [15.0]  # 凡例行
     natural_h = sum(row_heights_nat)
 
     sx = avail_w / natural_w   # 横は紙幅いっぱいに使う
@@ -320,7 +321,8 @@ def export_pdf(
     h_pt_row = h_ft_row + h_ft_n
     r_date3  = h_pt_row + h_pt_n
     r_dow3   = r_date3 + 1
-    n_rows   = r_dow3 + 1
+    r_legend = r_dow3 + 1
+    n_rows   = r_legend + 1
 
     # ── データ行列とスタイル ──────────────────────────────────────────
     data = [["" for _ in range(n_cols)] for _ in range(n_rows)]
@@ -541,6 +543,17 @@ def export_pdf(
     # フッター
     _hline(r_date3, THIN, data_only=True)
     _hline(r_dow3, MED)
+    _hline(r_legend, MED)
+
+    # ── 凡例行（黄=メモ / 赤=社員休 / 緑=有給）──────────────────────────
+    data[r_legend][0] = "凡例:"
+    for i, (bg, label) in enumerate(
+            [(COL_NOTE, "メモ"), (COL_FTOFF, "社員休"), (COL_LEAVE, "有給")]):
+        c0 = _block_col(i)
+        _span(c0, r_legend, c0 + 2, r_legend)
+        cmds.append(("BACKGROUND", (c0, r_legend), (c0 + 2, r_legend), bg))
+        data[r_legend][c0] = label
+    _font_size(r_legend, F_CELL)
 
     # ── ドキュメント生成（Canvas直描画で1ページを保証）─────────────────
     table = Table(data, colWidths=col_widths, rowHeights=row_heights)

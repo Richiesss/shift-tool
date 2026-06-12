@@ -110,7 +110,8 @@ class ScheduleView(QWidget):
          self._btn_other_b, self._warn_label_b,
          self._notes_table) = self._make_tab_widget(TimeSlot.BREAKFAST)
         (tab_d, self.emp_table_d, self.sum_table_d,
-         self._btn_other_d, self._warn_label_d, _) = self._make_tab_widget(TimeSlot.DINNER)
+         self._btn_other_d, self._warn_label_d,
+         self._notes_table_d) = self._make_tab_widget(TimeSlot.DINNER)
 
         self.tab_widget.addTab(tab_b, "🌅 朝食")
         self.tab_widget.addTab(tab_d, "🌆 ディナー")
@@ -160,9 +161,8 @@ class ScheduleView(QWidget):
         warn_label.setVisible(False)
         vbox.addWidget(warn_label)
 
-        # 備考テーブル（朝食タブのみ）
-        notes_table = None
-        if slot == TimeSlot.BREAKFAST:
+        # 備考テーブル（メモ1/メモ2、朝食・ディナー両タブに表示）
+        if True:
             notes_table = QTableWidget()
             notes_table.setRowCount(2)  # 行0=メモ1(全体向け) / 行1=メモ2(社員向け)
             notes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -231,8 +231,9 @@ class ScheduleView(QWidget):
         sum_t = self.sum_table_b if slot == TimeSlot.BREAKFAST else self.sum_table_d
         if col_idx < sum_t.columnCount():
             sum_t.setColumnWidth(col_idx, new_width)
-        if slot == TimeSlot.BREAKFAST and self._notes_table and col_idx < self._notes_table.columnCount():
-            self._notes_table.setColumnWidth(col_idx, new_width)
+        notes_t = self._notes_table if slot == TimeSlot.BREAKFAST else self._notes_table_d
+        if notes_t and col_idx < notes_t.columnCount():
+            notes_t.setColumnWidth(col_idx, new_width)
 
     def _on_toggle_other(self, slot: TimeSlot, checked: bool):
         self._show_other[slot] = checked
@@ -688,13 +689,19 @@ class ScheduleView(QWidget):
     # ── 備考テーブル ──────────────────────────────────────────────────────
 
     def _render_notes_row(self):
-        if self._notes_table is None or not self._col_date_strs_b:
+        if not self._col_date_strs_b:
             return
+        for notes_t, emp_t in ((self._notes_table, self.emp_table_b),
+                               (self._notes_table_d, self.emp_table_d)):
+            if notes_t is not None:
+                self._render_notes_table(notes_t, emp_t)
+
+    def _render_notes_table(self, notes_table, emp_table):
         col_date_strs = self._col_date_strs_b
         n_cols = len(col_date_strs)
-        self._notes_table.setColumnCount(n_cols)
+        notes_table.setColumnCount(n_cols)
         for c_i in range(n_cols):
-            self._notes_table.setColumnWidth(c_i, self.emp_table_b.columnWidth(c_i))
+            notes_table.setColumnWidth(c_i, emp_table.columnWidth(c_i))
         c = theme.c
         # 行0=メモ1(全体向け) / 行1=メモ2(社員向け)
         rows = [("メモ1(全体)", self._notes), ("メモ2(社員)", self._staff_notes)]
@@ -718,7 +725,7 @@ class ScheduleView(QWidget):
                     else:
                         item.setBackground(QBrush(QColor(c["bg"])))
                         item.setForeground(QBrush(QColor(c["text3"])))
-                self._notes_table.setItem(row_idx, col_idx, item)
+                notes_table.setItem(row_idx, col_idx, item)
 
     def _on_note_cell_clicked(self, row: int, col: int):
         if not self._period or not self._col_date_strs_b:

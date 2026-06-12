@@ -22,7 +22,7 @@ from copy import copy
 from datetime import date
 from pathlib import Path
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Alignment
+from openpyxl.styles import PatternFill, Alignment, Font
 from openpyxl.utils import get_column_letter
 from models.employee import Employee
 from models.schedule import SchedulePeriod
@@ -476,5 +476,21 @@ def export_excel(
     _fill_group(k_pt_row,   K_PT_SLOTS + k_pt_extra, k_pt)
     _fill_group(h_ft_row,   H_FT_SLOTS + h_ft_extra, h_ft)
     _fill_group(h_pt_row,   H_PT_SLOTS + h_pt_extra, h_pt)
+
+    # ── 凡例（フッターの1行下: 黄=メモ / 赤=社員休 / 緑=有給）──────────
+    r_leg = r_date3 + 2
+    leg_font = Font(size=10, bold=True)
+    cell = ws.cell(r_leg, C_NAME_L)
+    cell.value, cell.font, cell.alignment = "凡例:", leg_font, ALIGN_CC
+    for i, (fill, label) in enumerate(
+            [(FILL_NOTE, "メモ"), (FILL_FTOFF, "社員休"), (FILL_LEAVE, "有給")]):
+        col = _block_col(i)
+        for cc in range(col, col + COLS_PER_DAY):
+            ws.cell(r_leg, cc).fill = fill
+        ws.merge_cells(start_row=r_leg, start_column=col,
+                       end_row=r_leg, end_column=col + COLS_PER_DAY - 1)
+        cell = ws.cell(r_leg, col)
+        cell.value, cell.font, cell.alignment = label, leg_font, ALIGN_CC
+    ws.row_dimensions[r_leg].height = 18
 
     wb.save(path)
