@@ -142,7 +142,7 @@ def parse_forms_csv(
     """
     Google Forms の回答 CSV を解析して ImportResult を返す。
 
-    2種類のフォーム形式に自動対応:
+    3種類のフォーム形式に自動対応:
 
     【旧形式】グリッド質問 / 1日1列
         列ヘッダー例: 「4月1日(月)の出勤希望」
@@ -156,6 +156,13 @@ def parse_forms_csv(
         値:
           可否列: 「朝食のみ」「ディナーのみ」「ダブル（朝食＋ディナー両方）」「休み」
           時間列: パターンラベル or「その他（備考欄に時刻を記入）」
+
+    【チェックボックス形式】1日1列（複数選択）
+        列ヘッダー例:
+          「4月1日（月）の出勤希望時間」
+        値:
+          複数選択された値がカンマ区切りで結合された文字列
+          （例: "朝食: 6:00〜10:00, ディナー: 17:00〜21:00"）
     """
     result = ImportResult()
     name_to_emp: dict[str, Employee] = {e.name: e for e in employees}
@@ -181,7 +188,7 @@ def parse_forms_csv(
             custom_col = next((h for h in headers if "カスタム" in h and "時刻" in h), None)
 
             # ── 日付列を分類 ─────────────────────────────────────────
-            # date_str → {"avail": col, "b": col, "d": col, "direct": col}
+            # date_str → {"avail": col, "b": col, "d": col, "checkbox": col, "direct": col}
             date_cols: dict[str, dict[str, str]] = {}
             for h in headers:
                 ds = _parse_date_from_header(h, period)
@@ -197,6 +204,8 @@ def parse_forms_csv(
                     date_cols[ds]["b"] = h              # 新形式: 朝食時間
                 elif "ディナー" in h and "シフト" in h:
                     date_cols[ds]["d"] = h              # 新形式: ディナー時間
+                elif "出勤希望時間" in h or "希望時間" in h:
+                    date_cols[ds]["checkbox"] = h       # チェックボックス一括形式
                 else:
                     date_cols[ds]["direct"] = h         # 旧形式: パターン直接選択
 
@@ -235,7 +244,12 @@ def parse_forms_csv(
                 for date_str, cols in date_cols.items():
                     req = None
 
-                    if "avail" in cols:
+                    if "checkbox" in cols:
+                        # ── チェックボックス形式（複数選択） ───────────
+                        req = _process_checkbox_fmt(
+                            row, date_str, cols["checkbox"], custom_times, note, emp, result, name
+                        )
+                    elif "avail" in cols:
                         # ── 新形式: 可否列 + 時間列 ──────────────────
                         req = _process_new_fmt(
                             row, date_str, cols, custom_times, note, emp, result, name
@@ -305,8 +319,8 @@ def _process_new_fmt(
         return _resolve_time_value(d_val, date_str, custom_times, note, emp, result, name)
 
     # 新形式（はい ➔ 朝食・ディナー両方をチェック）
-    has_b = bool(b_val and b_val != "休み（出勤不可）" and "休み" not in b_val and "休み" not in b_val)
-    has_d = bool(d_val and d_val != "休み（出勤不可）" and "休み" not in d_val and "休み" not in d_val)
+    has_b = bool(b_val and b_val != "休み（出勤不可）" and "休み" not in b_val)
+    has_d = bool(d_val and d_val != "休み（出勤不可）" and "休み" not in d_val)
 
     if has_b and has_d:
         return ShiftRequest(
@@ -538,6 +552,8 @@ def parse_google_form_responses(
             date_cols[ds]["b"] = title
         elif "ディナー" in title and "シフト" in title:
             date_cols[ds]["d"] = title
+        elif "出勤希望時間" in title or "希望時間" in title:
+            date_cols[ds]["checkbox"] = title
         else:
             date_cols[ds]["direct"] = title
 
@@ -550,9 +566,9 @@ def parse_google_form_responses(
                 continue
             text_answers = ans.get("textAnswers", {}).get("answers", [])
             if text_answers:
-                # 今回はラジオ・プルダウン・記述なので最初の1つを取得
-                val = text_answers[0].get("value", "")
-                row[title] = val.strip()
+                # 複数選択のチェックボックス対応: カンマ区切りの文字列にして CSV 形式に統一する
+                val = ", ".join(ta.get("value", "").strip() for ta in text_answers if ta.get("value"))
+                row[title] = val
 
         name = row.get(name_col, "").strip()
         if not name:
@@ -577,7 +593,11 @@ def parse_google_form_responses(
         row_count = 0
         for date_str, cols in date_cols.items():
             req = None
-            if "avail" in cols:
+            if "checkbox" in cols:
+                req = _process_checkbox_fmt(
+                    row, date_str, cols["checkbox"], custom_times, note, emp, result, name
+                )
+            elif "avail" in cols:
                 req = _process_new_fmt(
                     row, date_str, cols, custom_times, note, emp, result, name
                 )
@@ -594,3 +614,72 @@ def parse_google_form_responses(
 
     return result
 
+
+def _process_checkbox_fmt(
+    row: dict,
+    date_str: str,
+    col_name: str,
+    custom_times: dict,
+    note: str,
+    emp,
+    result: "ImportResult",
+    name: str,
+) -> "Optional[ShiftRequest]":
+    """チェックボックス形式の複数選択の回答から ShiftRequest を構築する。"""
+    val = row.get(col_name, "").strip()
+    if not val or "休み" in val:
+        # 空、または「休み」が選択されている場合は休み扱い
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id=None, custom_start=None, custom_end=None, note=note,
+        )
+
+    # 選択肢のカンマ区切りを配列にパース
+    selections = [s.strip() for s in val.split(",")]
+
+    has_breakfast = False
+    has_dinner = False
+    selected_b_val = None
+    selected_d_val = None
+    has_custom = False
+
+    for sel in selections:
+        if "その他" in sel:
+            has_custom = True
+        elif "朝食" in sel:
+            has_breakfast = True
+            # 例 "朝食: 6:00〜10:00" -> "6:00〜10:00" を取得
+            parts = sel.split(":", 1)
+            selected_b_val = parts[1].strip() if len(parts) > 1 else sel
+        elif "ディナー" in sel or "晩" in sel:
+            has_dinner = True
+            parts = sel.split(":", 1)
+            selected_d_val = parts[1].strip() if len(parts) > 1 else sel
+
+    if has_custom:
+        cs = custom_times.get(date_str)
+        custom_start, custom_end = cs if cs else (None, None)
+        if not cs:
+            result.warnings.append(
+                f"「{name}」{date_str}: 「その他」選択ですが備考欄に時刻が見つかりません"
+            )
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id="custom", custom_start=custom_start, custom_end=custom_end, note=note,
+        )
+
+    if has_breakfast and has_dinner:
+        # 両方チェックがある場合はダブル
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id="double", custom_start=None, custom_end=None, note=note,
+        )
+    elif has_breakfast and selected_b_val:
+        return _resolve_time_value(selected_b_val, date_str, custom_times, note, emp, result, name)
+    elif has_dinner and selected_d_val:
+        return _resolve_time_value(selected_d_val, date_str, custom_times, note, emp, result, name)
+
+    return ShiftRequest(
+        employee_id=emp.id, date=date_str,
+        pattern_id=None, custom_start=None, custom_end=None, note=note,
+    )
