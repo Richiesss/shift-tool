@@ -25,6 +25,13 @@
   [data-theme="light"] .sun td, [data-theme="light"] .sun th { background: #fff1f2 !important; }
   [data-theme="dark"] .sat td, [data-theme="dark"] .sat th { background: rgba(59, 130, 246, 0.12) !important; }
   [data-theme="dark"] .sun td, [data-theme="dark"] .sun th { background: rgba(239, 68, 68, 0.12) !important; }
+
+  /* 予約・メモ1・メモ2行（table-light）：ダークモードでは白背景にしない */
+  [data-theme="dark"] .sched-grid tr.table-light > td,
+  [data-theme="dark"] .sched-grid tr.table-light > th {
+    --bs-table-bg: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+  }
   
   /* 今日の列 */
   .sched-grid thead th.today-col { background: #1d4ed8 !important; color: #fff !important; }
