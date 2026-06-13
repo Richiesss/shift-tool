@@ -203,6 +203,7 @@
   <!-- ── 目次 ── -->
   <div class="d-flex flex-wrap gap-2 mb-3">
     {% for anchor, label, color in [
+      ('#home',     'ホーム',         '#e0e7ff'),
       ('#staff',    'スタッフ管理',   '#dbeafe'),
       ('#shift',    '希望シフト',     '#dcfce7'),
       ('#generate', '自動生成',       '#fef9c3'),
@@ -234,6 +235,38 @@
       </div>
       <div class="help-card-body" id="{{ content_id }}">
   {% endmacro %}
+
+  {# ── ホーム（ダッシュボード） ── #}
+  {{ section('home', 'bi-house-door-fill', '#e0e7ff', 'ホーム（ダッシュボード）', 'body-home') }}
+
+        <p style="font-size:.82rem">ログイン後に最初に表示される画面です。「今日の状況」や「今やるべきこと」をまとめて確認できます。</p>
+
+        <div class="sub-heading">今日の状況</div>
+        <p style="font-size:.82rem">今日の予約客数（朝食・ディナー、入力済みの場合のみ表示）と、現在の時間帯における出勤予定人数をホール・キッチン別に表示します。<br>
+        人員が不足している区分は<span style="color:#ef4444;font-weight:600">赤色</span>でハイライトされ、不足人数が一目で分かります。</p>
+
+        <div class="sub-heading">TODO（対応が必要な項目）</div>
+        <p style="font-size:.82rem">優先度の高い順に、今対応した方がよい項目が自動でリストアップされます。各項目をタップすると関連する画面に移動します。</p>
+        <ul class="step-list mb-2" style="font-size:.82rem">
+          <li><span class="step-num" style="background:#ef4444"><i class="bi bi-exclamation-lg"></i></span><div>直近の人員不足（シフト表で確認・調整）</div></li>
+          <li><span class="step-num" style="background:#f59e0b"><i class="bi bi-exclamation-lg"></i></span><div>希望シフト未提出のスタッフがいる</div></li>
+          <li><span class="step-num" style="background:#38bdf8"><i class="bi bi-arrow-right"></i></span><div>シフトの自動生成・確定がまだ</div></li>
+          <li><span class="step-num" style="background:#a78bfa"><i class="bi bi-arrow-right"></i></span><div>予約客数の入力・更新</div></li>
+        </ul>
+        <div class="info-box">
+          <i class="bi bi-check-circle-fill me-1"></i>
+          対応が必要な項目がなければ「対応が必要な項目はありません」と表示されます。
+        </div>
+
+        <div class="sub-heading">期間ステータス</div>
+        <p style="font-size:.82rem">直近のシフト期間について、「希望収集 → 自動生成 → 確定」の進行状況をバーで表示します。期間の開始日・終了日・残り日数、希望シフトの提出人数（提出済み／全体）も確認できます。</p>
+
+        <div class="sub-heading">要対応の詳細</div>
+        <p style="font-size:.82rem">「直近7日間で人員不足が発生する日付」「希望シフト未提出のスタッフ名」はタップして展開表示できます。シフト表・希望シフト入力画面への入口としてご利用ください。</p>
+
+      </div>
+    </div>
+  </div>
 
   {# ── スタッフ管理 ── #}
   {{ section('staff', 'bi-people-fill', '#dbeafe', 'スタッフ管理', 'body-staff') }}
@@ -302,12 +335,26 @@
         <p style="font-size:.82rem">特定の日付をあらかじめ「休み」として登録できます。シフト自動生成時にその日はアサインされません。</p>
 
         <div class="sub-heading">アーカイブ・削除</div>
-        <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
+        <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
           <thead class="table-light"><tr><th>操作</th><th>内容</th></tr></thead>
           <tbody>
-            <tr><td>アーカイブ</td><td>スタッフを非表示にします。シフト生成の対象外になりますが、データは保持されます。</td></tr>
+            <tr><td>アーカイブ</td><td>スタッフを非表示にします。シフト生成の対象外になりますが、データは保持されます。アーカイブすると現役一覧から消え、一覧画面に切り替わります。</td></tr>
             <tr><td>復元</td><td>アーカイブしたスタッフを元に戻します（「アーカイブ表示」から操作）。</td></tr>
             <tr><td>完全削除</td><td>スタッフと関連するすべてのデータを完全に削除します。<strong>元に戻せません。</strong></td></tr>
+          </tbody>
+        </table>
+
+        <div class="sub-heading">アーカイブ表示の切り替え</div>
+        <p style="font-size:.82rem">検索欄の横にある<strong>「アーカイブ」</strong>ボタンでアーカイブ済みスタッフの一覧に切り替えられます。アーカイブ表示中は<strong>「現役のみ」</strong>ボタンで通常表示に戻れます。</p>
+
+        <div class="sub-heading">複数選択での一括操作</div>
+        <p style="font-size:.82rem">各カード左端のチェックボックス（または上部の「全選択」）で複数のスタッフを選択すると、画面上部に一括操作バーが表示されます。</p>
+        <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
+          <thead class="table-light"><tr><th>表示</th><th>操作</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>現役一覧</td><td>一括アーカイブ</td><td>選択したスタッフをまとめてアーカイブします。</td></tr>
+            <tr><td>アーカイブ一覧</td><td>一括復元</td><td>選択したスタッフをまとめて現役に戻します。</td></tr>
+            <tr><td>アーカイブ一覧</td><td>一括完全削除</td><td>選択したスタッフと関連データをまとめて完全に削除します。<strong>元に戻せません。</strong></td></tr>
           </tbody>
         </table>
 
@@ -321,7 +368,7 @@
         <ul class="step-list">
           <li><span class="step-num">1</span><div><strong>期間を作成</strong> — 年月を選び「前半（1〜15日）」または「後半（16〜末日）」ボタンをタップします。</div></li>
           <li><span class="step-num">2</span><div><strong>希望を入力</strong> — 上部のスタッフ名チップをタップして対象者を切り替えながら、1人ずつ希望シフトを入力します。</div></li>
-          <li><span class="step-num">3</span><div><strong>CSVでインポート</strong> — Google フォームなどからエクスポートした CSV をそのまま読み込めます。</div></li>
+          <li><span class="step-num">3</span><div><strong>フォーム・CSV連携</strong> — 「外部フォーム＆CSV連携（β）」パネルからGoogleフォームでの収集やCSV取り込みができます。</div></li>
         </ul>
 
         <div class="sub-heading">入力画面の見方</div>
@@ -329,6 +376,21 @@
 
         <div class="sub-heading">一括操作ボタン</div>
         <p style="font-size:.82rem">各スタッフの入力画面上部に一括ボタンがあります。社員は「出勤」「休希望」「有休」「朝のみ可」「晩のみ可」を全日にまとめて設定でき、アルバイトは「（休み）」または過去によく使われたパターン（最大3件）を全日にまとめて設定できます。</p>
+
+        <div class="sub-heading">外部フォーム＆CSV連携（β）</div>
+        <p style="font-size:.82rem">入力画面下部の「外部フォーム＆CSV連携（β）」パネルから、Googleフォームを使った希望収集やCSVインポートができます。</p>
+        <ul class="step-list mb-3" style="font-size:.82rem">
+          <li><span class="step-num">1</span><div><strong>フォームを自動作成</strong> — 「設定」でGoogleアカウント連携済みの場合、「フォームを自動作成」でこの期間専用の希望シフト収集フォームが生成されます。</div></li>
+          <li><span class="step-num">2</span><div><strong>配布</strong> — 発行された配布用URLをコピーしてスタッフへ共有します。</div></li>
+          <li><span class="step-num">3</span><div><strong>内容・選択肢の更新</strong> — タイトルや説明文を変更して「フォームに反映する」を押すと、作成済みフォームに変更が反映されます（回答の選択肢は人員構成に合わせて自動更新されます）。</div></li>
+          <li><span class="step-num">4</span><div><strong>回答受付の締切管理</strong> — 「締め切る」でフォームへの新規回答を停止、「再開する」で受付を再開できます。</div></li>
+          <li><span class="step-num">5</span><div><strong>回答データの同期</strong> — 「回答データを同期」でフォームの回答をシフト希望として取り込みます。「未入力のみ追加」（既存入力を保持）と「全て上書き」（フォーム回答を優先）から取り込み方法を選べます。</div></li>
+        </ul>
+        <p style="font-size:.82rem">Google連携を行っていない場合は、<strong>CSV手動取り込み</strong>からGoogleフォームなどでエクスポートしたCSVファイルを読み込めます。</p>
+        <div class="info-box">
+          <i class="bi bi-info-circle-fill me-1"></i>
+          Googleフォーム連携の利用には、あらかじめ「設定」ページでGoogleアカウントとの連携が必要です（詳しくは「設定」の項目を参照）。
+        </div>
 
         <div class="tip-box">
           <i class="bi bi-lightbulb-fill me-1"></i>
@@ -429,6 +491,20 @@
         <p class="mb-1">セルをタップ →「時間を指定する」で時間帯を指定して追加できます。<br>
         プリセット（全時間 / 早番 / 遅番）で素早く設定できます。ポジション選択は現在表示中のポジション（ホール / キッチン）が初期選択されます。</p>
 
+        <div class="sub-heading">天気・気温の表示</div>
+        <p style="font-size:.82rem">日付ヘッダーに天気アイコンと最高 / 最低気温が表示されます（直近16日分。過去日も記録があれば表示されます）。<br>
+        表示するには「設定」ページで店舗の緯度・経度を登録してください。未設定の場合は天気は表示されません。</p>
+
+        <div class="sub-heading">予約客数のインライン編集</div>
+        <p style="font-size:.82rem">「予約」行の各日のセルをタップすると、その場で朝食・ディナーの予約客数を編集できます。客数管理画面を開かずにシフト表から直接更新できます。</p>
+
+        <div class="sub-heading">お知らせメモ（メモ1・メモ2）</div>
+        <p style="font-size:.82rem">表の下部にある「メモ1」「メモ2」行は、日付ごとに自由にテキストを入力できる連絡用の行です。セルをタップして入力・編集します。<br>
+        メモ1はスタッフ全体向け、メモ2は社員向けの連絡事項として使い分けることを想定しています。入力内容はExcel / PDF出力にも反映されます。</p>
+
+        <div class="sub-heading">シフトセルへのコメント</div>
+        <p style="font-size:.82rem">スタッフのシフトセルを編集する際、「コメント（任意）」欄に補足メモを残せます。コメントが入っているセルには小さなアイコンが表示され、タップすると内容を確認できます。</p>
+
         <div class="tip-box">
           <i class="bi bi-lightbulb-fill me-1"></i>
           今日の日付の列は青ヘッダーでハイライト表示されます。土曜は青背景・日曜は赤背景で表示されます。
@@ -450,6 +526,18 @@
           <i class="bi bi-lightbulb-fill me-1"></i>
           予約客数を入力しておくと、自動生成時に閾値超過日は人数が自動増員されます。未入力の日は増員判定が無効になります。
         </div>
+
+        <div class="sub-heading">客数予測（β）</div>
+        <p style="font-size:.82rem">「設定」ページで客数予測（β）機能を有効にすると、過去の客数データと天気予報から各日の客数が予測され、表に「予測 N人」のヒントが表示されます。ヒントをタップすると予測方法・予測範囲（下限〜上限）を確認できます。<br>
+        未入力の日があれば「予測値を未入力欄に反映」ボタンで予測値を一括入力できます（入力済みの値は上書きされません）。特殊な集客が見込まれる日は「特殊日」にチェックすると、その日は予測対象から除外されます。</p>
+        <div class="info-box">
+          <i class="bi bi-info-circle-fill me-1"></i>
+          客数予測（β）の利用には「設定」ページで<strong>店舗の緯度・経度</strong>の登録と<strong>客数予測（β）の有効化</strong>が必要です。
+        </div>
+
+        <div class="sub-heading">過去客数データ入力（β）</div>
+        <p style="font-size:.82rem">客数予測（β）の精度向上のため、過去の実際の客数を月単位で入力できます。客数管理ページから「過去データ入力」を開き、月を切り替えながら朝食・ディナーの客数を入力します。<br>
+        Excelなどからのコピー＆ペーストで複数日分をまとめて入力することもできます。</p>
 
       </div>
     </div>
@@ -494,6 +582,18 @@
           </tbody>
         </table>
         <p style="font-size:.82rem">個人昇給額はスタッフ管理画面でスタッフごとに設定します。正社員は人件費計算の対象外です。</p>
+
+        <div class="sub-heading">ベータ機能</div>
+        <p style="font-size:.82rem">開発中の実験的な機能です。今後も順次追加されます。</p>
+
+        <div class="mb-2"><strong>客数予測機能（第1弾・β）</strong></div>
+        <p style="font-size:.82rem">過去の客数実績・曜日 / 祝日・気象データなどから朝食 / ディナーの客数を予測し、客数管理ページとダッシュボードに表示します。<br>
+        「客数予測機能を有効にする（β）」をオンにすると有効化されます。「店舗の緯度・経度」を設定すると、シフト表の天気表示にも使われる気象データを予測に利用できます（緯度・経度は任意ですが、未設定の場合シフト表に天気は表示されません）。<br>
+        予測精度を高めるには、客数管理画面で実績を入力し続けるか、過去客数データ入力ページから過去の実績を登録してください。</p>
+
+        <div class="mb-2"><strong>Google フォーム連携機能（第2弾・β）</strong></div>
+        <p style="font-size:.82rem">Google Forms APIを利用して希望シフトの提出フォームを自動生成・配布し、回答結果を取り込める機能です。利用にはあらかじめGoogle Cloud ConsoleでOAuth 2.0クライアントを作成し、「Google OAuth Client ID」「Client Secret」を設定・保存してください（画面内に取得手順が表示されます）。<br>
+        設定保存後、「連携する」ボタンからGoogleアカウントと連携すると、各期間の希望シフト入力画面で「外部フォーム＆CSV連携（β）」パネルが利用できるようになります。「連携解除」でいつでも連携を解除できます。</p>
 
         <div class="sub-heading">バックアップ / リストア</div>
         <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
