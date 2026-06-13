@@ -20,6 +20,25 @@
   }
   .popover { max-width: 280px; font-size: .82rem; }
   .popover-header { font-size: .85rem; font-weight: 600; }
+
+  /* 開発者情報カード */
+  .dev-avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; flex-shrink: 0; color: white;
+  }
+  .dev-version-badge {
+    display: inline-block; background: rgba(14, 165, 233, 0.12);
+    color: var(--accent); border-radius: 20px;
+    padding: 1px 9px; font-size: .68rem; font-family: monospace;
+    margin-top: 3px;
+  }
+  .dev-contact-link {
+    display: flex; align-items: center; gap: .5rem;
+    font-size: .85rem; color: var(--text); text-decoration: none;
+  }
+  .dev-contact-link:hover { color: var(--accent); }
 </style>
 {% endblock %}
 {% block content %}
@@ -428,6 +447,35 @@
     </div>
     <div class="text-muted small mt-2">
       ※ リストアすると現在のデータは全て上書きされます
+    </div>
+  </div>
+</div>
+
+<!-- 開発者情報 -->
+<div class="card mb-3">
+  <div class="card-body">
+    <h6 class="card-title text-muted mb-3">開発者情報</h6>
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div class="dev-avatar">👨‍💻</div>
+      <div>
+        <div class="fw-semibold">島野 凌</div>
+        <div class="small text-muted">Developer &amp; Designer · SDU-Shift</div>
+        <span class="dev-version-badge">{{ app_version }}</span>
+      </div>
+    </div>
+    <div class="d-flex flex-column gap-2 mb-2">
+      <a href="mailto:srinrin502.728@gmail.com" class="dev-contact-link">
+        <i class="bi bi-envelope-fill"></i>srinrin502.728@gmail.com
+      </a>
+      <a href="https://github.com/Richiesss/shift-tool" target="_blank" rel="noopener" class="dev-contact-link">
+        <i class="bi bi-github"></i>github.com/Richiesss/shift-tool
+      </a>
+      <div class="dev-contact-link" style="cursor:default">
+        <i class="bi bi-chat-fill" style="color:#06c755"></i>LINE（知人の方はこちらからでも）
+      </div>
+    </div>
+    <div class="text-muted small">
+      <i class="bi bi-bug-fill me-1"></i>バグ報告・機能要望はメール・GitHub Issues・LINEからお気軽にどうぞ。
     </div>
   </div>
 </div>
