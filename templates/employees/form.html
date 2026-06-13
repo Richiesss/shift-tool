@@ -218,7 +218,7 @@
 
       <div class="mb-3">
         <label class="form-label fw-semibold">勤務時間帯</label>
-        <select name="primary_timeslot" class="form-select">
+        <select name="primary_timeslot" class="form-select" onchange="onTimeslotChange()">
           <option value="">どちらでも</option>
           {% for ts in time_slots %}
           <option value="{{ ts.value }}" {{ 'selected' if emp and emp.primary_timeslot == ts else '' }}>
@@ -229,6 +229,7 @@
       </div>
 
       <div class="d-flex flex-column gap-2">
+        <div id="breakfast-band-fields" class="d-flex flex-column gap-2">
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="can_open" id="co"
             {{ 'checked' if emp and emp.can_open else '' }}>
@@ -239,8 +240,9 @@
             {{ 'checked' if emp and emp.can_cleanup else '' }}>
           <label class="form-check-label" for="cc">朝食片付け対応可（〜11:30）</label>
         </div>
+        </div>
         <div id="omakase-fields" class="d-flex flex-column gap-2">
-        <div class="form-check">
+        <div id="aab-row" class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_breakfast" id="aab"
             {{ 'checked' if emp and emp.always_available_breakfast else '' }}>
           <label class="form-check-label" for="aab">朝食：おまかせ（希望提出不要・いつでも出勤可）
@@ -249,7 +251,7 @@
                   data-bs-content="希望シフトを提出しなくても、朝食の時間帯はいつでも出勤可能なアルバイト・パートスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。※正社員は休み希望の日以外もともと常に出勤可能として扱われるため、このチェックを付けても効果はありません。">?</span>
           </label>
         </div>
-        <div class="form-check">
+        <div id="aad-row" class="form-check">
           <input class="form-check-input" type="checkbox" name="always_available_dinner" id="aad"
             {{ 'checked' if emp and emp.always_available_dinner else '' }}>
           <label class="form-check-label" for="aad">ディナー：おまかせ（希望提出不要・いつでも出勤可）
@@ -258,7 +260,7 @@
                   data-bs-content="希望シフトを提出しなくても、ディナーの時間帯はいつでも出勤可能なアルバイト・パートスタッフに設定します。自動生成時に「希望あり」と同様に扱われます。※正社員は休み希望の日以外もともと常に出勤可能として扱われるため、このチェックを付けても効果はありません。">?</span>
           </label>
         </div>
-        <div>
+        <div id="omakase-both-row">
           <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setBothOmakase()">
             <i class="bi bi-check2-all me-1"></i>朝食・ディナーともに「おまかせ」にする
           </button>
@@ -289,14 +291,14 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr id="fp-breakfast-row">
               <td class="fw-semibold">朝食</td>
               {% for i in range(7) %}
               <td><input type="checkbox" name="fp_b_{{ i }}"
                 {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).breakfast else '' }}></td>
               {% endfor %}
             </tr>
-            <tr>
+            <tr id="fp-dinner-row">
               <td class="fw-semibold">ディナー</td>
               {% for i in range(7) %}
               <td><input type="checkbox" name="fp_d_{{ i }}"
@@ -399,8 +401,22 @@ function onEmploymentTypeChange() {
   document.getElementById('ft-note').style.display = isPt ? 'none' : '';
 }
 
+function onTimeslotChange() {
+  const val = document.querySelector('select[name="primary_timeslot"]').value;
+  const hideBreakfast = (val === 'dinner');
+  const hideDinner    = (val === 'breakfast');
+
+  document.getElementById('breakfast-band-fields').style.display = hideBreakfast ? 'none' : '';
+  document.getElementById('aab-row').style.display = hideBreakfast ? 'none' : '';
+  document.getElementById('aad-row').style.display = hideDinner ? 'none' : '';
+  document.getElementById('omakase-both-row').style.display = (val === '') ? '' : 'none';
+  document.getElementById('fp-breakfast-row').style.display = hideBreakfast ? 'none' : '';
+  document.getElementById('fp-dinner-row').style.display = hideDinner ? 'none' : '';
+}
+
 onPositionChange();
 onEmploymentTypeChange();
+onTimeslotChange();
 
 function setBothOmakase() {
   document.getElementById('aab').checked = true;
