@@ -81,7 +81,7 @@ def reorder():
 def archive(emp_id):
     repo.delete_employee(emp_id)
     flash("アーカイブしました", "success")
-    return redirect(url_for("employees.index") + "?archive=1")
+    return redirect(url_for("employees.index"))
 
 
 @bp.post("/<int:emp_id>/purge")
@@ -98,6 +98,34 @@ def restore(emp_id):
     repo.restore_employee(emp_id)
     flash("復元しました", "success")
     return redirect(url_for("employees.index") + "?archive=1")
+
+
+@bp.post("/bulk")
+def bulk_action():
+    action = request.form.get("action")
+    ids = [int(i) for i in request.form.getlist("ids") if i.isdigit()]
+    if not ids:
+        flash("スタッフを選択してください", "error")
+        return redirect(url_for("employees.index"))
+
+    if action == "archive":
+        for emp_id in ids:
+            repo.delete_employee(emp_id)
+        flash(f"{len(ids)}名をアーカイブしました", "success")
+        return redirect(url_for("employees.index"))
+    elif action == "restore":
+        for emp_id in ids:
+            repo.restore_employee(emp_id)
+        flash(f"{len(ids)}名を復元しました", "success")
+        return redirect(url_for("employees.index") + "?archive=1")
+    elif action == "purge":
+        for emp_id in ids:
+            repo.purge_employee(emp_id)
+        flash(f"{len(ids)}名を完全に削除しました", "success")
+        return redirect(url_for("employees.index") + "?archive=1")
+
+    flash("不正な操作です", "error")
+    return redirect(url_for("employees.index"))
 
 
 def _form_to_employee(emp_id):

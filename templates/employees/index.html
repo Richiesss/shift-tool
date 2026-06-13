@@ -26,6 +26,30 @@
   </p>
   {% endif %}
 
+  {% if employees %}
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <div class="form-check m-0">
+      <input class="form-check-input" type="checkbox" id="select-all">
+      <label class="form-check-label small text-muted" for="select-all">全選択</label>
+    </div>
+    <div id="bulk-bar" class="d-flex align-items-center gap-2" style="display:none">
+      <span class="small text-muted" id="bulk-count"></span>
+      {% if not show_archive %}
+      <button type="button" class="btn btn-warning btn-sm" onclick="openBulkArchiveModal()">
+        <i class="bi bi-archive me-1"></i>アーカイブ
+      </button>
+      {% else %}
+      <button type="button" class="btn btn-outline-success btn-sm" onclick="submitBulk('restore')">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>復元
+      </button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="openBulkPurgeModal()">
+        <i class="bi bi-trash me-1"></i>完全削除
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- 従業員一覧 -->
   <div id="emp-list">
   {% for emp in employees %}
@@ -33,6 +57,10 @@
        data-id="{{ emp.id }}">
     <div class="card-body py-2 px-3">
       <div class="d-flex align-items-center gap-2">
+        <div class="form-check m-0">
+          <input class="form-check-input emp-select" type="checkbox" value="{{ emp.id }}"
+                 data-name="{{ emp.name }}" aria-label="{{ emp.name }}を選択">
+        </div>
         <!-- ドラッグハンドル（検索中・アーカイブ中は非表示） -->
         {% if not show_archive and not q %}
         <span class="drag-handle text-muted" style="cursor:grab;font-size:1.2rem;padding:4px 2px">
@@ -140,6 +168,55 @@
     </div>
   </div>
 </div>
+
+<!-- 一括アーカイブ確認モーダル -->
+<div class="modal fade" id="bulkArchiveModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body p-4 text-center">
+        <i class="bi bi-archive-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
+        <div class="fw-semibold mb-1"><span id="bulk-archive-count"></span>名をアーカイブ</div>
+        <div id="bulk-archive-names" class="text-muted small mb-2" style="max-height:120px;overflow-y:auto"></div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-bottom:1.25rem">
+          後から復元できます。
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-warning flex-grow-1" onclick="submitBulk('archive', this)">
+            <i class="bi bi-archive me-1"></i>アーカイブ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 一括完全削除確認モーダル -->
+<div class="modal fade" id="bulkPurgeModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body p-4 text-center">
+        <i class="bi bi-trash-fill text-danger d-block mb-2" style="font-size:2.2rem"></i>
+        <div class="fw-semibold mb-1"><span id="bulk-purge-count"></span>名を完全に削除</div>
+        <div id="bulk-purge-names" class="text-muted small mb-2" style="max-height:120px;overflow-y:auto"></div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-bottom:1.25rem">
+          <span class="text-danger fw-semibold">この操作は取り消せません。</span>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-danger flex-grow-1" onclick="submitBulk('purge', this)">
+            <i class="bi bi-trash me-1"></i>完全削除
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 一括操作送信用フォーム -->
+<form id="bulk-form" method="post" action="{{ url_for('employees.bulk_action') }}" style="display:none">
+  <input type="hidden" name="action" id="bulk-action-input">
+</form>
 {% endblock %}
 
 {% block scripts %}
@@ -187,6 +264,67 @@ function openArchiveModal(action, name) {
   document.getElementById('archive-emp-name').textContent = name;
   document.getElementById('archive-form').action = action;
   new bootstrap.Modal(document.getElementById('archiveModal')).show();
+}
+
+// ── 複数選択（一括操作） ──────────────────────────────────────────
+function getSelectedEmps() {
+  return [...document.querySelectorAll('.emp-select:checked')];
+}
+
+function updateBulkBar() {
+  const all = document.querySelectorAll('.emp-select');
+  const selected = getSelectedEmps();
+  const bar = document.getElementById('bulk-bar');
+  if (bar) {
+    bar.style.display = selected.length > 0 ? 'flex' : 'none';
+    document.getElementById('bulk-count').textContent = `${selected.length}件選択中`;
+  }
+  const selectAll = document.getElementById('select-all');
+  if (selectAll) {
+    selectAll.checked = all.length > 0 && selected.length === all.length;
+    selectAll.indeterminate = selected.length > 0 && selected.length < all.length;
+  }
+}
+
+document.querySelectorAll('.emp-select').forEach(cb => cb.addEventListener('change', updateBulkBar));
+
+document.getElementById('select-all')?.addEventListener('change', e => {
+  document.querySelectorAll('.emp-select').forEach(cb => cb.checked = e.target.checked);
+  updateBulkBar();
+});
+
+function submitBulk(action, btn) {
+  const selected = getSelectedEmps();
+  if (selected.length === 0) return;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>処理中…';
+  }
+  const form = document.getElementById('bulk-form');
+  form.querySelectorAll('input[name="ids"]').forEach(el => el.remove());
+  selected.forEach(cb => {
+    const inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = 'ids';
+    inp.value = cb.value;
+    form.appendChild(inp);
+  });
+  document.getElementById('bulk-action-input').value = action;
+  form.submit();
+}
+
+function openBulkArchiveModal() {
+  const selected = getSelectedEmps();
+  document.getElementById('bulk-archive-count').textContent = selected.length;
+  document.getElementById('bulk-archive-names').textContent = selected.map(cb => cb.dataset.name).join('、');
+  new bootstrap.Modal(document.getElementById('bulkArchiveModal')).show();
+}
+
+function openBulkPurgeModal() {
+  const selected = getSelectedEmps();
+  document.getElementById('bulk-purge-count').textContent = selected.length;
+  document.getElementById('bulk-purge-names').textContent = selected.map(cb => cb.dataset.name).join('、');
+  new bootstrap.Modal(document.getElementById('bulkPurgeModal')).show();
 }
 </script>
 {% endblock %}
