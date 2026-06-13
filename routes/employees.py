@@ -109,19 +109,16 @@ def bulk_action():
         return redirect(url_for("employees.index"))
 
     if action == "archive":
-        for emp_id in ids:
-            repo.delete_employee(emp_id)
-        flash(f"{len(ids)}名をアーカイブしました", "success")
+        n = repo.delete_employees_bulk(ids)
+        flash(f"{n}名をアーカイブしました", "success")
         return redirect(url_for("employees.index"))
     elif action == "restore":
-        for emp_id in ids:
-            repo.restore_employee(emp_id)
-        flash(f"{len(ids)}名を復元しました", "success")
+        n = repo.restore_employees_bulk(ids)
+        flash(f"{n}名を復元しました", "success")
         return redirect(url_for("employees.index") + "?archive=1")
     elif action == "purge":
-        for emp_id in ids:
-            repo.purge_employee(emp_id)
-        flash(f"{len(ids)}名を完全に削除しました", "success")
+        n = repo.purge_employees_bulk(ids)
+        flash(f"{n}名を完全に削除しました", "success")
         return redirect(url_for("employees.index") + "?archive=1")
 
     flash("不正な操作です", "error")

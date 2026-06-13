@@ -323,6 +323,8 @@ def export_excel(
     staff_notes = repo.get_staff_notes(period.id)        # 社員向けお知らせ → メモ2欄
     reserves = repo.get_reservation_counts(period.id)    # 予約客数 → 朝食見込・夜予約
     cell_notes = repo.get_cell_notes(period.id)          # スタッフ個別コメント → 区切りセル
+    app_settings = repo.get_all_app_settings()
+    base_hourly_wage = int(app_settings.get("base_hourly_wage", "0") or 0)
 
     wb = load_workbook(TEMPLATE_PATH)
     ws = wb.active
@@ -470,9 +472,15 @@ def export_excel(
                     for cc in range(col, col + COLS_PER_DAY):
                         ws.cell(r, cc).fill = FILL_FTOFF
             ws.cell(r, c_hours).value = _hours_formula(r, n)
-            ws.cell(r, c_wage).value = (
-                f"={get_column_letter(c_hours)}{r}*{emp.hourly_wage}"
-                if emp.hourly_wage else None)
+            if _is_ft(emp):
+                # 社員は統計画面と同様に時給計算の対象外
+                ws.cell(r, c_wage).value = None
+            else:
+                # 実効時給 = 基本時給 ＋ 個人昇給額（統計画面の base_rate と同じ計算）
+                rate = base_hourly_wage + emp.hourly_wage
+                ws.cell(r, c_wage).value = (
+                    f"={get_column_letter(c_hours)}{r}*{rate}"
+                    if rate else None)
 
     _fill_group(K_FT_START, K_FT_SLOTS + k_ft_extra, k_ft)
     _fill_group(k_pt_row,   K_PT_SLOTS + k_pt_extra, k_pt)

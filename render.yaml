@@ -2,7 +2,7 @@ services:
   - type: web
     name: sdu-shift
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements-web.txt
     # SimpleCache（プロセスローカル）のキャッシュ無効化を全ワーカーに伝播させるため、
     # workers=1 + gthread のマルチスレッド構成にする（#37）
     startCommand: gunicorn "web_app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 120

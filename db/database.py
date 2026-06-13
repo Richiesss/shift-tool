@@ -107,6 +107,8 @@ class Connection:
             self._pool = None
             self.backend = "sqlite"
         self.lastrowid = None
+        # 直近の commit/rollback 以降に文を実行済みか（接続断リトライの安全判定用）
+        self._tx_dirty = False
 
     def _set_statement_timeout(self):
         """クエリが何らかの理由でハング/ロック待ちになっても
@@ -138,6 +140,7 @@ class Connection:
             try:
                 cur = self._conn.cursor(cursor_factory=self._factory)
                 cur.execute(sql, params)
+                self._tx_dirty = True
                 return cur
             except psycopg2.errors.QueryCanceled:
                 # statement_timeout によるクエリキャンセル（SQLSTATE 57014）。
@@ -148,18 +151,28 @@ class Connection:
                     self._conn.rollback()
                 except Exception:
                     pass
+                self._tx_dirty = False
                 raise
             except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
                 # 接続切断（Neonのアイドルタイムアウト等で「connection already
                 # closed」になるケースを含む）— プールから破棄して新しい接続を
-                # 取得し、リトライする
+                # 取得する
                 last_err = e
+                was_dirty = self._tx_dirty
                 try:
                     self._pool.putconn(self._conn, close=True)
                 except Exception:
                     pass
                 self._conn = self._pool.getconn()
+                self._tx_dirty = False
                 self._set_statement_timeout()
+                if was_dirty:
+                    # トランザクション内で既に文を実行済み（未コミットの変更がある）
+                    # 状態での接続断は、新しい接続でリトライすると先行する文の
+                    # 効果が失われたまま現在の文だけが実行されてしまう。
+                    # リトライせず呼び出し元に伝播し、トランザクション全体を
+                    # やり直してもらう。
+                    raise
             except psycopg2.Error:
                 # クエリエラー（statement_timeout含む）でトランザクションが
                 # 中断状態のままプールに戻らないようロールバックしてから再送出
@@ -167,6 +180,7 @@ class Connection:
                     self._conn.rollback()
                 except Exception:
                     pass
+                self._tx_dirty = False
                 raise
         raise last_err
 
@@ -175,6 +189,7 @@ class Connection:
             self._conn.rollback()
         except Exception:
             pass
+        self._tx_dirty = False
 
     def execute(self, sql: str, params=()):
         if self.backend == "postgres":
@@ -197,7 +212,9 @@ class Connection:
             cur = self._conn.execute(sql, params)
             return cur.lastrowid
 
-    def commit(self): self._conn.commit()
+    def commit(self):
+        self._conn.commit()
+        self._tx_dirty = False
 
     def close(self):
         if getattr(self, "_flask_managed", False):

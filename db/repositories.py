@@ -140,6 +140,48 @@ def restore_employee(employee_id: int):
     cache.delete_memoized(get_all_employees)
 
 
+def delete_employees_bulk(employee_ids: list[int]) -> int:
+    """複数スタッフを1接続・1トランザクションでアーカイブし、実際に更新された件数を返す"""
+    if not employee_ids:
+        return 0
+    conn = get_connection()
+    ph = ",".join(["?"] * len(employee_ids))
+    cur = conn.execute(f"UPDATE employees SET is_active=0 WHERE id IN ({ph})", employee_ids)
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_all_employees)
+    return n
+
+
+def restore_employees_bulk(employee_ids: list[int]) -> int:
+    """複数スタッフを1接続・1トランザクションで復元し、実際に更新された件数を返す"""
+    if not employee_ids:
+        return 0
+    conn = get_connection()
+    ph = ",".join(["?"] * len(employee_ids))
+    cur = conn.execute(f"UPDATE employees SET is_active=1 WHERE id IN ({ph})", employee_ids)
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_all_employees)
+    return n
+
+
+def purge_employees_bulk(employee_ids: list[int]) -> int:
+    """複数スタッフを1接続・1トランザクションで完全削除し、実際に削除された件数を返す"""
+    if not employee_ids:
+        return 0
+    conn = get_connection()
+    ph = ",".join(["?"] * len(employee_ids))
+    cur = conn.execute(f"DELETE FROM employees WHERE id IN ({ph})", employee_ids)
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    cache.delete_memoized(get_all_employees)
+    return n
+
+
 def reorder_employees(ordered_ids: list[int]):
     """ドラッグ&ドロップ後の並び順を保存する"""
     conn = get_connection()

@@ -389,6 +389,31 @@ def solve(
     if not shortage_days:
         logger.info("    → 全日程で最低人数を満たせる見込み")
 
+    # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
+    # (emp_id, date_str, slot_value) -> 実勤務時間(float)
+    req_hours: dict[tuple[int, str, str], float] = {}
+    for r in requests:
+        from utils.shift_patterns import PATTERN_MAP, ShiftPattern
+        if r.pattern_id and r.pattern_id != "custom":
+            p = PATTERN_MAP.get(r.pattern_id)
+            dur = p.duration_hours() if p else 5.0
+        elif r.pattern_id == "custom" and r.custom_start and r.custom_end:
+            sp = ShiftPattern("_c", "c", r.custom_start, r.custom_end)
+            dur = sp.duration_hours()
+        else:
+            dur = 5.0  # フォールバック
+        if r.breakfast:
+            req_hours[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = dur
+        if r.dinner:
+            req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
+
+    # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
+    # duration_hours() は休憩考慮なしの総拘束時間を返す。
+    # 実働8h + 法定休憩1h = 総拘束9h 以上のパターンのみ割当可とする。
+    # 例: 5:45〜14:45（b_long = 9h） → 実働8h → 割当可
+    #     6:30〜11:30（b_std  = 5h） → 実働4h → 割当不可
+    SOCIAL_INSURANCE_MIN_HOURS = 9.0   # 実働8h + 休憩1h
+
     # ── 決定変数 ────────────────────────────────────────────────────────
     # assign[e_id][date_str][slot][pos] = BoolVar
     assign: dict = {}
@@ -595,11 +620,30 @@ def solve(
     for ds in date_strs:
         long_candidates = [emp for emp in active_employees if (emp.id, ds) in long_breakfast_set]
         if long_candidates:
-            long_vars = [
-                assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.KITCHEN.value]
-                for emp in long_candidates
+            # constraint 0（兼務不可のホール専任はキッチン配置不可）や社会保険ハード制約
+            # （実働8h未満のパターンは当該スロット全ポジション配置不可）により、そもそも
+            # 朝食キッチンへ配置できない候補を除外する（#54）。除外しないと
+            # long_vars が全て0固定の変数になり sum(long_vars) >= 1 が充足不能になる。
+            kitchen_capable = [
+                emp for emp in long_candidates
+                if not (emp.primary_position == PrimaryPosition.HALL and not emp.can_work_both_positions)
+                and not (
+                    emp.employment_type != EmploymentType.FULL_TIME
+                    and emp.has_social_insurance
+                    and (req_hours.get((emp.id, ds, TimeSlot.BREAKFAST.value)) or 0) < SOCIAL_INSURANCE_MIN_HOURS
+                )
             ]
-            model.add(sum(long_vars) >= 1)
+            if kitchen_capable:
+                long_vars = [
+                    assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.KITCHEN.value]
+                    for emp in kitchen_capable
+                ]
+                model.add(sum(long_vars) >= 1)
+            else:
+                warnings.append(
+                    f"{ds} 朝食 キッチン: ロング勤務（〜15:30頃まで）希望者はいますが、"
+                    f"キッチン配置可能な担当者がいないため最低1名配置を保証できません"
+                )
         else:
             warnings.append(
                 f"{ds} 朝食 キッチン: ロング勤務（〜15:30頃まで）希望者がいません"
@@ -652,30 +696,11 @@ def solve(
             if emp.employment_type == EmploymentType.FULL_TIME:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
 
-    # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
-    # (emp_id, date_str, slot_value) -> 実勤務時間(float)
-    req_hours: dict[tuple[int, str, str], float] = {}
-    for r in requests:
-        from utils.shift_patterns import PATTERN_MAP, ShiftPattern
-        if r.pattern_id and r.pattern_id != "custom":
-            p = PATTERN_MAP.get(r.pattern_id)
-            dur = p.duration_hours() if p else 5.0
-        elif r.pattern_id == "custom" and r.custom_start and r.custom_end:
-            sp = ShiftPattern("_c", "c", r.custom_start, r.custom_end)
-            dur = sp.duration_hours()
-        else:
-            dur = 5.0  # フォールバック
-        if r.breakfast:
-            req_hours[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = dur
-        if r.dinner:
-            req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
-
     # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
     # duration_hours() は休憩考慮なしの総拘束時間を返す。
     # 実働8h + 法定休憩1h = 総拘束9h 以上のパターンのみ割当可とする。
     # 例: 5:45〜14:45（b_long = 9h） → 実働8h → 割当可
     #     6:30〜11:30（b_std  = 5h） → 実働4h → 割当不可
-    SOCIAL_INSURANCE_MIN_HOURS = 9.0   # 実働8h + 休憩1h
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
             continue

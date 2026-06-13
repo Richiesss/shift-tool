@@ -241,24 +241,23 @@ def restore():
             ph = "%s" if conn.backend == "postgres" else "?"
             placeholders = ",".join([ph]*len(cols))
             sql = f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders})"
+            # 1行でも失敗したら例外を伝播させ、リストア全体を rollback する
+            # （PostgreSQL は1文の失敗でトランザクション全体が中断状態になるため、
+            #  ここで握り潰すと先行する DELETE/INSERT が静かに巻き戻ったまま
+            #  以降の行だけが新しいトランザクションで commit されてしまう）
             for row in rows:
-                try:
-                    conn.execute(sql, [row.get(c) for c in cols])
-                except Exception:
-                    pass
+                conn.execute(sql, [row.get(c) for c in cols])
         # シーケンスリセット（PostgreSQL）
         if conn.backend == "postgres":
             for t in ["employees","schedule_periods","shift_requests","shift_assignments","assignment_log"]:
-                try:
-                    conn.execute(f"SELECT setval(pg_get_serial_sequence('{t}','id'), COALESCE((SELECT MAX(id) FROM {t}),1))")
-                except Exception:
-                    pass
+                conn.execute(f"SELECT setval(pg_get_serial_sequence('{t}','id'), COALESCE((SELECT MAX(id) FROM {t}),1))")
         conn.commit()
         # キャッシュクリア
         from cache import cache
         cache.clear()
         flash("バックアップからリストアしました", "success")
     except Exception as e:
+        conn.rollback()
         flash(f"リストア失敗: {e}", "error")
     finally:
         conn.close()

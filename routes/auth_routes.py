@@ -10,11 +10,20 @@ bp = Blueprint("auth", __name__)
 
 def _safe_next(url: str) -> str:
     """next パラメータを相対パスのみに限定してオープンリダイレクトを防ぐ"""
+    if not url:
+        return url_for("dashboard.index")
+    # ブラウザは Location ヘッダ中の "\" を "/" に正規化するため、
+    # バックスラッシュを含む値（例: "/\evil.com" → "//evil.com"）は拒否する
+    if "\\" in url:
+        return url_for("dashboard.index")
+    # "//" で始まる値はプロトコル相対URL（外部ホストへのリダイレクト）になるため拒否
+    if not url.startswith("/") or url.startswith("//"):
+        return url_for("dashboard.index")
     parsed = urlparse(url)
     # scheme や netloc が含まれる（外部URL）場合はデフォルトに戻す
     if parsed.scheme or parsed.netloc:
         return url_for("dashboard.index")
-    return url or url_for("dashboard.index")
+    return url
 
 
 def _login_page(**kwargs):

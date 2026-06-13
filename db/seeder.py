@@ -52,13 +52,16 @@ def seed_if_empty(conn) -> bool:
             try:
                 conn.execute(sql, values)
             except Exception as e:
-                # PostgreSQL: 1件失敗でトランザクションがアボートするため rollback
-                if conn.backend == "postgres":
-                    try:
-                        conn._conn.rollback()
-                    except Exception:
-                        pass
+                # PostgreSQL は1件失敗でトランザクション全体がロールバックされる。
+                # テーブル単位でコミットしているため、ここでの rollback が
+                # 巻き戻すのは現在のテーブルの未コミット行のみで、
+                # 既に投入済みの他テーブルには影響しない。
+                conn.rollback()
                 print(f"[seeder] skipped row in {table}: {e}")
+
+        # テーブル単位でコミットし、後続テーブルでの rollback が
+        # このテーブルの投入結果に影響しないようにする
+        conn.commit()
 
     # PostgreSQL: SERIAL シーケンスを最大IDに合わせる
     if conn.backend == "postgres":
@@ -69,8 +72,7 @@ def seed_if_empty(conn) -> bool:
                     f"COALESCE((SELECT MAX(id) FROM {table}), 1))"
                 )
             except Exception:
-                if conn.backend == "postgres":
-                    conn._conn.rollback()
+                conn.rollback()
 
     conn.commit()
     return True
