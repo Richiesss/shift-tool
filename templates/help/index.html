@@ -184,9 +184,9 @@
           <thead class="table-light"><tr><th>項目</th><th>内容</th></tr></thead>
           <tbody>
             <tr><td>氏名</td><td>必須。シフト表・PDF・Excelに表示されます。</td></tr>
-            <tr><td>雇用形態</td><td><strong>正社員</strong>と<strong>アルバイト</strong>の2種類。自動生成ルールの適用方法が異なります（詳細は「自動生成」参照）。</td></tr>
-            <tr><td>個人昇給額</td><td>アルバイトのみ。基本給への上乗せ額（円/時）。人件費計算に使用されます。</td></tr>
-            <tr><td>社会保険</td><td>アルバイトのみ。チェックを入れると生成時に優先配置されます。</td></tr>
+            <tr><td>雇用形態</td><td><strong>正社員</strong>と<strong>アルバイト/パート</strong>の2種類。自動生成ルールの適用方法が異なります（詳細は「自動生成」参照）。</td></tr>
+            <tr><td>個人昇給額</td><td>アルバイト/パートのみ。基本給への上乗せ額（円/時）。人件費計算に使用されます。</td></tr>
+            <tr><td>社会保険</td><td>アルバイト/パートのみ。チェックを入れると生成時に優先配置されます。</td></tr>
           </tbody>
         </table>
 
@@ -225,7 +225,7 @@
           </tbody>
         </table>
 
-        <div class="sub-heading">固定シフトパターン（アルバイト）</div>
+        <div class="sub-heading">固定シフトパターン（アルバイト/パート）</div>
         <p style="font-size:.82rem">曜日ごとに「朝食」「ディナー」の出勤パターンを設定できます。<br>
         固定パターンを設定したスタッフは、その曜日について希望シフト提出とほぼ同様に扱われます。</p>
 
@@ -273,7 +273,7 @@
         <p style="font-size:.82rem">画面上部のスタッフ名チップから対象者を選ぶと、その人の希望シフト入力欄が表示されます。1人ずつ切り替えながら入力してください。</p>
 
         <div class="sub-heading">一括操作ボタン</div>
-        <p style="font-size:.82rem">各スタッフの入力画面上部に一括ボタンがあります。社員は「出勤」「休希望」「有休」「朝のみ可」「晩のみ可」を全日にまとめて設定でき、アルバイトは「（休み）」または過去によく使われたパターン（最大3件）を全日にまとめて設定できます。</p>
+        <p style="font-size:.82rem">各スタッフの入力画面上部に一括ボタンがあります。社員は「出勤」「休希望」「有休」「朝のみ可」「晩のみ可」を全日にまとめて設定でき、アルバイト/パートは「（休み）」または過去によく使われたパターン（最大3件）を全日にまとめて設定できます。</p>
 
         <div class="sub-heading">外部フォーム＆CSV連携（β）</div>
         <p style="font-size:.82rem">入力画面下部の「外部フォーム＆CSV連携（β）」パネルから、Googleフォームを使った希望収集やCSVインポートができます。</p>
@@ -318,17 +318,17 @@
           <thead class="table-light"><tr><th>設定項目</th><th>内容</th></tr></thead>
           <tbody>
             <tr><td>人件費最小化</td><td>総勤務時間の合計を少なくすることを優先します。短時間シフトのスタッフを優先配置して人件費を抑えます。</td></tr>
-            <tr><td>アルバイト希望充当</td><td>アルバイトが希望した時間帯にできるだけアサインされるよう配慮します。</td></tr>
+            <tr><td>アルバイト/パート希望充当</td><td>アルバイト/パートが希望した時間帯にできるだけアサインされるよう配慮します。</td></tr>
             <tr><td>人員バランス均等化</td><td>各スタッフの総勤務回数が均等になるよう調整します。</td></tr>
-            <tr><td>深夜勤務分散</td><td>ディナー時間帯（22時以降）の勤務が特定のアルバイトスタッフに集中しないよう分散させます（正社員は対象外）。</td></tr>
+            <tr><td>深夜勤務分散</td><td>ディナー時間帯（22時以降）の勤務が特定のアルバイト/パートスタッフに集中しないよう分散させます（正社員は対象外）。</td></tr>
           </tbody>
         </table>
 
         <div class="sub-heading">自動生成の基本ルール</div>
         <ul class="step-list mb-3" style="font-size:.82rem">
           <li><span class="step-num" style="background:#64748b">—</span><div><strong>正社員の掛け持ち禁止</strong> — 1日のうち朝食とディナーの両方にはアサインされません。</div></li>
-          <li><span class="step-num" style="background:#64748b">—</span><div><strong>朝食はアルバイト優先</strong> — アルバイトだけで最低人数を満たせる場合、正社員はアサインされません。</div></li>
-          <li><span class="step-num" style="background:#64748b">—</span><div><strong>ディナーは正社員優先</strong> — 正社員だけで最低人数を満たせる場合、アルバイトはアサインされません。</div></li>
+          <li><span class="step-num" style="background:#64748b">—</span><div><strong>朝食はアルバイト/パート優先</strong> — アルバイト/パートだけで最低人数を満たせる場合、正社員はアサインされません。</div></li>
+          <li><span class="step-num" style="background:#64748b">—</span><div><strong>ディナーは正社員優先</strong> — 正社員だけで最低人数を満たせる場合、アルバイト/パートはアサインされません。</div></li>
           <li><span class="step-num" style="background:#64748b">—</span><div><strong>開店準備・片付けの考慮</strong> — 対応可能スタッフが設定の要件を満たすよう自動配置されます。</div></li>
           <li><span class="step-num" style="background:#64748b">—</span><div><strong>予約客数による増員</strong> — 客数が設定画面の閾値を超えると、その日は自動で増員されます。</div></li>
         </ul>
@@ -475,7 +475,7 @@
         <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
           <thead class="table-light"><tr><th>項目</th><th>内容</th></tr></thead>
           <tbody>
-            <tr><td>基本給（円/時）</td><td>全アルバイト共通の基本時給。</td></tr>
+            <tr><td>基本給（円/時）</td><td>全アルバイト/パート共通の基本時給。</td></tr>
             <tr><td>早朝手当（円/時）</td><td>朝食シフトへの追加手当。実効時給 = 基本給 ＋ 個人昇給額 ＋ 早朝手当（朝食のみ）。</td></tr>
           </tbody>
         </table>

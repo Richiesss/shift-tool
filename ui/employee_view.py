@@ -242,7 +242,7 @@ class EmployeeDialog(QDialog):
 
         self.emp_type_combo = QComboBox()
         self.emp_type_combo.addItem("正社員", EmploymentType.FULL_TIME)
-        self.emp_type_combo.addItem("アルバイト", EmploymentType.PART_TIME)
+        self.emp_type_combo.addItem("アルバイト/パート", EmploymentType.PART_TIME)
         self.emp_type_combo.currentIndexChanged.connect(self._on_type_changed)
         form.addRow("雇用形態 *", self.emp_type_combo)
 
@@ -315,8 +315,8 @@ class EmployeeDialog(QDialog):
         skill_layout.addRow("キッチン習熟度（ディナー）", self.kitchen_skill_dinner_combo)
         layout.addWidget(skill_group)
 
-        # アルバイト専用設定
-        self.parttime_group = QGroupBox("アルバイト設定")
+        # アルバイト/パート専用設定
+        self.parttime_group = QGroupBox("アルバイト/パート設定")
         pt_layout = QVBoxLayout(self.parttime_group)
 
         # 固定シフトパターン

@@ -6,7 +6,8 @@ class EmploymentType(str, Enum):
     PART_TIME = "part_time"
 
     def label(self):
-        return {"full_time": "正社員", "part_time": "アルバイト"}[self.value]
+        return {"full_time": "正社員", "part_time": "アルバイト/パート"}[self.value]
+
 
 
 class SkillLevel(str, Enum):
