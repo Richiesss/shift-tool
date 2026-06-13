@@ -22,14 +22,19 @@ def create_app():
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+    is_dev = os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG") == "1"
+
     secret_key = os.environ.get("SECRET_KEY")
     if not secret_key:
-        if APP_PASSWORD:
+        if not is_dev:
+            import secrets
             logger.warning(
-                "SECRET_KEY が未設定のため固定のデフォルト値を使用します。"
-                "本番環境では環境変数 SECRET_KEY を設定してください。"
+                "SECRET_KEY が未設定のため、ランダムなキーを自動生成しました。"
+                "サーバーの再起動ごとにセッションが失われるため、本番環境では必ず環境変数 SECRET_KEY を設定してください。"
             )
-        secret_key = "dev-secret-key-change-in-prod"
+            secret_key = secrets.token_hex(32)
+        else:
+            secret_key = "dev-secret-key-change-in-prod"
     app.secret_key = secret_key
     Compress(app)
     cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
@@ -42,6 +47,9 @@ def create_app():
         SESSION_FILE_DIR="/tmp/flask_sessions",
         SESSION_FILE_THRESHOLD=500,
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+        SESSION_COOKIE_SECURE=not is_dev,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
     )
     FlaskSession(app)
 
@@ -87,6 +95,13 @@ def create_app():
         if not session.get("authenticated") or session.get("sv") != SESSION_VERSION:
             session.clear()
             return redirect(url_for("auth.login", next=request.path))
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        return response
 
     from routes.employees import bp as emp_bp
     from routes.shifts import bp as shifts_bp
