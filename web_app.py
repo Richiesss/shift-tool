@@ -73,8 +73,8 @@ def create_app():
 
     @app.context_processor
     def inject_auth():
-        from utils.version import APP_VERSION
-        return {"auth_enabled": bool(APP_PASSWORD), "app_version": APP_VERSION}
+        from utils.version import get_display_version
+        return {"auth_enabled": bool(APP_PASSWORD), "app_version": get_display_version()}
 
     # 認証チェック（ログイン・静的ファイルは除外）
     @app.before_request
