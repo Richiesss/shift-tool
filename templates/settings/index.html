@@ -24,9 +24,7 @@
   /* 開発者情報カード */
   .dev-avatar {
     width: 48px; height: 48px; border-radius: 50%;
-    background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.4rem; flex-shrink: 0; color: white;
+    object-fit: cover; flex-shrink: 0;
   }
   .dev-version-badge {
     display: inline-block; background: rgba(14, 165, 233, 0.12);
@@ -456,7 +454,7 @@
   <div class="card-body">
     <h6 class="card-title text-muted mb-3">開発者情報</h6>
     <div class="d-flex align-items-center gap-3 mb-3">
-      <div class="dev-avatar">👨‍💻</div>
+      <img src="{{ url_for('static', filename='icons/dev-avatar.jpg') }}" class="dev-avatar" alt="島野 凌">
       <div>
         <div class="fw-semibold">島野 凌</div>
         <div class="small text-muted">Developer &amp; Designer · SDU-Shift</div>
