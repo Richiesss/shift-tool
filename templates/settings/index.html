@@ -471,6 +471,12 @@
       <div class="dev-contact-link" style="cursor:default">
         <i class="bi bi-chat-fill" style="color:#06c755"></i>LINE（知人の方はこちらからでも）
       </div>
+      <a href="{{ url_for('help.index') }}#changelog" class="dev-contact-link">
+        <i class="bi bi-clock-history"></i>更新履歴を見る
+      </a>
+      <a href="{{ url_for('help.index') }}#known-issues" class="dev-contact-link">
+        <i class="bi bi-bug-fill"></i>既知の不具合を確認する
+      </a>
     </div>
     <div class="text-muted small">
       <i class="bi bi-bug-fill me-1"></i>バグ報告・機能要望はメール・GitHub Issues・LINEからお気軽にどうぞ。
