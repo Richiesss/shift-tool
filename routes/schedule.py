@@ -441,7 +441,7 @@ def assign(period_id):
             is_reinf    = bool(data.get("is_reinforcement", False))
             reinf_start = data.get("reinf_start") or None
             reinf_end   = data.get("reinf_end")   or None
-            # 応援時刻の形式チェック
+            # 指定時刻の形式チェック（応援・希望時間からの変更どちらも対象）
             _time_re = _re.compile(r'^\d{1,2}:\d{2}$')
             if reinf_start and not _time_re.match(reinf_start):
                 return jsonify({"ok": False, "error": "開始時刻の形式が不正です"}), 400

@@ -129,11 +129,11 @@ def _get_shift_cells(
         return "", "-", "", "off"
 
     # 4タプルから位置情報を展開
-    b_pos, b_is_reinf, b_rs, b_re = b_raw if b_raw else (None, False, None, None)
-    d_pos, d_is_reinf, d_rs, d_re = d_raw if d_raw else (None, False, None, None)
+    b_pos, _b_is_reinf, b_rs, b_re = b_raw if b_raw else (None, False, None, None)
+    d_pos, _d_is_reinf, d_rs, d_re = d_raw if d_raw else (None, False, None, None)
 
-    # 応援要員は reinf_start/reinf_end を優先して使用
-    if b_is_reinf or d_is_reinf:
+    # 応援・希望時間からの変更は reinf_start/reinf_end を優先して使用
+    if (b_rs and b_re) or (d_rs and d_re):
         if b_raw and not d_raw and b_rs and b_re:
             s, e = _to_decimal(b_rs), _to_decimal(b_re)
         elif d_raw and not b_raw and d_rs and d_re:
