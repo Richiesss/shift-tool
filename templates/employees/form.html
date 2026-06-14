@@ -407,6 +407,11 @@ function onTimeslotChange() {
   const hideDinner    = (val === 'breakfast');
 
   document.getElementById('breakfast-band-fields').style.display = hideBreakfast ? 'none' : '';
+  if (hideBreakfast) {
+    // ディナー専任は朝食の開店準備・片付けを行わないためチェックを外す
+    document.getElementById('co').checked = false;
+    document.getElementById('cc').checked = false;
+  }
   document.getElementById('aab-row').style.display = hideBreakfast ? 'none' : '';
   document.getElementById('aad-row').style.display = hideDinner ? 'none' : '';
   document.getElementById('omakase-both-row').style.display = (val === '') ? '' : 'none';
