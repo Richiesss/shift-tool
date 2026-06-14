@@ -467,6 +467,18 @@ def initialize_db():
     except Exception:
         pass
 
+    # 既存データの can_open/can_cleanup 不整合を修正:
+    # ディナー専任スタッフは朝食の開店準備・片付けを行わないため、
+    # 修正（0ff7a0f）以前に保存された残存フラグを解消する
+    try:
+        conn.execute(
+            "UPDATE employees SET can_open = 0, can_cleanup = 0"
+            " WHERE primary_timeslot = 'dinner'"
+            " AND (can_open = 1 OR can_cleanup = 1)"
+        )
+    except Exception:
+        pass
+
     # 既存データの custom_start/custom_end 不整合を修正:
     # パターン変更で「カスタム」以外になったのに古い custom_start/custom_end が残っているレコードをクリア
     try:
