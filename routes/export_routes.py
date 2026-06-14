@@ -35,8 +35,9 @@ def excel(period_id):
         return redirect(url_for("schedule.index", period_id=period_id))
     employees = repo.get_all_employees(active_only=True)
     assignments = _assignments_dict(period_id)
+    show_reserve = repo.get_app_setting("export_show_reservation_counts", "1") == "1"
     buf = io.BytesIO()
-    export_excel(buf, period, employees, assignments)
+    export_excel(buf, period, employees, assignments, show_reservation_counts=show_reserve)
     buf.seek(0)
     filename = _period_filename(period, "xlsx")
     return send_file(buf, as_attachment=True, download_name=filename,
@@ -53,8 +54,9 @@ def pdf(period_id):
         return redirect(url_for("schedule.index", period_id=period_id))
     employees = repo.get_all_employees(active_only=True)
     assignments = _assignments_dict(period_id)
+    show_reserve = repo.get_app_setting("export_show_reservation_counts", "1") == "1"
     buf = io.BytesIO()
-    export_pdf(buf, period, employees, assignments)
+    export_pdf(buf, period, employees, assignments, show_reservation_counts=show_reserve)
     buf.seek(0)
     filename = _period_filename(period, "pdf")
     inline = request.args.get("inline") == "1"

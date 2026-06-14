@@ -208,6 +208,23 @@
     </div>
   </div>
 
+  <!-- シフト表 出力設定 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">シフト表 出力設定</h6>
+      <div class="form-check form-switch mb-1">
+        <input class="form-check-input" type="checkbox" role="switch" id="export_show_reservation_counts" name="export_show_reservation_counts"
+               {% if settings.get('export_show_reservation_counts', '1') == '1' %}checked{% endif %}>
+        <label class="form-check-label small" for="export_show_reservation_counts">
+          PDF・Excel出力に「朝食見込」「夜予約」の行を含める
+        </label>
+      </div>
+      <div class="text-muted small">
+        全体周知用のシフト表ではオフにすると、出力時にこの2行を省略できます。シフト表画面での予約客数の入力・編集には影響しません。
+      </div>
+    </div>
+  </div>
+
   <!-- 人件費設定 -->
   <div class="card mb-3">
   <div class="card-body">

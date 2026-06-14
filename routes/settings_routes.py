@@ -86,6 +86,7 @@ def save():
     ]
     new_settings = {k: request.form.get(k, "") for k in settings_keys}
     new_settings["customer_forecast_enabled"] = "1" if request.form.get("customer_forecast_enabled") else "0"
+    new_settings["export_show_reservation_counts"] = "1" if request.form.get("export_show_reservation_counts") else "0"
     repo.save_all_app_settings(new_settings)
 
     # 緯度・経度を変更したら気象キャッシュ・客数予測キャッシュを破棄して即時反映する

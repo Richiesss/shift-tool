@@ -314,8 +314,12 @@ def export_excel(
     period: SchedulePeriod,
     employees: list[Employee],
     assignments: dict,
+    show_reservation_counts: bool = True,
 ):
-    """SDU_shift テンプレートにシフトデータを流し込んで Excel を出力する"""
+    """SDU_shift テンプレートにシフトデータを流し込んで Excel を出力する。
+
+    show_reservation_counts=False の場合、「朝食見込」「夜予約」行（1・2ブロック目とも）
+    を非表示にする（全体周知用シフト表向け。値自体はセルに残るため再表示も可能）。"""
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
     req_map  = {(r.employee_id, r.date): r for r in requests}
@@ -431,6 +435,11 @@ def export_excel(
             cell = ws.cell(r, c)
             cell.value = label
             cell.alignment = ALIGN_CC
+
+    # 「朝食見込・夜予約」行を非表示（全体周知用シフト表向け。値は残し再表示も可能）
+    if not show_reservation_counts:
+        for r in (R_BF, R_DIN, r_date2 + 2, r_date2 + 3):
+            ws.row_dimensions[r].hidden = True
 
     # ── 従業員グループの流し込み ───────────────────────────────────────
     def _fill_group(start_row: int, slot_count: int, emps: list[Employee]):

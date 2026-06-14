@@ -244,8 +244,12 @@ def export_pdf(
     period: SchedulePeriod,
     employees: list[Employee],
     assignments: dict,
+    show_reservation_counts: bool = True,
 ):
-    """SDU_shift テンプレートと同じ紙面の PDF を出力する（A4横・1ページフィット）"""
+    """SDU_shift テンプレートと同じ紙面の PDF を出力する（A4横・1ページフィット）。
+
+    show_reservation_counts=False の場合、「朝食見込」「夜予約」行（1・2ブロック目とも）
+    の高さを0にして出力から省く（全体周知用シフト表向け）。"""
     from db import repositories as repo
     requests = repo.get_shift_requests(period.id)
     req_map  = {(r.employee_id, r.date): r for r in requests}
@@ -293,11 +297,15 @@ def export_pdf(
     n_cols    = 2 + n * COLS_PER_DAY  # 月の日数に合わせブロック数を可変にし空白を作らない
     natural_w = (2 * NAME_W_CH + n * COLS_PER_DAY * DAY_W_CH) * CH_PT
 
+    # 朝食見込・夜予約行は show_reservation_counts=False の場合、高さ0にして省く
+    fore_h = H_FORE if show_reservation_counts else 0.0
+    fore_h2 = H_DATE if show_reservation_counts else 0.0
+
     # 行構成: ヘッダー8行 + K枠 + 2ブロック目4行 + H枠 + フッター2行
     row_heights_nat: list[float] = []
-    row_heights_nat += [H_DATE, H_DATE, H_MEMO1, H_MEMO1, H_MEMO1, H_MEMO2, H_FORE, H_FORE]
+    row_heights_nat += [H_DATE, H_DATE, H_MEMO1, H_MEMO1, H_MEMO1, H_MEMO2, fore_h, fore_h]
     row_heights_nat += [H_DATE] * (k_ft_n + k_pt_n)
-    row_heights_nat += [H_DATE] * 4
+    row_heights_nat += [H_DATE, H_DATE, fore_h2, fore_h2]
     row_heights_nat += [H_DATE] * (h_ft_n + h_pt_n)
     row_heights_nat += [H_DATE] * 2
     row_heights_nat += [15.0]  # 凡例行
@@ -404,31 +412,34 @@ def export_pdf(
         c0 = _block_col(i)
         _span(c0, R_MEMO1, c0 + 2, R_MEMO1 + 2)   # メモ1: 3列×3行
         _span(c0, R_MEMO2, c0 + 2, R_MEMO2)
-        _span(c0, R_BF,    c0 + 2, R_BF)
-        _span(c0, R_DIN,   c0 + 2, R_DIN)
+        if show_reservation_counts:
+            _span(c0, R_BF,  c0 + 2, R_BF)
+            _span(c0, R_DIN, c0 + 2, R_DIN)
         if i < n:
             ds    = dates[i].isoformat()
             note  = notes.get(ds, "")
             note2 = staff_notes.get(ds, "")
-            res   = reserves.get(ds, {})
             if note:
                 data[R_MEMO1][c0] = Paragraph(note, memo_style)
             if note2:
                 data[R_MEMO2][c0] = Paragraph(note2, memo_style)
-            if res.get("breakfast") is not None:
-                data[R_BF][c0] = str(res["breakfast"])
-            if res.get("dinner") is not None:
-                data[R_DIN][c0] = str(res["dinner"])
-    data[R_BF][0]           = "朝食見込"
-    data[R_BF][n_cols - 1]  = "朝食見込"
-    data[R_DIN][0]          = "夜予約"
-    data[R_DIN][n_cols - 1] = "夜予約"
-    _font_size(R_BF,  F_FORE)
-    _font_size(R_DIN, F_FORE)
-    _font_size(R_BF,  F_NAME, 0, 0)
-    _font_size(R_BF,  F_NAME, n_cols - 1, n_cols - 1)
-    _font_size(R_DIN, F_NAME, 0, 0)
-    _font_size(R_DIN, F_NAME, n_cols - 1, n_cols - 1)
+            if show_reservation_counts:
+                res = reserves.get(ds, {})
+                if res.get("breakfast") is not None:
+                    data[R_BF][c0] = str(res["breakfast"])
+                if res.get("dinner") is not None:
+                    data[R_DIN][c0] = str(res["dinner"])
+    if show_reservation_counts:
+        data[R_BF][0]           = "朝食見込"
+        data[R_BF][n_cols - 1]  = "朝食見込"
+        data[R_DIN][0]          = "夜予約"
+        data[R_DIN][n_cols - 1] = "夜予約"
+        _font_size(R_BF,  F_FORE)
+        _font_size(R_DIN, F_FORE)
+        _font_size(R_BF,  F_NAME, 0, 0)
+        _font_size(R_BF,  F_NAME, n_cols - 1, n_cols - 1)
+        _font_size(R_DIN, F_NAME, 0, 0)
+        _font_size(R_DIN, F_NAME, n_cols - 1, n_cols - 1)
 
     # ── 2ブロック目ヘッダー・フッター ──────────────────────────────────
     _fill_date_rows(r_date2, r_dow2)
@@ -436,25 +447,26 @@ def export_pdf(
     _span(n_cols - 1, r_date2, n_cols - 1, r_dow2)
     _set_title(0, r_date2)
     _set_title(n_cols - 1, r_date2)
-    for i in range(n):
-        c0 = _block_col(i)
-        _span(c0, r_bf2,  c0 + 2, r_bf2)
-        _span(c0, r_din2, c0 + 2, r_din2)
-        if i < n:
-            res = reserves.get(dates[i].isoformat(), {})
-            if res.get("breakfast") is not None:
-                data[r_bf2][c0] = str(res["breakfast"])
-            if res.get("dinner") is not None:
-                data[r_din2][c0] = str(res["dinner"])
-    data[r_bf2][0]           = "朝食見込"
-    data[r_bf2][n_cols - 1]  = "朝食見込"
-    data[r_din2][0]          = "夜予約"
-    data[r_din2][n_cols - 1] = "夜予約"
-    _font_size(r_bf2,  F_FORE)
-    _font_size(r_din2, F_FORE)
-    for rr in (r_bf2, r_din2):
-        _font_size(rr, F_NAME, 0, 0)
-        _font_size(rr, F_NAME, n_cols - 1, n_cols - 1)
+    if show_reservation_counts:
+        for i in range(n):
+            c0 = _block_col(i)
+            _span(c0, r_bf2,  c0 + 2, r_bf2)
+            _span(c0, r_din2, c0 + 2, r_din2)
+            if i < n:
+                res = reserves.get(dates[i].isoformat(), {})
+                if res.get("breakfast") is not None:
+                    data[r_bf2][c0] = str(res["breakfast"])
+                if res.get("dinner") is not None:
+                    data[r_din2][c0] = str(res["dinner"])
+        data[r_bf2][0]           = "朝食見込"
+        data[r_bf2][n_cols - 1]  = "朝食見込"
+        data[r_din2][0]          = "夜予約"
+        data[r_din2][n_cols - 1] = "夜予約"
+        _font_size(r_bf2,  F_FORE)
+        _font_size(r_din2, F_FORE)
+        for rr in (r_bf2, r_din2):
+            _font_size(rr, F_NAME, 0, 0)
+            _font_size(rr, F_NAME, n_cols - 1, n_cols - 1)
 
     _fill_date_rows(r_date3, r_dow3)
     _span(0, r_date3, 0, r_dow3)
