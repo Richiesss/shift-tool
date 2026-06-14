@@ -36,6 +36,7 @@
   </div>
 
   <form id="history-form" method="post" action="{{ url_for('customers.save_history') }}" data-dirty-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="ym" value="{{ ym }}">
     <div class="card">
       <div class="table-responsive">

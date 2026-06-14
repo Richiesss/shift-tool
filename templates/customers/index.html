@@ -59,6 +59,7 @@
   {% endif %}
 
   <form id="cust-form" method="post" action="{{ url_for('customers.save', period_id=period.id) }}" data-dirty-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="card">
       <div class="table-responsive">
         <table class="table table-bordered table-sm mb-0" id="cust-table">

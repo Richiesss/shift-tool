@@ -5,9 +5,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import logging
 from datetime import timedelta
-from flask import Flask, g, session, redirect, url_for, request
+from flask import Flask, g, session, redirect, url_for, request, flash, jsonify
 from flask_compress import Compress
 from flask_session import Session as FlaskSession
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from cache import cache
 from db.database import initialize_db
 from auth import APP_PASSWORD, SESSION_VERSION
@@ -38,6 +39,10 @@ def create_app():
     app.secret_key = secret_key
     Compress(app)
     cache.init_app(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 180})
+
+    # CSRF対策（長時間開いた画面からの送信もエラーにしないようトークンの有効期限は設けない）
+    app.config["WTF_CSRF_TIME_LIMIT"] = None
+    CSRFProtect(app)
 
     # サーバーサイドセッション（ファイルストア）
     # Flask-Session 0.8.x では SESSION_PERMANENT / SESSION_USE_SIGNER は廃止
@@ -102,6 +107,13 @@ def create_app():
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         return response
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        if request.is_json:
+            return jsonify(error="セッションが無効です。ページを再読み込みしてください。"), 400
+        flash("セッションが切れたため操作を完了できませんでした。もう一度お試しください。", "warning")
+        return redirect(request.referrer or url_for("dashboard.index"))
 
     from routes.employees import bp as emp_bp
     from routes.shifts import bp as shifts_bp

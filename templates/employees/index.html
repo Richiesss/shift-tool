@@ -86,6 +86,7 @@
           </button>
           {% else %}
           <form method="post" action="{{ url_for('employees.restore', emp_id=emp.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-outline-success btn-sm px-2 px-md-3" title="復元">
               <i class="bi bi-arrow-counterclockwise"></i><span class="d-none d-md-inline ms-1">復元</span>
             </button>
@@ -135,6 +136,7 @@
         <div class="d-flex gap-2">
           <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
           <form id="purge-form" method="post" style="flex-grow:1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger w-100" data-loading="削除中…">
               <i class="bi bi-trash me-1"></i>完全削除
             </button>
@@ -158,6 +160,7 @@
         <div class="d-flex gap-2">
           <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
           <form id="archive-form" method="post" style="flex-grow:1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-warning w-100"
                     data-loading="アーカイブ中…">
               <i class="bi bi-archive me-1"></i>アーカイブ
@@ -215,6 +218,7 @@
 
 <!-- 一括操作送信用フォーム -->
 <form id="bulk-form" method="post" action="{{ url_for('employees.bulk_action') }}" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="action" id="bulk-action-input">
 </form>
 {% endblock %}

@@ -317,10 +317,13 @@
       <button class="btn btn-success btn-sm flex-shrink-0" onclick="openConfirmDialog()">
         <i class="bi bi-check-lg"></i> 確定
       </button>
-      <form id="confirm-form" method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" style="display:none"></form>
+      <form id="confirm-form" method="post" action="{{ url_for('schedule.confirm', period_id=period.id) }}" style="display:none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
       {% else %}
       <span class="badge bg-success flex-shrink-0"><i class="bi bi-lock-fill me-1"></i>確定済</span>
       <form id="unconfirm-form" method="post" action="{{ url_for('schedule.unconfirm', period_id=period.id) }}" class="flex-shrink-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-outline-danger btn-sm">
           <i class="bi bi-lock-fill me-1"></i>確定解除
         </button>

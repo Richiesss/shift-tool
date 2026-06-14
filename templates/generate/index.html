@@ -37,6 +37,7 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('generate.run') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <!-- 期間選択 -->
     <div class="card mb-3">
       <div class="card-body">

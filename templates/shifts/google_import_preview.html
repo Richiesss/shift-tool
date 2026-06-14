@@ -108,6 +108,7 @@
   {# ── 実行 / キャンセル ── #}
   <div class="d-flex gap-2">
     <form method="post" action="{{ url_for('shifts.google_sync_confirm', period_id=period.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="token" value="{{ token }}">
       <input type="hidden" name="merge" value="{{ merge }}">
       <button type="submit" class="btn btn-primary" data-loading="同期処理中…">
