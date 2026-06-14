@@ -10,7 +10,7 @@ pinned: false
 
 # SDU-Shift
 
-飲食店向けのシフト表自動生成デスクトップアプリケーションです。  
+飲食店向けのシフト表自動生成Webアプリケーションです。  
 従業員の希望シフトをパターンから選択するだけで、制約条件を満たした最適なシフト表を自動生成します。
 
 ---
@@ -20,10 +20,10 @@ pinned: false
 | 機能 | 内容 |
 |---|---|
 | 従業員管理 | 氏名・雇用形態・所属ポジション・勤務時間帯・ポジション別習熟度を登録 |
-| 希望シフト入力 | 2週間単位でシフトパターン（14種類）またはカスタム時刻を入力。←/→キーで従業員切替、数字キーでパターン選択 |
+| 希望シフト入力 | 2週間単位でシフトパターン（14種類）またはカスタム時刻を入力 |
 | シフト自動生成 | CP-SATソルバーによる最適化（正社員優先・リーダー要件・ポジション制約を考慮） |
 | シフト編集 | 朝食/ディナー別タブのカレンダー形式で確認・手動修正。他時間帯専任メンバーのワンタッチ表示切替 |
-| バックアップ/インポート | DBファイルを任意の場所に保存・復元。バージョン更新後も移行可能 |
+| バックアップ/インポート | データをJSON形式でダウンロード・復元 |
 | ダークモード | OS設定に連動した自動切替（Light / Dark） |
 | 出力 | PDF・Excel（.xlsx）形式でエクスポート（従業員×日付マトリクス形式） |
 
@@ -88,55 +88,15 @@ pinned: false
 
 ---
 
-## ショートカットキー（希望シフト入力画面）
-
-| キー | 動作 |
-|---|---|
-| ← / → | 前/次の従業員に切替 |
-| 0〜9 | 現在選択行のシフトパターンを数字で選択 |
-
----
-
 ## 技術スタック
 
 | 用途 | ライブラリ |
 |---|---|
-| GUI | PyQt6 |
+| Webフレームワーク | Flask |
 | 最適化 | Google OR-Tools（CP-SAT） |
-| データベース | SQLite |
+| データベース | SQLite / PostgreSQL |
 | Excel出力 | openpyxl |
 | PDF出力 | reportlab |
-| ビルド | PyInstaller + GitHub Actions |
-
----
-
-## ダウンロード
-
-**[Releases](https://github.com/Richiesss/shift-tool/releases)** から最新バージョンをダウンロードしてください。
-
-### macOS (.app)
-
-`SDU-Shift.dmg` をダウンロードしてアプリをApplicationsフォルダへドラッグ&ドロップします。
-
-> 初回起動時は右クリック → 「開く」を選択してください（Gatekeeperの警告を回避）。
-
-### Windows (.exe)
-
-`SDU-Shift.exe` をダウンロードして実行してください。DBは初回起動時に自動作成されます。
-
-> SmartScreen の警告が出た場合は「詳細情報」→「実行」で起動できます。
-
----
-
-## データの保存先
-
-| 実行方法 | 保存先 |
-|---|---|
-| macOS .app | `~/Library/Application Support/SDU-Shift/shift_tool.db` |
-| Windows EXE | `%APPDATA%\SDU-Shift\shift_tool.db`（初回起動時に自動作成） |
-| 開発環境（python main.py） | `~/.shift_tool/shift_tool.db` |
-
-設定画面のバックアップ機能を使うと、任意の場所にDBを保存・復元できます。
 
 ---
 
@@ -146,10 +106,13 @@ pinned: false
 git clone https://github.com/Richiesss/shift-tool.git
 cd shift-tool
 pip install -r requirements.txt
-python main.py
+python web_app.py
 ```
 
-**動作確認済み環境**: Python 3.11以上 / macOS 13+ / Windows 10・11
+`http://localhost:5000` でアクセスできます。`DATABASE_URL` 未設定時はSQLite（`~/.shift_tool/shift_tool.db`）にフォールバックします。設定画面のバックアップ機能を使うと、データをJSON形式で保存・復元できます。
+
+**動作確認済み環境**: Python 3.11以上
+
 ---
 
 ## 今後の予定

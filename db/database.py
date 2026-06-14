@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 import threading
 from pathlib import Path
 
@@ -13,15 +12,8 @@ def __getattr__(name):
 # Global flag to dynamically disable statement timeout if it is not supported by the pooler
 _disable_statement_timeout = os.environ.get("DISABLE_STATEMENT_TIMEOUT", "").lower() in ("true", "1", "yes")
 
-# SQLite fallback path (desktop / dev)
-if getattr(sys, "frozen", False):
-    if sys.platform == "darwin":
-        DB_PATH = (Path.home() / "Library" / "Application Support"
-                    / "SDU-Shift" / "shift_tool.db")
-    else:
-        DB_PATH = Path(os.environ.get("APPDATA", str(Path.home()))) / "SDU-Shift" / "shift_tool.db"
-else:
-    DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
+# SQLite fallback path (dev / HF Spaces)
+DB_PATH = Path.home() / ".shift_tool" / "shift_tool.db"
 
 # PostgreSQL connection pool (reuse connections across requests)
 _pg_pool = None
