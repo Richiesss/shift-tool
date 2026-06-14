@@ -38,8 +38,9 @@ python web_app.py
 
 ### 本番相当
 ```bash
-gunicorn 'web_app:create_app()' --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 120
+gunicorn 'web_app:create_app()' --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 120 --max-requests 500 --max-requests-jitter 50 --access-logfile - --error-logfile -
 ```
+`--max-requests`はワーカーを一定リクエスト数ごとに再起動させ、メモリ肥大やキャッシュの蓄積をリセットする（`--max-requests-jitter`で再起動タイミングをずらす）。`--access-logfile -`/`--error-logfile -`で標準出力にログを出し、Render/HF Spacesのログビューアで追跡できるようにする。
 ※ Flask-Caching の `SimpleCache` はプロセスローカルのため、`workers` を2以上にすると
 ワーカー間でキャッシュ無効化（`delete_memoized`）が伝播せず古いデータが表示される（#37）。
 並列度はワーカー数ではなく `--threads` で確保すること。
