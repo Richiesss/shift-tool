@@ -356,6 +356,13 @@
                 data-bs-title="Google フォーム連携（β）"
                 data-bs-content="Google Forms APIを利用して希望シフトの提出フォームを自動生成・配布し、回答結果を1クリックで直接取り込むことができる機能です。あらかじめGoogle Cloud ConsoleでOAuth 2.0 クライアントを作成し、下記の Client ID / Client Secret を設定しておく必要があります。">?</span>
         </div>
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="google_forms_enabled" name="google_forms_enabled"
+                 {% if settings.get('google_forms_enabled', '1') == '1' %}checked{% endif %}>
+          <label class="form-check-label small text-muted" for="google_forms_enabled">
+            Google フォーム連携機能を有効にする（β）
+          </label>
+        </div>
 
         <!-- 連携ステータス表示 -->
         <div class="mb-3">

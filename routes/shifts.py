@@ -160,6 +160,7 @@ def input(period_id):
                 break
 
     # Google 連携情報
+    google_forms_enabled = repo.get_app_setting("google_forms_enabled", "1") == "1"
     google_token = repo.get_google_token()
     is_google_linked = google_token is not None
     from routes.settings_routes import _get_google_client_credentials
@@ -189,6 +190,7 @@ def input(period_id):
         holidays=holiday_set(dates),
         is_google_linked=is_google_linked,
         has_google_credentials=has_google_credentials,
+        google_forms_enabled=google_forms_enabled,
         emp_note=emp_note,
     )
 

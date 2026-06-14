@@ -233,10 +233,11 @@
         <div class="border-top pt-3 mt-3" style="border-color: var(--border) !important;">
           <div class="row g-3">
             
+            {% if google_forms_enabled %}
             <!-- Google フォーム連携 -->
             <div class="col-md-7 pe-md-3" style="border-right: 1.5px solid var(--border);">
               <div class="fw-bold small mb-2"><i class="bi bi-google me-1"></i>Google Forms 連携（API自動）</div>
-              
+
               {% if not is_google_linked %}
                 <div class="p-3 rounded-2 text-center" style="background-color: rgba(0,0,0,0.02); border: 1px dashed var(--border);">
                   <div class="small text-muted mb-2">Googleアカウントと連携されていません。</div>
@@ -352,9 +353,10 @@
                 {% endif %}
               {% endif %}
             </div>
-            
+            {% endif %}
+
             <!-- CSV手動インポート -->
-            <div class="col-md-5 ps-md-3">
+            <div class="col-md-{{ '5 ps-md-3' if google_forms_enabled else '12' }}">
               <div class="fw-bold small mb-2"><i class="bi bi-filetype-csv me-1"></i>CSVファイル手動取り込み</div>
               <p class="small text-muted mb-3">
                 APIを使わず、手動でエクスポートしたGoogleフォーム等のCSVファイルを読み込みます。
