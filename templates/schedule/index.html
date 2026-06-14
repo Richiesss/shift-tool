@@ -187,7 +187,13 @@
   }
 
   /* ── 担当編集モーダル ── */
+  /* 背景が常にダーク（--dark-card-bg）なため、配色もダーク固定にしてライトテーマでの
+     文字色とのコントラスト不足（暗い背景に暗い文字）を防ぐ */
   .asgn-modal-content {
+    --text: var(--dark-card-text, #f8fafc);
+    --text-muted: #94a3b8;
+    --bg-card: rgba(30, 41, 59, 0.65);
+    --border: rgba(51, 65, 85, 0.5);
     background: var(--dark-card-bg, #1e293b); color: var(--text); border: 1px solid var(--border); border-radius: 16px;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
