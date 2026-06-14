@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db.database import initialize_db, get_connection
 from db import repositories as repo
-from models.employee import Employee, FixedPattern
+from models.employee import Employee
 from models.schedule import SchedulePeriod, ShiftRequest, ShiftAssignment
 from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP, ShiftPattern
@@ -511,8 +511,6 @@ def reset_db():
     conn.execute("DELETE FROM shift_assignments")
     conn.execute("DELETE FROM shift_requests")
     conn.execute("DELETE FROM schedule_periods")
-    conn.execute("DELETE FROM fixed_patterns")
-    conn.execute("DELETE FROM fixed_unavailable_dates")
     conn.execute("DELETE FROM employees")
     conn.commit()
     conn.close()

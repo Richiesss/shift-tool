@@ -7,8 +7,6 @@ _SEED_FILE = Path(__file__).parent / "seed_data.json"
 
 _TABLE_ORDER = [
     "employees",
-    "fixed_patterns",
-    "fixed_unavailable_dates",
     "schedule_periods",
     "shift_requests",
     "shift_assignments",

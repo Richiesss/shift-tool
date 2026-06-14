@@ -579,11 +579,11 @@ class ScheduleView(QWidget):
             reinf_start = result[2] if result else None
             reinf_end   = result[3] if result else None
             req = self._requests.get((emp.id, ds))
-            # 常時出勤可スタッフ: 固定不可日以外は can_work=True
+            # 常時出勤可スタッフ: can_work=True
             if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
-                can_work = ds not in emp.fixed_unavailable_dates
+                can_work = True
             elif slot == TimeSlot.DINNER and emp.always_available_dinner:
-                can_work = ds not in emp.fixed_unavailable_dates
+                can_work = True
             else:
                 can_work = (req[0] if slot == TimeSlot.BREAKFAST else req[1]) if req else False
 

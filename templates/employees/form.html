@@ -274,66 +274,6 @@
     </div>
   </div>
 
-  <!-- 固定シフトパターン -->
-  <div class="card mb-3">
-    <div class="card-body">
-      <h6 class="card-title text-muted mb-3">固定シフトパターン（アルバイト/パート）
-        <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="top"
-              data-bs-title="固定シフトパターン"
-              data-bs-content="毎週決まった曜日に出勤するスタッフに設定します。チェックした曜日は希望シフト提出と同様に扱われ、自動生成の対象になります。希望シフトで別の入力がある場合はそちらが優先されます。">?</span>
-      </h6>
-      <div class="table-responsive">
-        <table class="table table-sm table-bordered text-center mb-0">
-          <thead class="table-light">
-            <tr>
-              <th></th>
-              {% for d in dow_labels %}<th>{{ d }}</th>{% endfor %}
-            </tr>
-          </thead>
-          <tbody>
-            <tr id="fp-breakfast-row">
-              <td class="fw-semibold">朝食</td>
-              {% for i in range(7) %}
-              <td><input type="checkbox" name="fp_b_{{ i }}"
-                {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).breakfast else '' }}></td>
-              {% endfor %}
-            </tr>
-            <tr id="fp-dinner-row">
-              <td class="fw-semibold">ディナー</td>
-              {% for i in range(7) %}
-              <td><input type="checkbox" name="fp_d_{{ i }}"
-                {{ 'checked' if emp and emp.get_pattern(i) and emp.get_pattern(i).dinner else '' }}></td>
-              {% endfor %}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 固定不可日 -->
-  <div class="card mb-3">
-    <div class="card-body">
-      <h6 class="card-title text-muted mb-3">固定不可日</h6>
-      <div id="unavail-list" class="d-flex flex-wrap gap-2 mb-2">
-        {% for d in (emp.fixed_unavailable_dates if emp else []) %}
-        <div class="badge bg-secondary d-flex align-items-center gap-1 unavail-badge" style="font-size:.85rem">
-          <input type="hidden" name="unavail_dates" value="{{ d }}">
-          {{ d }}
-          <button type="button" class="btn-close btn-close-white btn-sm" style="font-size:.6rem"
-            onclick="this.closest('.unavail-badge').remove()"></button>
-        </div>
-        {% endfor %}
-      </div>
-      <div class="d-flex gap-2">
-        <input type="date" id="new-unavail-date" class="form-control form-control-sm" style="max-width:180px">
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addUnavailDate()">
-          <i class="bi bi-plus"></i> 追加
-        </button>
-      </div>
-    </div>
-  </div>
-
   <div class="d-grid gap-2">
     <button type="submit" class="btn btn-primary btn-lg" data-loading="保存中…">
       <i class="bi bi-check-lg me-1"></i>{{ '更新する' if emp else '登録する' }}
@@ -415,8 +355,6 @@ function onTimeslotChange() {
   document.getElementById('aab-row').style.display = hideBreakfast ? 'none' : '';
   document.getElementById('aad-row').style.display = hideDinner ? 'none' : '';
   document.getElementById('omakase-both-row').style.display = (val === '') ? '' : 'none';
-  document.getElementById('fp-breakfast-row').style.display = hideBreakfast ? 'none' : '';
-  document.getElementById('fp-dinner-row').style.display = hideDinner ? 'none' : '';
 }
 
 onPositionChange();
@@ -426,22 +364,6 @@ onTimeslotChange();
 function setBothOmakase() {
   document.getElementById('aab').checked = true;
   document.getElementById('aad').checked = true;
-}
-
-function addUnavailDate() {
-  const input = document.getElementById('new-unavail-date');
-  const val = input.value;
-  if (!val) return;
-  const existing = [...document.querySelectorAll('input[name="unavail_dates"]')].map(e => e.value);
-  if (existing.includes(val)) { input.value = ''; return; }
-  const badge = document.createElement('div');
-  badge.className = 'badge bg-secondary d-flex align-items-center gap-1 unavail-badge';
-  badge.style.fontSize = '.85rem';
-  badge.innerHTML = `<input type="hidden" name="unavail_dates" value="${val}">${val}
-    <button type="button" class="btn-close btn-close-white btn-sm" style="font-size:.6rem"
-      onclick="this.closest('.unavail-badge').remove()"></button>`;
-  document.getElementById('unavail-list').appendChild(badge);
-  input.value = '';
 }
 </script>
 {% endblock %}

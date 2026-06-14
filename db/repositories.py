@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 from datetime import date as _date
 from db.database import get_connection, Connection
-from models.employee import Employee, FixedPattern
+from models.employee import Employee
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition
 from cache import cache
@@ -21,28 +21,7 @@ def get_all_employees(active_only: bool = True) -> list[Employee]:
         conn.close()
         return []
 
-    emp_ids = [r["id"] for r in rows]
-    ph = ",".join(["?" ] * len(emp_ids))
-
-    # fixed_patterns を一括取得（N+1解消）
-    pat_rows = conn.execute(
-        f"SELECT * FROM fixed_patterns WHERE employee_id IN ({ph}) ORDER BY employee_id, day_of_week",
-        emp_ids
-    ).fetchall()
-    pat_map: dict[int, list] = {}
-    for p in pat_rows:
-        pat_map.setdefault(p["employee_id"], []).append(p)
-
-    # fixed_unavailable_dates を一括取得（N+1解消）
-    unavail_rows = conn.execute(
-        f"SELECT employee_id, date FROM fixed_unavailable_dates WHERE employee_id IN ({ph}) ORDER BY employee_id, date",
-        emp_ids
-    ).fetchall()
-    unavail_map: dict[int, list] = {}
-    for u in unavail_rows:
-        unavail_map.setdefault(u["employee_id"], []).append(u["date"])
-
-    employees = [_row_to_employee_preloaded(row, pat_map, unavail_map) for row in rows]
+    employees = [_row_to_employee_preloaded(row) for row in rows]
     conn.close()
     return employees
 
@@ -93,8 +72,6 @@ def save_employee(emp: Employee) -> Employee:
             "UPDATE employees SET name=?, employment_type=?, hall_skill_breakfast=?, hall_skill_dinner=?, kitchen_skill_breakfast=?, kitchen_skill_dinner=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, hourly_wage=?, has_social_insurance=?, is_active=? WHERE id=?",
             (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, int(emp.is_active), emp.id)
         )
-    _save_fixed_patterns(conn, emp)
-    _save_fixed_unavailable_dates(conn, emp)
     conn.commit()
     conn.close()
     cache.delete_memoized(get_all_employees)
@@ -202,7 +179,7 @@ def reorder_employees(ordered_ids: list[int]):
     cache.delete_memoized(get_all_employees)
 
 
-def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employee:
+def _row_to_employee_preloaded(row) -> Employee:
     eid = row["id"]
     keys = row.keys()
     pp_val   = row["primary_position"]   if "primary_position"   in keys and row["primary_position"] else None
@@ -226,23 +203,10 @@ def _row_to_employee_preloaded(row, pat_map: dict, unavail_map: dict) -> Employe
         hourly_wage=int(row["hourly_wage"]) if "hourly_wage" in keys and row["hourly_wage"] else 0,
         has_social_insurance=bool(row["has_social_insurance"]) if "has_social_insurance" in keys else False,
         is_active=bool(row["is_active"]),
-        fixed_patterns=[
-            FixedPattern(p["day_of_week"], bool(p["breakfast"]), bool(p["dinner"]))
-            for p in pat_map.get(eid, [])
-        ],
-        fixed_unavailable_dates=unavail_map.get(eid, []),
     )
 
 
 def _row_to_employee(row, conn) -> Employee:
-    patterns = conn.execute(
-        "SELECT * FROM fixed_patterns WHERE employee_id=? ORDER BY day_of_week",
-        (row["id"],)
-    ).fetchall()
-    unavail = conn.execute(
-        "SELECT date FROM fixed_unavailable_dates WHERE employee_id=? ORDER BY date",
-        (row["id"],)
-    ).fetchall()
     keys = row.keys()
     pp_val   = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
     op_val   = row["output_position"]  if "output_position"  in keys and row["output_position"]  else None
@@ -273,30 +237,7 @@ def _row_to_employee(row, conn) -> Employee:
         has_social_insurance=si_val,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         is_active=bool(row["is_active"]),
-        fixed_patterns=[
-            FixedPattern(p["day_of_week"], bool(p["breakfast"]), bool(p["dinner"]))
-            for p in patterns
-        ],
-        fixed_unavailable_dates=[u["date"] for u in unavail],
     )
-
-
-def _save_fixed_patterns(conn, emp: Employee):
-    conn.execute("DELETE FROM fixed_patterns WHERE employee_id=?", (emp.id,))
-    for p in emp.fixed_patterns:
-        conn.execute(
-            "INSERT INTO fixed_patterns (employee_id, day_of_week, breakfast, dinner) VALUES (?,?,?,?)",
-            (emp.id, p.day_of_week, int(p.breakfast), int(p.dinner))
-        )
-
-
-def _save_fixed_unavailable_dates(conn, emp: Employee):
-    conn.execute("DELETE FROM fixed_unavailable_dates WHERE employee_id=?", (emp.id,))
-    for d in emp.fixed_unavailable_dates:
-        conn.execute(
-            "INSERT INTO fixed_unavailable_dates (employee_id, date) VALUES (?,?)",
-            (emp.id, d)
-        )
 
 
 # ── シフト期間 ──────────────────────────────────────────────────────────

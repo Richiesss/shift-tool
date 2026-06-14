@@ -257,20 +257,6 @@ _CREATE_TABLES = [
                       CHECK(kitchen_skill_dinner IN ('leader','veteran','general','beginner')),
         is_active       INTEGER NOT NULL DEFAULT 1
     )""",
-    """CREATE TABLE IF NOT EXISTS fixed_patterns (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-        day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 0 AND 6),
-        breakfast   INTEGER NOT NULL DEFAULT 0,
-        dinner      INTEGER NOT NULL DEFAULT 0,
-        UNIQUE(employee_id, day_of_week)
-    )""",
-    """CREATE TABLE IF NOT EXISTS fixed_unavailable_dates (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-        date        TEXT NOT NULL,
-        UNIQUE(employee_id, date)
-    )""",
     """CREATE TABLE IF NOT EXISTS schedule_periods (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         start_date  TEXT NOT NULL,
@@ -409,8 +395,6 @@ _MIGRATIONS = [
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_shift_assignments_period ON shift_assignments(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_shift_requests_period    ON shift_requests(period_id)",
-    "CREATE INDEX IF NOT EXISTS idx_fixed_patterns_emp       ON fixed_patterns(employee_id)",
-    "CREATE INDEX IF NOT EXISTS idx_fixed_unavail_emp        ON fixed_unavailable_dates(employee_id)",
     "CREATE INDEX IF NOT EXISTS idx_reservation_period       ON reservation_counts(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_schedule_notes_period    ON schedule_notes(period_id)",
     "CREATE INDEX IF NOT EXISTS idx_staff_notes_period       ON staff_notes(period_id)",
@@ -431,6 +415,13 @@ def initialize_db():
 
     for idx in _INDEXES:
         conn.execute(idx)
+
+    # 廃止された固定シフトパターン/固定不可日テーブルを既存DBから削除
+    for table in ("fixed_patterns", "fixed_unavailable_dates"):
+        try:
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+        except Exception:
+            pass
 
     added_cols = set()
     for table, col, definition in _MIGRATIONS:

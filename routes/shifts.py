@@ -107,21 +107,6 @@ def input(period_id):
         prev_idx = emp_idx - 1 if emp_idx > 0 else None
         next_idx = emp_idx + 1 if emp_idx < len(employees) - 1 else None
 
-    # 固定シフト（曜日固定パターン）によるプリフィル
-    # 希望が未提出の日のみ、登録済みの固定パターンから初期値を補完する
-    if current_emp and current_emp.fixed_patterns:
-        from utils.shift_patterns import default_pattern_from_fixed
-        for d in dates:
-            key = (current_emp.id, str(d))
-            if key in req_map:
-                continue
-            fp = current_emp.get_pattern(d.weekday())
-            if not fp:
-                continue
-            pid = default_pattern_from_fixed(fp.breakfast, fp.dinner)
-            if pid:
-                req_map[key] = ShiftRequest(employee_id=current_emp.id, date=str(d), pattern_id=pid)
-
     # 「おまかせ」スタッフのプリフィル
     # 希望が未提出の日のみ、いつでも出勤可として全日「希望あり」を自動補完表示する
     # （DBへの保存は行わず表示のみ。ソルバーは always_available_* フラグを直接参照して

@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
-from models.employee import Employee, FixedPattern
-from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot, DAY_OF_WEEK_LABELS
+from models.employee import Employee
+from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot
 
 bp = Blueprint("employees", __name__, url_prefix="/employees")
 
@@ -31,7 +31,6 @@ def new():
         skill_levels=SkillLevel,
         primary_positions=PrimaryPosition,
         time_slots=TimeSlot,
-        dow_labels=DAY_OF_WEEK_LABELS,
     )
 
 
@@ -56,7 +55,6 @@ def edit(emp_id):
         skill_levels=SkillLevel,
         primary_positions=PrimaryPosition,
         time_slots=TimeSlot,
-        dow_labels=DAY_OF_WEEK_LABELS,
     )
 
 
@@ -127,13 +125,6 @@ def bulk_action():
 
 def _form_to_employee(emp_id):
     f = request.form
-    patterns = []
-    for dow in range(7):
-        b = bool(f.get(f"fp_b_{dow}"))
-        d = bool(f.get(f"fp_d_{dow}"))
-        if b or d:
-            patterns.append(FixedPattern(dow, b, d))
-
     pp_val = f.get("primary_position") or None
     op_val = f.get("output_position")  or None
     pt_val = f.get("primary_timeslot") or None
@@ -168,7 +159,5 @@ def _form_to_employee(emp_id):
         can_cleanup=can_cleanup,
         always_available_breakfast=bool(f.get("always_available_breakfast")),
         always_available_dinner=bool(f.get("always_available_dinner")),
-        fixed_patterns=patterns,
-        fixed_unavailable_dates=request.form.getlist("unavail_dates"),
         is_active=True,
     )

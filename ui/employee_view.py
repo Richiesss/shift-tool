@@ -5,13 +5,12 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QDialog, QFormLayout, QLineEdit,
     QComboBox, QGroupBox, QCheckBox, QLabel, QMessageBox,
     QCalendarWidget, QDialogButtonBox, QSizePolicy, QFrame,
-    QScrollArea, QGridLayout, QListWidget, QDateEdit
+    QScrollArea
 )
-from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
 from db import repositories as repo
-from models.employee import Employee, FixedPattern
-from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot, DAY_OF_WEEK_LABELS
+from models.employee import Employee
+from utils.constants import EmploymentType, SkillLevel, PrimaryPosition, TimeSlot
 from utils.theme import theme
 
 
@@ -280,8 +279,7 @@ class EmployeeDialog(QDialog):
         avail_layout.setSpacing(6)
         avail_note = QLabel(
             "チェックしたスタッフは希望シフトの提出が不要です。\n"
-            "対象の時間帯であれば毎日シフトに入れることができます。\n"
-            "固定不可日のみ除外されます。"
+            "対象の時間帯であれば毎日シフトに入れることができます。"
         )
         avail_note.setWordWrap(True)
         avail_note.setStyleSheet("font-size:11px; color:#6b7280;")
@@ -316,73 +314,6 @@ class EmployeeDialog(QDialog):
         skill_layout.addRow("キッチン習熟度（ディナー）", self.kitchen_skill_dinner_combo)
         layout.addWidget(skill_group)
 
-        # アルバイト/パート専用設定
-        self.parttime_group = QGroupBox("アルバイト/パート設定")
-        pt_layout = QVBoxLayout(self.parttime_group)
-
-        # 固定シフトパターン
-        pattern_label = QLabel("固定シフトパターン（毎週の出勤希望）")
-        pattern_label.setStyleSheet("font-weight:bold;")
-        pt_layout.addWidget(pattern_label)
-
-        pattern_grid = QGridLayout()
-        pattern_grid.setSpacing(6)
-        pattern_grid.addWidget(QLabel("曜日"), 0, 0)
-        pattern_grid.addWidget(QLabel("朝食"), 0, 1, Qt.AlignmentFlag.AlignCenter)
-        pattern_grid.addWidget(QLabel("ディナー"), 0, 2, Qt.AlignmentFlag.AlignCenter)
-
-        self.pattern_checks: list[tuple[QCheckBox, QCheckBox]] = []
-        for i, day in enumerate(DAY_OF_WEEK_LABELS):
-            lbl = QLabel(day)
-            cb_b = QCheckBox()
-            cb_d = QCheckBox()
-            pattern_grid.addWidget(lbl, i + 1, 0)
-            pattern_grid.addWidget(cb_b, i + 1, 1, Qt.AlignmentFlag.AlignCenter)
-            pattern_grid.addWidget(cb_d, i + 1, 2, Qt.AlignmentFlag.AlignCenter)
-            self.pattern_checks.append((cb_b, cb_d))
-
-        pt_layout.addLayout(pattern_grid)
-
-        note = QLabel("※ 固定パターンなしの場合はすべてチェックを外してください")
-        note.setStyleSheet("color:#6b7280; font-size:11px;")
-        pt_layout.addWidget(note)
-
-        layout.addWidget(self.parttime_group)
-
-        # 固定不可日
-        unavail_group = QGroupBox("固定不可日（出勤不可の日を登録）")
-        unavail_vl = QVBoxLayout(unavail_group)
-        unavail_vl.setSpacing(6)
-
-        add_row = QHBoxLayout()
-        self._unavail_date_edit = QDateEdit()
-        self._unavail_date_edit.setCalendarPopup(True)
-        self._unavail_date_edit.setDate(QDate.currentDate())
-        self._unavail_date_edit.setDisplayFormat("yyyy/MM/dd")
-        btn_add_unavail = QPushButton("追加")
-        btn_add_unavail.setFixedWidth(56)
-        btn_add_unavail.clicked.connect(self._add_unavail_date)
-        add_row.addWidget(QLabel("日付:"))
-        add_row.addWidget(self._unavail_date_edit)
-        add_row.addWidget(btn_add_unavail)
-        add_row.addStretch()
-        unavail_vl.addLayout(add_row)
-
-        self._unavail_list = QListWidget()
-        self._unavail_list.setMaximumHeight(90)
-        self._unavail_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        unavail_vl.addWidget(self._unavail_list)
-
-        btn_remove_row = QHBoxLayout()
-        btn_remove_row.addStretch()
-        btn_remove_unavail = QPushButton("選択した日を削除")
-        btn_remove_unavail.setFixedHeight(28)
-        btn_remove_unavail.clicked.connect(self._remove_unavail_dates)
-        btn_remove_row.addWidget(btn_remove_unavail)
-        unavail_vl.addLayout(btn_remove_row)
-
-        layout.addWidget(unavail_group)
-
         # ボタン
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Save).setText("保存")
@@ -395,8 +326,6 @@ class EmployeeDialog(QDialog):
         self._on_timeslot_changed()
 
     def _on_type_changed(self):
-        is_part = self.emp_type_combo.currentData() == EmploymentType.PART_TIME
-        self.parttime_group.setVisible(is_part)
         self.adjustSize()
 
     def _on_timeslot_changed(self):
@@ -407,18 +336,6 @@ class EmployeeDialog(QDialog):
             self.can_open_check.setChecked(False)
             self.can_cleanup_check.setChecked(False)
         self.adjustSize()
-
-    def _add_unavail_date(self):
-        ds = self._unavail_date_edit.date().toString("yyyy-MM-dd")
-        # 重複チェック
-        existing = [self._unavail_list.item(i).text() for i in range(self._unavail_list.count())]
-        if ds not in existing:
-            self._unavail_list.addItem(ds)
-            self._unavail_list.sortItems()
-
-    def _remove_unavail_dates(self):
-        for item in self._unavail_list.selectedItems():
-            self._unavail_list.takeItem(self._unavail_list.row(item))
 
     def _load_employee(self, emp: Employee):
         self.name_edit.setText(emp.name)
@@ -443,15 +360,6 @@ class EmployeeDialog(QDialog):
         idx_kd = self.kitchen_skill_dinner_combo.findData(emp.kitchen_skill_dinner)
         self.kitchen_skill_dinner_combo.setCurrentIndex(idx_kd)
 
-        for i, (cb_b, cb_d) in enumerate(self.pattern_checks):
-            p = emp.get_pattern(i)
-            cb_b.setChecked(p.breakfast if p else False)
-            cb_d.setChecked(p.dinner if p else False)
-
-        self._unavail_list.clear()
-        for ds in sorted(emp.fixed_unavailable_dates):
-            self._unavail_list.addItem(ds)
-
     def _on_save(self):
         name = self.name_edit.text().strip()
         if not name:
@@ -474,17 +382,7 @@ class EmployeeDialog(QDialog):
         kitchen_skill_breakfast = self.kitchen_skill_breakfast_combo.currentData()
         kitchen_skill_dinner = self.kitchen_skill_dinner_combo.currentData()
 
-        patterns = []
-        if emp_type == EmploymentType.PART_TIME:
-            for i, (cb_b, cb_d) in enumerate(self.pattern_checks):
-                if cb_b.isChecked() or cb_d.isChecked():
-                    patterns.append(FixedPattern(i, cb_b.isChecked(), cb_d.isChecked()))
-
         existing_id = self.employee.id if self.employee else None
-        unavail_dates = [
-            self._unavail_list.item(i).text()
-            for i in range(self._unavail_list.count())
-        ]
 
         self.employee = Employee(
             id=existing_id,
@@ -501,7 +399,5 @@ class EmployeeDialog(QDialog):
             always_available_breakfast=always_avail_b,
             always_available_dinner=always_avail_d,
             primary_timeslot=primary_timeslot,
-            fixed_patterns=patterns,
-            fixed_unavailable_dates=unavail_dates,
         )
         self.accept()

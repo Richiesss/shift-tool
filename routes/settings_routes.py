@@ -184,7 +184,7 @@ def backup():
     conn = Connection()
     # google_tokens（Google連携のOAuthトークン）は機密情報のため意図的に対象外とする
     tables = [
-        "employees","fixed_patterns","fixed_unavailable_dates",
+        "employees",
         "schedule_periods","shift_requests","shift_assignments",
         "reservation_counts","customer_count_history","schedule_notes","staff_notes","cell_notes",
         "shift_constraints","breakfast_band_constraints","app_settings","assignment_log",
@@ -224,7 +224,7 @@ def restore():
     conn = Connection()
     # 依存順でリストア（google_tokens はバックアップ対象外のため含めない）
     restore_order = [
-        "employees","fixed_patterns","fixed_unavailable_dates",
+        "employees",
         "schedule_periods","shift_requests","shift_assignments",
         "reservation_counts","customer_count_history","schedule_notes","staff_notes","cell_notes",
         "shift_constraints","breakfast_band_constraints","app_settings","assignment_log",

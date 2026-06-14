@@ -121,8 +121,6 @@ def main():
     # 親テーブルを先に移行し、子テーブルを後に移行する
     tables_to_migrate = [
         "employees",
-        "fixed_patterns",
-        "fixed_unavailable_dates",
         "schedule_periods",
         "shift_requests",
         "shift_assignments",
@@ -204,8 +202,6 @@ def main():
     # SERIAL / PRIMARY KEY AUTOINCREMENT で定義されたテーブル
     sequence_tables = [
         "employees",
-        "fixed_patterns",
-        "fixed_unavailable_dates",
         "schedule_periods",
         "shift_requests",
         "shift_assignments",

@@ -381,8 +381,6 @@
       "primary_timeslot": null
     }
   ],
-  "fixed_patterns": [],
-  "fixed_unavailable_dates": [],
   "schedule_periods": [
     {
       "id": 1,

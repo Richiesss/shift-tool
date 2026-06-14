@@ -12,7 +12,7 @@ from PyQt6.QtGui import QFont, QColor, QBrush, QKeySequence, QShortcut
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.constants import DAY_OF_WEEK_LABELS
-from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP, default_pattern_from_fixed
+from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
 from utils.theme import theme
 
 
@@ -105,10 +105,6 @@ class _PatternCellWidget(QWidget):
         start = parts[0] if len(parts) >= 1 else None
         end = parts[1] if len(parts) >= 2 else None
         return start, end
-
-    def set_enabled(self, enabled: bool):
-        self.combo.setEnabled(enabled)
-        self.custom_edit.setEnabled(enabled)
 
 
 class ShiftInputView(QWidget):
@@ -321,14 +317,14 @@ class ShiftInputView(QWidget):
         cell = self._pattern_cells.get(date_str)
         if cell and cell.combo.isEnabled() and combo_index < cell.combo.count():
             cell.combo.setCurrentIndex(combo_index)
-            self._apply_row_color(row, date_str, False)
+            self._apply_row_color(row, date_str)
 
     def _on_combo_number_key(self, combo_index: int, date_str: str, row: int):
         """コンボが number_pressed シグナルを emit したときの処理"""
         cell = self._pattern_cells.get(date_str)
         if cell and cell.combo.isEnabled() and combo_index < cell.combo.count():
             cell.combo.setCurrentIndex(combo_index)
-            self._apply_row_color(row, date_str, False)
+            self._apply_row_color(row, date_str)
 
     def _apply_styles(self):
         c = theme.c
@@ -460,7 +456,7 @@ class ShiftInputView(QWidget):
             cell = self._pattern_cells.get(ds)
             if cell and cell.combo.isEnabled():
                 cell.set_pattern(pattern_id)
-                self._apply_row_color(row, ds, False)
+                self._apply_row_color(row, ds)
 
     def _on_delete_period(self):
         p = self.period_combo.currentData()
@@ -638,7 +634,7 @@ class ShiftInputView(QWidget):
             c = theme.c
             self._always_avail_banner.setText(
                 f"ℹ️  {emp.name}さんは【{'・'.join(slots_avail)}】が常時出勤可のため"
-                "希望提出は不要です。固定不可日を設定する場合のみ入力してください。"
+                "希望提出は不要です。"
             )
             self._always_avail_banner.setStyleSheet(
                 f"background:#EFF6FF; border:1px solid #BFDBFE; border-radius:4px; "
@@ -672,25 +668,13 @@ class ShiftInputView(QWidget):
             self.table.setItem(row, 0, date_item)
 
             # ── パターン選択セル ──
-            is_unavail = date_str in emp.fixed_unavailable_dates
             req = self._requests.get((emp.id, date_str))
 
             cell = _PatternCellWidget()
-            cell.set_enabled(not is_unavail)
 
-            if is_unavail:
-                # 固定不可日: 休みのまま
-                cell.set_pattern(None)
-                cell.combo.setToolTip("固定不可日")
-            elif req is not None:
+            if req is not None:
                 # 保存済みデータを復元
                 cell.set_pattern(req.pattern_id, req.custom_start, req.custom_end)
-            elif emp.has_fixed_pattern():
-                # 固定パターンからデフォルトを設定
-                fp = emp.get_pattern(dow)
-                if fp:
-                    default_pid = default_pattern_from_fixed(fp.breakfast, fp.dinner)
-                    cell.set_pattern(default_pid)
 
             # コンボの数字キーシグナルをビューのハンドラに接続
             cell.combo.number_pressed.connect(
@@ -705,13 +689,8 @@ class ShiftInputView(QWidget):
             note_item.setFlags(note_item.flags() | Qt.ItemFlag.ItemIsEditable)
             self.table.setItem(row, 2, note_item)
 
-            # 不可日はグレーアウト
-            if is_unavail:
-                date_item.setBackground(QBrush(QColor(theme.c["cell_none"])))
-                note_item.setBackground(QBrush(QColor(theme.c["cell_none"])))
-
             # 行の背景色でパターン種別を視覚化
-            self._apply_row_color(row, date_str, is_unavail)
+            self._apply_row_color(row, date_str)
 
             self.table.setRowHeight(row, 38)
 
@@ -719,10 +698,8 @@ class ShiftInputView(QWidget):
         self._saved_snapshot = self._current_snapshot()
         self._refresh_history()
 
-    def _apply_row_color(self, row: int, date_str: str, is_unavail: bool):
+    def _apply_row_color(self, row: int, date_str: str):
         """選択パターンに応じて行背景を更新（変更時にも呼べるよう分離）"""
-        if is_unavail:
-            return
         cell = self._pattern_cells.get(date_str)
         if not cell:
             return

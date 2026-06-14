@@ -363,11 +363,11 @@ def solve(
                 for e in active_employees:
                     # FIX①: FT社員を正しくカウント（実際の可用性チェックと統一）
                     if e.employment_type == EmploymentType.FULL_TIME:
-                        ok = not off_map.get((e.id, ds), False) and ds not in e.fixed_unavailable_dates
+                        ok = not off_map.get((e.id, ds), False)
                     elif slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
-                        ok = ds not in e.fixed_unavailable_dates
+                        ok = True
                     elif slot == TimeSlot.DINNER and e.always_available_dinner:
-                        ok = ds not in e.fixed_unavailable_dates
+                        ok = True
                     else:
                         ok = req_map.get((e.id, ds, slot.value), False)
                     if not ok:
@@ -441,7 +441,7 @@ def solve(
                     model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
     # 1. 従業員は希望していない時間帯には入れない
-    # 常時出勤可スタッフは固定不可日以外すべて勤務可能とする
+    # 常時出勤可スタッフはすべて勤務可能とする
     for emp in active_employees:
         for ds in date_strs:
             for slot in slots:
@@ -449,12 +449,11 @@ def solve(
                     # 社員：休希望・有休の日以外は常時出勤可
                     # （朝のみ可/晩のみ可の日は該当しない時間帯への配置を禁止）
                     can_work = not off_map.get((emp.id, ds), False) \
-                               and ds not in emp.fixed_unavailable_dates \
                                and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
-                    can_work = ds not in emp.fixed_unavailable_dates
+                    can_work = True
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
-                    can_work = ds not in emp.fixed_unavailable_dates
+                    can_work = True
                 else:
                     can_work = req_map.get((emp.id, ds, slot.value), False)
                 for pos in positions:
@@ -539,8 +538,7 @@ def solve(
                     req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                     or (emp.employment_type == EmploymentType.FULL_TIME
                         and not off_map.get((emp.id, ds), False)
-                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
-                        and ds not in emp.fixed_unavailable_dates)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                 )
             ]
             open_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in can_open_req]
@@ -584,8 +582,7 @@ def solve(
                     or emp.always_available_breakfast
                     or (emp.employment_type == EmploymentType.FULL_TIME
                         and not off_map.get((emp.id, ds), False)
-                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
-                        and ds not in emp.fixed_unavailable_dates)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                 ]
                 if min_cln > 0 and cln_vars:
                     model.add(sum(cln_vars) >= min(min_cln, len(cln_vars)))
@@ -598,8 +595,7 @@ def solve(
                         or emp.always_available_breakfast
                         or (emp.employment_type == EmploymentType.FULL_TIME
                             and not off_map.get((emp.id, ds), False)
-                            and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
-                            and ds not in emp.fixed_unavailable_dates)
+                            and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                     ]
                     if ldr_cln_vars:
                         model.add(sum(ldr_cln_vars) >= min(min_cln_ldr, len(ldr_cln_vars)))
@@ -828,9 +824,9 @@ def solve(
                     if emp.primary_position.value != pos.value:
                         continue
                     if slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
-                        slot_ok = ds not in emp.fixed_unavailable_dates
+                        slot_ok = True
                     elif slot == TimeSlot.DINNER and emp.always_available_dinner:
-                        slot_ok = ds not in emp.fixed_unavailable_dates
+                        slot_ok = True
                     else:
                         slot_ok = req_map.get((emp.id, ds, slot.value), False)
                     if slot_ok:
@@ -843,7 +839,7 @@ def solve(
                 for emp in active_employees:
                     if emp.employment_type != EmploymentType.FULL_TIME:
                         continue
-                    if off_map.get((emp.id, ds), False) or ds in emp.fixed_unavailable_dates:
+                    if off_map.get((emp.id, ds), False):
                         continue
                     if slot_block_map.get((emp.id, ds)) == slot:
                         continue
@@ -1103,7 +1099,7 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
         logger.info(f"    → 加入者平均{avg_si:.1f}回 / 未加入者平均{avg_non:.1f}回")
         if si_req_8h == 0 and si_emps_count > 0:
             logger.warning("    ⚠️  社保加入PT全員が8h希望を提出していません。"
-                           "8時間のシフトパターンを提出するか、おまかせ+固定パターンで8hを設定してください。")
+                           "8時間のシフトパターンを提出するか、おまかせ（朝食・ディナー両方）で8hを設定してください。")
 
 
 def _log_assignment_summary(assignments, date_strs):
@@ -1207,12 +1203,11 @@ def _solve_best_effort(
             for slot in slots:
                 if emp.employment_type == EmploymentType.FULL_TIME:
                     can_work = not off_map.get((emp.id, ds), False) \
-                               and ds not in emp.fixed_unavailable_dates \
                                and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
-                    can_work = ds not in emp.fixed_unavailable_dates
+                    can_work = True
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
-                    can_work = ds not in emp.fixed_unavailable_dates
+                    can_work = True
                 else:
                     can_work = req_map.get((emp.id, ds, slot.value), False)
                 for pos in positions:
@@ -1506,8 +1501,8 @@ def _diagnose_infeasible(
                             or e.primary_position.value == pos.value):
                         continue
                     if e.employment_type == EmploymentType.FULL_TIME:
-                        # 正社員: off_map と固定休日のみで可否判断
-                        if off_map.get((e.id, ds), False) or ds in e.fixed_unavailable_dates:
+                        # 正社員: off_mapのみで可否判断
+                        if off_map.get((e.id, ds), False):
                             continue
                         available.append(e)
                     else:
