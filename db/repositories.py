@@ -59,18 +59,19 @@ def save_employee(emp: Employee) -> Employee:
     avail_b = int(emp.always_available_breakfast)
     avail_d = int(emp.always_available_dinner)
     si      = int(emp.has_social_insurance)
+    si_short = int(emp.si_allow_short_shift)
     if emp.id is None:
         # 末尾に追加されるよう MAX(display_order)+1 をセット
         row = conn.execute("SELECT COALESCE(MAX(display_order), -1) AS max_order FROM employees").fetchone()
         next_order = (row["max_order"] if row else -1) + 1
         emp.id = conn.execute_insert(
-            "INSERT INTO employees (name, employment_type, hall_skill_breakfast, hall_skill_dinner, kitchen_skill_breakfast, kitchen_skill_dinner, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, hourly_wage, has_social_insurance, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, 1, next_order)
+            "INSERT INTO employees (name, employment_type, hall_skill_breakfast, hall_skill_dinner, kitchen_skill_breakfast, kitchen_skill_dinner, primary_position, output_position, primary_timeslot, can_work_both_positions, can_open, can_cleanup, always_available_breakfast, always_available_dinner, hourly_wage, has_social_insurance, si_allow_short_shift, is_active, display_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, si_short, 1, next_order)
         )
     else:
         conn.execute(
-            "UPDATE employees SET name=?, employment_type=?, hall_skill_breakfast=?, hall_skill_dinner=?, kitchen_skill_breakfast=?, kitchen_skill_dinner=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, hourly_wage=?, has_social_insurance=?, is_active=? WHERE id=?",
-            (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, int(emp.is_active), emp.id)
+            "UPDATE employees SET name=?, employment_type=?, hall_skill_breakfast=?, hall_skill_dinner=?, kitchen_skill_breakfast=?, kitchen_skill_dinner=?, primary_position=?, output_position=?, primary_timeslot=?, can_work_both_positions=?, can_open=?, can_cleanup=?, always_available_breakfast=?, always_available_dinner=?, hourly_wage=?, has_social_insurance=?, si_allow_short_shift=?, is_active=? WHERE id=?",
+            (emp.name, emp.employment_type.value, emp.hall_skill_breakfast.value, emp.hall_skill_dinner.value, emp.kitchen_skill_breakfast.value, emp.kitchen_skill_dinner.value, pp, op, pt, both, opn, cln, avail_b, avail_d, emp.hourly_wage, si, si_short, int(emp.is_active), emp.id)
         )
     conn.commit()
     conn.close()
@@ -202,6 +203,7 @@ def _row_to_employee_preloaded(row) -> Employee:
         always_available_dinner=bool(row["always_available_dinner"]) if "always_available_dinner" in keys else False,
         hourly_wage=int(row["hourly_wage"]) if "hourly_wage" in keys and row["hourly_wage"] else 0,
         has_social_insurance=bool(row["has_social_insurance"]) if "has_social_insurance" in keys else False,
+        si_allow_short_shift=bool(row["si_allow_short_shift"]) if "si_allow_short_shift" in keys else False,
         is_active=bool(row["is_active"]),
     )
 
@@ -218,6 +220,7 @@ def _row_to_employee(row, conn) -> Employee:
     avail_d_val = bool(row["always_available_dinner"])    if "always_available_dinner"    in keys else False
     wage_val  = int(row["hourly_wage"])  if "hourly_wage" in keys and row["hourly_wage"] else 0
     si_val    = bool(row["has_social_insurance"]) if "has_social_insurance" in keys else False
+    si_short_val = bool(row["si_allow_short_shift"]) if "si_allow_short_shift" in keys else False
     return Employee(
         id=row["id"],
         name=row["name"],
@@ -235,6 +238,7 @@ def _row_to_employee(row, conn) -> Employee:
         always_available_dinner=avail_d_val,
         hourly_wage=wage_val,
         has_social_insurance=si_val,
+        si_allow_short_shift=si_short_val,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
         is_active=bool(row["is_active"]),
     )

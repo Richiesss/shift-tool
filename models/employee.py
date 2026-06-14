@@ -22,6 +22,7 @@ class Employee:
     primary_timeslot: Optional[TimeSlot] = None          # None = どちらでも可
     hourly_wage: int = 0
     has_social_insurance: bool = False
+    si_allow_short_shift: bool = False                    # True = 社保加入でも9時間未満の希望を割当対象にする（ソフト制約）
     is_active: bool = True
 
     def skill_for(self, position: str, time_slot: TimeSlot) -> SkillLevel:

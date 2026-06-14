@@ -102,7 +102,16 @@
                    {{ 'checked' if emp and emp.has_social_insurance else '' }}>
             <label class="form-check-label small" for="has_si">
               社会保険に加入している
-              <span class="text-muted fw-normal">（シフト生成時に優先配置）</span>
+              <span class="text-muted fw-normal">（シフト生成時に優先配置・出勤日は原則8時間勤務）</span>
+            </label>
+          </div>
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" name="si_allow_short_shift"
+                   id="si_short" value="1"
+                   {{ 'checked' if emp and emp.si_allow_short_shift else '' }}>
+            <label class="form-check-label small" for="si_short">
+              9時間未満の希望でも割当対象にする
+              <span class="text-muted fw-normal">（社会保険加入者向け。ペナルティ付きで許可）</span>
             </label>
           </div>
         </div>

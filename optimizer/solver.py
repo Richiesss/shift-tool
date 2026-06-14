@@ -39,6 +39,15 @@ PHASE2_STALL_TIMEOUT = 12.0
 # 最適値とのギャップがこの割合以内なら探索を打ち切る（Issue #48）
 RELATIVE_GAP_LIMIT = 0.01
 
+# 社保加入アルバイトで「9時間未満の希望でも割当対象にする」設定の人に課す
+# 短時間勤務ペナルティ（Issue #7拡張）。
+# SI_PREF_PENALTY(50,000)より重く、EXPLICIT_PREF_PENALTY(200,000)より軽くすることで、
+# 「短時間でも本人の希望を割当てる」(P1人件費+本ペナルティ ≈ 150,000) が
+# 「明示希望を不履行にする」(200,000)より安くなり、希望が優先的に拾われる。
+# 一方、人員/リーダー不足ペナルティ(800,000〜1,000,000)よりは十分小さく、
+# 不足解消のための割当にも使われる。
+SI_SHORT_SHIFT_PENALTY = 100_000
+
 
 def _solver_workers() -> int:
     """CP-SATの並列探索ワーカー数を返す（Issue #48）。
@@ -300,9 +309,9 @@ def solve(
     logger.info("-" * 60)
     logger.info("[従業員DBダンプ] 本番DBから読み込んだ全従業員情報")
     logger.info(f"  {'ID':>4} {'名前':<12} {'雇用':>5} {'H/B':>6} {'H/D':>6} {'K/B':>6} {'K/D':>6} "
-                f"{'主担当':>8} {'両P':>3} {'おまB':>4} {'おまD':>4} {'社保':>3} {'時給':>5}")
+                f"{'主担当':>8} {'両P':>3} {'おまB':>4} {'おまD':>4} {'社保':>3} {'SI短':>4} {'時給':>5}")
     logger.info(f"  {'-'*4} {'-'*12} {'-'*5} {'-'*6} {'-'*6} {'-'*6} {'-'*6} "
-                f"{'-'*8} {'-'*3} {'-'*4} {'-'*4} {'-'*3} {'-'*5}")
+                f"{'-'*8} {'-'*3} {'-'*4} {'-'*4} {'-'*3} {'-'*4} {'-'*5}")
     for e in active_employees:
         hb = e.hall_skill_breakfast.value if hasattr(e, 'hall_skill_breakfast') else '?'
         hd = e.hall_skill_dinner.value if hasattr(e, 'hall_skill_dinner') else '?'
@@ -313,10 +322,11 @@ def solve(
         omab = '○' if e.always_available_breakfast else '×'
         omad = '○' if e.always_available_dinner else '×'
         si = '○' if e.has_social_insurance else '×'
+        si_short = '○' if e.si_allow_short_shift else '×'
         wage = getattr(e, 'hourly_wage', 0) or 0
         emp_type = 'FT' if e.employment_type == EmploymentType.FULL_TIME else 'PT'
         logger.info(f"  {e.id:>4} {e.name:<12} {emp_type:>5} {hb:>6} {hd:>6} {kb:>6} {kd:>6} "
-                    f"{pp:>8} {both:>3} {omab:>4} {omad:>4} {si:>3} {wage:>5}")
+                    f"{pp:>8} {both:>3} {omab:>4} {omad:>4} {si:>3} {si_short:>4} {wage:>5}")
     logger.info("-" * 60)
 
     # DB から制約・予約客数・アプリ設定を読み込む
@@ -626,6 +636,7 @@ def solve(
                 and not (
                     emp.employment_type != EmploymentType.FULL_TIME
                     and emp.has_social_insurance
+                    and not emp.si_allow_short_shift
                     and (req_hours.get((emp.id, ds, TimeSlot.BREAKFAST.value)) or 0) < SOCIAL_INSURANCE_MIN_HOURS
                 )
             ]
@@ -697,19 +708,35 @@ def solve(
     # 実働8h + 法定休憩1h = 総拘束9h 以上のパターンのみ割当可とする。
     # 例: 5:45〜14:45（b_long = 9h） → 実働8h → 割当可
     #     6:30〜11:30（b_std  = 5h） → 実働4h → 割当不可
+    # ただし si_allow_short_shift=True の従業員は、希望提出はあるが9時間未満の場合に限り
+    # ハード禁止ではなくソフト制約（SI_SHORT_SHIFT_PENALTY）に緩和する（Issue #7拡張）。
+    # 希望自体が未提出（dur is None）の日は変わらずハード禁止。
+    si_short_shift_terms = []
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
             continue
         for ds in date_strs:
             for slot in slots:
                 dur = req_hours.get((emp.id, ds, slot.value))
-                if dur is None or dur < SOCIAL_INSURANCE_MIN_HOURS:
+                if dur is None:
                     for pos in positions:
                         model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+                elif dur < SOCIAL_INSURANCE_MIN_HOURS:
+                    if emp.si_allow_short_shift:
+                        si_short_shift_terms.append(
+                            sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
+                        )
+                    else:
+                        for pos in positions:
+                            model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
     # ── ソフト制約（ペナルティ最小化） ──────────────────────────────────
 
     penalty_terms = []
+
+    # P0: 社保加入・短時間勤務許可者が9時間未満の希望で割当された場合のペナルティ（Issue #7拡張）
+    for term in si_short_shift_terms:
+        penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
 
     # P1: 人件費最小化 = 実勤務時間を最小化（パターン別の時間を使用）
     DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
@@ -1006,11 +1033,13 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
 
     assigned_b = defaultdict(int)
     assigned_d = defaultdict(int)
+    assigned_set: set[tuple[int, str, str]] = set()
     for a in assignments:
         if a.time_slot == TimeSlot.BREAKFAST:
             assigned_b[a.employee_id] += 1
         else:
             assigned_d[a.employee_id] += 1
+        assigned_set.add((a.employee_id, a.date, a.time_slot.value))
 
     # ── リーダー要件チェック ────────────────────────────────────────────
     logger.info("  [リーダー要件チェック]")
@@ -1042,6 +1071,7 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
 
     si_assigned = 0; si_req_8h = 0; si_emps_count = 0
     non_si_assigned = 0; non_si_emps_count = 0
+    si_short_total_penalty = 0
 
     for emp in sorted(pt_emps, key=lambda e: (not e.has_social_insurance, e.name)):
         # 希望提出日数
@@ -1049,7 +1079,8 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
         req_d_days = [ds for ds in date_strs if req_map.get((emp.id, ds, TimeSlot.DINNER.value))]
         # SI加入者: 8h互換パターン数（割当可能な日数）
         h8_count = 0
-        h8_blocked = []
+        h8_blocked = []          # 9h未満で割当されなかった日
+        h8_short_assigned = []   # si_allow_short_shift により9h未満でも割当された日
         if emp.has_social_insurance:
             for ds in date_strs:
                 for slot in slots:
@@ -1057,6 +1088,8 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
                         h = req_hours.get((emp.id, ds, slot.value), DEFAULT_SLOT_HOURS[slot])
                         if h >= SOCIAL_INSURANCE_MIN_HOURS:
                             h8_count += 1
+                        elif emp.si_allow_short_shift and (emp.id, ds, slot.value) in assigned_set:
+                            h8_short_assigned.append(f"{ds}({h}h)")
                         else:
                             h8_blocked.append(f"{ds}({h}h)")
         # リーダー能力
@@ -1084,10 +1117,15 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
         if emp.has_social_insurance:
             if not req_b_days and not req_d_days:
                 notes.append("希望未提出→全日ブロック")
-            elif h8_count == 0 and (req_b_days or req_d_days):
+            elif h8_count == 0 and not h8_short_assigned and (req_b_days or req_d_days):
                 notes.append("8h希望ゼロ→全日ブロック")
-            elif h8_blocked:
-                notes.append(f"8h非該当{len(h8_blocked)}日ブロック")
+            else:
+                if h8_short_assigned:
+                    short_pen = SI_SHORT_SHIFT_PENALTY * len(h8_short_assigned)
+                    notes.append(f"9h未満希望{len(h8_short_assigned)}日を短時間勤務許可で割当(ペナ{short_pen:,})")
+                    si_short_total_penalty += short_pen
+                if h8_blocked:
+                    notes.append(f"8h非該当{len(h8_blocked)}日ブロック")
             si_assigned += total_assigned
             si_req_8h += h8_count
             si_emps_count += 1
@@ -1110,6 +1148,9 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
         if si_req_8h == 0 and si_emps_count > 0:
             logger.warning("    ⚠️  社保加入PT全員が8h希望を提出していません。"
                            "8時間のシフトパターンを提出するか、おまかせ（朝食・ディナー両方）で8hを設定してください。")
+    if si_short_total_penalty:
+        logger.info(f"    短時間勤務許可による9h未満割当ペナルティ計={si_short_total_penalty:,}"
+                     f"(SI_SHORT_SHIFT_PENALTY={SI_SHORT_SHIFT_PENALTY:,}/件)")
 
 
 def _log_assignment_summary(assignments, date_strs):
@@ -1249,17 +1290,28 @@ def _solve_best_effort(
                 model.add(worked_b + worked_d <= 1)
 
     # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
-    # 総拘束9h以上（実働8h + 休憩1h）のパターンのみ割当可
+    # 総拘束9h以上（実働8h + 休憩1h）のパターンのみ割当可。
+    # si_allow_short_shift=True の従業員は、希望提出はあるが9時間未満の場合に限り
+    # ハード禁止ではなくソフト制約（SI_SHORT_SHIFT_PENALTY）に緩和する（Issue #7拡張）。
     SOCIAL_INSURANCE_MIN_HOURS = 9.0
+    si_short_shift_terms = []
     for emp in active_employees:
         if emp.employment_type == EmploymentType.FULL_TIME or not emp.has_social_insurance:
             continue
         for ds in date_strs:
             for slot in slots:
                 dur = req_hours.get((emp.id, ds, slot.value))
-                if dur is None or dur < SOCIAL_INSURANCE_MIN_HOURS:
+                if dur is None:
                     for pos in positions:
                         model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
+                elif dur < SOCIAL_INSURANCE_MIN_HOURS:
+                    if emp.si_allow_short_shift:
+                        si_short_shift_terms.append(
+                            sum(assign[emp.id][ds][slot.value][pos.value] for pos in positions)
+                        )
+                    else:
+                        for pos in positions:
+                            model.add(assign[emp.id][ds][slot.value][pos.value] == 0)
 
     # 日をまたいだ朝食⇄ディナーの連続勤務を禁止（休息時間確保のハード制約 / Issue #8）
     for emp in active_employees:
@@ -1299,6 +1351,10 @@ def _solve_best_effort(
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
     LEADER_PENALTY = 800_000    # リーダー不足ペナルティ
+
+    # P0: 社保加入・短時間勤務許可者が9時間未満の希望で割当された場合のペナルティ（Issue #7拡張）
+    for term in si_short_shift_terms:
+        penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
 
     rc_map = reservation_counts or {}
     for ds in date_strs:

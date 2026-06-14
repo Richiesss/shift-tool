@@ -382,6 +382,7 @@ _MIGRATIONS = [
     ("employees",         "kitchen_skill_dinner",       "TEXT NOT NULL DEFAULT 'beginner'"),
     ("reservation_counts", "is_special_day",            "INTEGER NOT NULL DEFAULT 0"),
     ("schedule_periods",  "google_form_id",             "TEXT"),
+    ("employees",         "si_allow_short_shift",       "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 _INDEXES = [

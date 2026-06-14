@@ -147,6 +147,7 @@ def _form_to_employee(emp_id):
         employment_type=EmploymentType(f["employment_type"]),
         hourly_wage=int(f.get("hourly_wage") or 0),
         has_social_insurance=bool(f.get("has_social_insurance")),
+        si_allow_short_shift=bool(f.get("si_allow_short_shift")),
         hall_skill_breakfast=SkillLevel(f.get("hall_skill_breakfast") or "beginner"),
         hall_skill_dinner=SkillLevel(f.get("hall_skill_dinner") or "beginner"),
         kitchen_skill_breakfast=SkillLevel(f.get("kitchen_skill_breakfast") or "beginner"),
