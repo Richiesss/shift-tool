@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SDU-Shift">
   <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -13,6 +14,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16.png">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  {% include "pwa/_splash_links.html" %}
   <!-- Noto Sans JP (ノンブロッキング読み込み) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -263,6 +265,40 @@
       background: var(--accent);
     }
 
+    /* ── ホーム画面に追加バナー ───────────────────────── */
+    .pwa-install-banner {
+      display: none;
+      position: fixed; left: .75rem; right: .75rem;
+      bottom: calc(var(--nav-h) + var(--safe-bottom) + .75rem);
+      z-index: 1000;
+      align-items: center; gap: .75rem;
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      padding: .75rem;
+      color: var(--text);
+    }
+    .pwa-install-banner.show { display: flex; }
+    .pwa-install-banner img { width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0; }
+    .pwa-install-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .pwa-install-text strong { font-size: .85rem; }
+    .pwa-install-text span { font-size: .75rem; color: var(--text-muted); }
+    .pwa-install-action {
+      background: var(--primary); color: #fff; border: none; border-radius: var(--radius-md);
+      padding: .4rem .9rem; font-size: .8rem; font-weight: 600; white-space: nowrap;
+      font-family: inherit;
+    }
+    .pwa-install-close {
+      background: none; border: none; color: var(--text-muted); font-size: 1.1rem;
+      padding: .25rem; line-height: 1; flex-shrink: 0; cursor: pointer;
+    }
+    @media (min-width: 768px) {
+      .pwa-install-banner { left: auto; right: 1.5rem; bottom: 1.5rem; max-width: 360px; }
+    }
+
     /* ── ハンバーガードロワー ─────────────────────────── */
     .drawer-backdrop {
       display: none; position: fixed; inset: 0;
@@ -396,6 +432,19 @@
   </a>
   {% endif %}
 </nav>
+
+<!-- ホーム画面に追加バナー -->
+<div class="pwa-install-banner" id="pwa-install-banner">
+  <img src="/static/icons/icon-192.png" alt="">
+  <div class="pwa-install-text">
+    <strong>ホーム画面に追加</strong>
+    <span id="pwa-install-desc">アプリのように使えます</span>
+  </div>
+  <button type="button" class="pwa-install-action d-none" id="pwa-install-action">追加</button>
+  <button type="button" class="pwa-install-close" id="pwa-install-close" aria-label="閉じる">
+    <i class="bi bi-x-lg"></i>
+  </button>
+</div>
 
 <!-- Mobile Bottom Nav -->
 {% set _in_drawer = request.endpoint and (
@@ -635,8 +684,64 @@
   })();
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
+
+  // ── ホーム画面に追加バナー ──────────────────────────
+  (() => {
+    const KEY = 'pwaInstallDismissedUntil';
+    const banner = document.getElementById('pwa-install-banner');
+    const desc = document.getElementById('pwa-install-desc');
+    const actionBtn = document.getElementById('pwa-install-action');
+    const closeBtn = document.getElementById('pwa-install-close');
+    if (!banner) return;
+
+    // 既にホーム画面から起動している場合は表示しない
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    if (isStandalone) return;
+
+    // 閉じてから14日以内は再表示しない
+    const dismissedUntil = Number(localStorage.getItem(KEY) || 0);
+    if (Date.now() < dismissedUntil) return;
+
+    const DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
+    const show = () => banner.classList.add('show');
+    const hide = () => banner.classList.remove('show');
+
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    let deferredPrompt = null;
+
+    if (isIOS) {
+      // iOS Safariはbeforeinstallpromptに対応していないため案内文のみ表示
+      desc.textContent = '共有ボタン →「ホーム画面に追加」';
+      show();
+    } else {
+      window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        deferredPrompt = e;
+        actionBtn.classList.remove('d-none');
+        show();
+      });
+    }
+
+    actionBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      hide();
+      await deferredPrompt.prompt();
+      deferredPrompt = null;
+    });
+
+    closeBtn.addEventListener('click', () => {
+      hide();
+      localStorage.setItem(KEY, String(Date.now() + DISMISS_MS));
+    });
+
+    window.addEventListener('appinstalled', () => {
+      hide();
+      localStorage.setItem(KEY, String(Date.now() + DISMISS_MS));
+    });
+  })();
 </script>
 {% block scripts %}{% endblock %}
 </body>

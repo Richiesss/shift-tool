@@ -1,14 +1,38 @@
 {
+  "id": "/",
   "name": "SDU-Shift",
   "short_name": "SDU-Shift",
   "description": "スタッフシフト管理",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1e293b",
   "orientation": "portrait",
+  "lang": "ja",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/static/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "希望シフト",
+      "url": "/shifts",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "シフト表",
+      "url": "/schedule",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "自動生成",
+      "url": "/generate",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }
