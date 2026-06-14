@@ -37,6 +37,17 @@
     font-size: .85rem; color: var(--text); text-decoration: none;
   }
   .dev-contact-link:hover { color: var(--accent); }
+
+  /* セクション見出し */
+  .settings-section-title {
+    display: flex; align-items: center; gap: .5rem;
+    font-size: .78rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-muted);
+    margin: 1.75rem 0 .75rem; padding-bottom: .5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-section-title.first { margin-top: 0; }
+  .settings-section-title i { font-size: .95rem; color: var(--accent); }
 </style>
 {% endblock %}
 {% block content %}
@@ -49,6 +60,8 @@
 <div class="content">
 <form id="settings-form" method="post" action="{{ url_for('settings.save') }}" data-dirty-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <h5 class="settings-section-title first"><i class="bi bi-sliders"></i>シフト作成ルール</h5>
 
   <!-- シフト人員制約 -->
   <div class="card mb-3">
@@ -208,6 +221,58 @@
     </div>
   </div>
 
+  <!-- 人件費設定 -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title text-muted mb-3">人件費設定</h6>
+
+      <!-- 基本給・早朝手当 -->
+      <div class="d-flex gap-3 mb-3 flex-wrap">
+        <div>
+          <label class="form-label small fw-semibold mb-1">基本給</label>
+          <div class="input-group input-group-sm" style="width:130px">
+            <input type="number" name="base_hourly_wage"
+                   value="{{ settings.get('base_hourly_wage', '1000') }}"
+                   min="0" max="99999" step="1"
+                   class="form-control form-control-sm text-end">
+            <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
+          </div>
+        </div>
+        <div>
+          <label class="form-label small fw-semibold mb-1">早朝手当
+            <span class="text-muted fw-normal">（朝食シフト加算）</span>
+          </label>
+          <div class="input-group input-group-sm" style="width:130px">
+            <input type="number" name="early_morning_allowance"
+                   value="{{ settings.get('early_morning_allowance', '0') }}"
+                   min="0" max="9999" step="1"
+                   class="form-control form-control-sm text-end">
+            <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
+          </div>
+        </div>
+        <div>
+          <label class="form-label small fw-semibold mb-1">早朝手当の対象時間帯</label>
+          <div class="d-flex align-items-center gap-1">
+            <input type="time" name="early_allowance_start"
+                   value="{{ settings.get('early_allowance_start', '05:30') }}"
+                   class="form-control form-control-sm" style="width:110px">
+            <span class="text-muted small">〜</span>
+            <input type="time" name="early_allowance_end"
+                   value="{{ settings.get('early_allowance_end', '09:00') }}"
+                   class="form-control form-control-sm" style="width:110px">
+          </div>
+        </div>
+      </div>
+
+      <div class="text-muted small mt-3">
+        実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 上記時間帯と重複する勤務時間）。社員は対象外。<br>
+        個人昇給額はスタッフ管理画面で個別に設定します。
+      </div>
+    </div>
+  </div>
+
+  <h5 class="settings-section-title"><i class="bi bi-display"></i>表示・出力</h5>
+
   <!-- シフト表 出力設定 -->
   <div class="card mb-3">
     <div class="card-body">
@@ -225,56 +290,6 @@
     </div>
   </div>
 
-  <!-- 人件費設定 -->
-  <div class="card mb-3">
-  <div class="card-body">
-    <h6 class="card-title text-muted mb-3">人件費設定</h6>
-
-    <!-- 基本給・早朝手当 -->
-    <div class="d-flex gap-3 mb-3 flex-wrap">
-      <div>
-        <label class="form-label small fw-semibold mb-1">基本給</label>
-        <div class="input-group input-group-sm" style="width:130px">
-          <input type="number" name="base_hourly_wage"
-                 value="{{ settings.get('base_hourly_wage', '1000') }}"
-                 min="0" max="99999" step="1"
-                 class="form-control form-control-sm text-end">
-          <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
-        </div>
-      </div>
-      <div>
-        <label class="form-label small fw-semibold mb-1">早朝手当
-          <span class="text-muted fw-normal">（朝食シフト加算）</span>
-        </label>
-        <div class="input-group input-group-sm" style="width:130px">
-          <input type="number" name="early_morning_allowance"
-                 value="{{ settings.get('early_morning_allowance', '0') }}"
-                 min="0" max="9999" step="1"
-                 class="form-control form-control-sm text-end">
-          <span class="input-group-text px-1" style="font-size:.75rem">円/時</span>
-        </div>
-      </div>
-      <div>
-        <label class="form-label small fw-semibold mb-1">早朝手当の対象時間帯</label>
-        <div class="d-flex align-items-center gap-1">
-          <input type="time" name="early_allowance_start"
-                 value="{{ settings.get('early_allowance_start', '05:30') }}"
-                 class="form-control form-control-sm" style="width:110px">
-          <span class="text-muted small">〜</span>
-          <input type="time" name="early_allowance_end"
-                 value="{{ settings.get('early_allowance_end', '09:00') }}"
-                 class="form-control form-control-sm" style="width:110px">
-        </div>
-      </div>
-    </div>
-
-    <div class="text-muted small mt-3">
-      実効時給 = 基本給 ＋ 個人昇給額（＋早朝手当 for 上記時間帯と重複する勤務時間）。社員は対象外。<br>
-      個人昇給額はスタッフ管理画面で個別に設定します。
-    </div>
-  </div>
-</div>
-
   <!-- 表示テーマ -->
   <div class="card mb-3">
     <div class="card-body">
@@ -290,6 +305,8 @@
       </div>
     </div>
   </div>
+
+  <h5 class="settings-section-title"><i class="bi bi-puzzle"></i>連携・ベータ機能</h5>
 
   <!-- ベータ機能 -->
   <div class="card mb-3">
@@ -388,7 +405,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="text-muted small mt-2">
           ※ 認証時のリダイレクトURIには、以下のURLをGoogle Cloud Consoleの「承認済みのリダイレクトURI」に設定してください：<br>
           <code class="user-select-all">{{ url_for('settings.google_callback', _external=True) }}</code>
@@ -442,6 +459,8 @@
   </div>
 </form>
 
+<h5 class="settings-section-title"><i class="bi bi-database"></i>データ管理</h5>
+
 <!-- バックアップ / リストア -->
 <div class="card mb-3">
   <div class="card-body">
@@ -467,6 +486,8 @@
     </div>
   </div>
 </div>
+
+<h5 class="settings-section-title"><i class="bi bi-info-circle"></i>このアプリについて</h5>
 
 <!-- 開発者情報 -->
 <div class="card mb-3">
