@@ -897,21 +897,31 @@ def solve(
     solver.parameters.num_search_workers = _solver_workers()
     solver.parameters.relative_gap_limit = RELATIVE_GAP_LIMIT
     solver.parameters.log_search_progress = False
-    logger.info(f"  [CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s "
-                f"workers={solver.parameters.num_search_workers} "
-                f"gap_limit={solver.parameters.relative_gap_limit} "
-                f"stall_timeout={PHASE1_STALL_TIMEOUT}s")
-    cb = progress_callback or _StallTrackingCallback()
-    status = _solve_with_stall_watchdog(solver, model, cb, PHASE1_STALL_TIMEOUT)
+
+    if shortage_days:
+        # 充足前チェックで不足が見つかっている場合、人員数制約(4)・リーダー配置制約(5)の
+        # ハード制約のいずれかを必ず満たせずフェーズ1はINFEASIBLE確定となる。
+        # 求解(最大25秒)を実行せず直接フェーズ2へ進む（Issue #48 改善案②）。
+        logger.info(f"  [CP-SAT 求解スキップ] 充足前チェックで{len(shortage_days)}件の不足を検出 "
+                     "→ フェーズ1はINFEASIBLE確定のためスキップ")
+        status = cp_model.INFEASIBLE
+        nb = nc = 0
+    else:
+        logger.info(f"  [CP-SAT 求解開始] max_time={solver.parameters.max_time_in_seconds}s "
+                    f"workers={solver.parameters.num_search_workers} "
+                    f"gap_limit={solver.parameters.relative_gap_limit} "
+                    f"stall_timeout={PHASE1_STALL_TIMEOUT}s")
+        cb = progress_callback or _StallTrackingCallback()
+        status = _solve_with_stall_watchdog(solver, model, cb, PHASE1_STALL_TIMEOUT)
+
+        try:
+            nb = solver.num_branches() if callable(solver.num_branches) else solver.num_branches
+            nc = solver.num_conflicts() if callable(solver.num_conflicts) else solver.num_conflicts
+        except Exception:
+            nb = nc = "?"
 
     elapsed = time.time() - t0
     status_name = solver.status_name(status)
-
-    try:
-        nb = solver.num_branches() if callable(solver.num_branches) else solver.num_branches
-        nc = solver.num_conflicts() if callable(solver.num_conflicts) else solver.num_conflicts
-    except Exception:
-        nb = nc = "?"
     logger.info(f"  [CP-SAT 求解完了] status={status_name}  wall={elapsed:.2f}s  "
                 f"branches={nb}  conflicts={nc}")
 
