@@ -137,12 +137,18 @@ def _form_to_employee(emp_id):
     pp_val = f.get("primary_position") or None
     op_val = f.get("output_position")  or None
     pt_val = f.get("primary_timeslot") or None
+    pt_enum = TimeSlot(pt_val) if pt_val else None
     # 所属ポジションが「どちらでも」の場合は兼務可を自動でTrue
     can_work_both = (pp_val is None)
     # 単一ポジション（ホール/キッチン）の場合は output_position を必ず primary_position に合わせる
     # （非表示の radio ボタンが古い値を送信する問題を防ぐ）
     if pp_val:
         op_val = pp_val
+
+    # ディナー専任スタッフは朝食の開店準備・片付けを行わないため、対応可フラグは常にFalseにする
+    # （非表示チェックボックスが古い値を送信する問題を防ぐ）
+    can_open = bool(f.get("can_open")) and pt_enum != TimeSlot.DINNER
+    can_cleanup = bool(f.get("can_cleanup")) and pt_enum != TimeSlot.DINNER
 
     return Employee(
         id=emp_id,
@@ -156,10 +162,10 @@ def _form_to_employee(emp_id):
         kitchen_skill_dinner=SkillLevel(f.get("kitchen_skill_dinner") or "beginner"),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         output_position=PrimaryPosition(op_val) if op_val else None,
-        primary_timeslot=TimeSlot(pt_val) if pt_val else None,
+        primary_timeslot=pt_enum,
         can_work_both_positions=can_work_both,
-        can_open=bool(f.get("can_open")),
-        can_cleanup=bool(f.get("can_cleanup")),
+        can_open=can_open,
+        can_cleanup=can_cleanup,
         always_available_breakfast=bool(f.get("always_available_breakfast")),
         always_available_dinner=bool(f.get("always_available_dinner")),
         fixed_patterns=patterns,
