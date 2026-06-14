@@ -258,11 +258,12 @@ class EmployeeDialog(QDialog):
         self.primary_ts_combo.addItem("どちらでも", None)
         self.primary_ts_combo.addItem("朝食専任", TimeSlot.BREAKFAST)
         self.primary_ts_combo.addItem("ディナー専任", TimeSlot.DINNER)
+        self.primary_ts_combo.currentIndexChanged.connect(self._on_timeslot_changed)
         form.addRow("勤務時間帯", self.primary_ts_combo)
         layout.addWidget(basic_group)
 
         # 朝食タイムテーブル対応スキル
-        timetable_group = QGroupBox("朝食タイムテーブル対応")
+        self.timetable_group = timetable_group = QGroupBox("朝食タイムテーブル対応")
         tt_layout = QVBoxLayout(timetable_group)
         tt_layout.setSpacing(6)
         self.can_open_check = QCheckBox("開店準備対応可（5:45〜6:30）")
@@ -391,10 +392,20 @@ class EmployeeDialog(QDialog):
         layout.addWidget(buttons)
 
         self._on_type_changed()
+        self._on_timeslot_changed()
 
     def _on_type_changed(self):
         is_part = self.emp_type_combo.currentData() == EmploymentType.PART_TIME
         self.parttime_group.setVisible(is_part)
+        self.adjustSize()
+
+    def _on_timeslot_changed(self):
+        # ディナー専任は朝食の開店準備・片付けを行わないため非表示にし、チェックも外す
+        is_dinner_only = self.primary_ts_combo.currentData() == TimeSlot.DINNER
+        self.timetable_group.setVisible(not is_dinner_only)
+        if is_dinner_only:
+            self.can_open_check.setChecked(False)
+            self.can_cleanup_check.setChecked(False)
         self.adjustSize()
 
     def _add_unavail_date(self):
@@ -455,6 +466,9 @@ class EmployeeDialog(QDialog):
         always_avail_b       = self.always_avail_b_check.isChecked()
         always_avail_d       = self.always_avail_d_check.isChecked()
         primary_timeslot     = self.primary_ts_combo.currentData()
+        if primary_timeslot == TimeSlot.DINNER:
+            can_open = False
+            can_cleanup = False
         hall_skill_breakfast = self.hall_skill_breakfast_combo.currentData()
         hall_skill_dinner = self.hall_skill_dinner_combo.currentData()
         kitchen_skill_breakfast = self.kitchen_skill_breakfast_combo.currentData()
