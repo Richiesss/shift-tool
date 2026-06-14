@@ -2,7 +2,7 @@ from collections import defaultdict
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from db import repositories as repo
 from models.schedule import ShiftAssignment
-from utils.constants import TimeSlot, Position
+from utils.constants import TimeSlot, Position, EmploymentType, PrimaryPosition
 
 from optimizer import forecast
 from utils.holidays import holiday_set
@@ -259,6 +259,22 @@ def index(period_id):
 
     # 人員充足チェック
     all_employees    = repo.get_all_employees(active_only=True)
+
+    # PDF/Excel出力と同じ並び順（キッチン社員→キッチンA・P→ホール社員→ホールA・P、
+    # 各グループ内は display_order）のスタッフIDリスト。タイムラインの並び替えに使う
+    def _out_pos(e):
+        return e.output_position or e.primary_position
+
+    def _is_ft(e):
+        return e.employment_type == EmploymentType.FULL_TIME
+
+    _kitchen = [e for e in all_employees if _out_pos(e) == PrimaryPosition.KITCHEN]
+    _hall    = [e for e in all_employees if _out_pos(e) != PrimaryPosition.KITCHEN]
+    export_emp_order = [e.id for e in (
+        [e for e in _kitchen if _is_ft(e)] + [e for e in _kitchen if not _is_ft(e)]
+        + [e for e in _hall if _is_ft(e)] + [e for e in _hall if not _is_ft(e)]
+    )]
+
     constraints      = repo.get_shift_constraints()
     reservation_counts = repo.get_reservation_counts(period_id)
     reserv_thresh_b  = safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100)
@@ -397,6 +413,7 @@ def index(period_id):
         reservation_counts=reservation_counts,
         ft_off_dates=ft_off_dates,
         cell_notes=cell_notes,
+        export_emp_order=export_emp_order,
         today=today,
         ft_times=ft_times,
         holidays=holidays,

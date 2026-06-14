@@ -257,14 +257,15 @@
   </div>
   <div class="ms-auto d-flex gap-1 align-items-center">
     {% if period %}
-    {% set draft_hint = '' if period.status == 'confirmed' else ' (案)' %}
+    {% set is_confirmed = period.status == 'confirmed' %}
+    {% set draft_hint = '' if is_confirmed else ' (案)' %}
     {% if export_warnings %}
     <button class="btn btn-outline-warning btn-sm" title="出力前の注意があります" aria-label="出力前の注意"
             onclick="{% for w in export_warnings %}showToast({{ w | tojson }}, 'warning');{% endfor %}">
       <i class="bi bi-exclamation-triangle"></i>
     </button>
     {% endif %}
-    
+
     <!-- 出力ドロップダウン -->
     <div class="dropdown">
       <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="出力メニュー">
@@ -272,19 +273,31 @@
       </button>
       <ul class="dropdown-menu dropdown-menu-end" style="min-width: 180px;">
         <li>
-          <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.pdf', period_id=period.id, inline=1) }}" target="_blank">
+          <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.pdf', period_id=period.id, inline=1) }}" target="_blank" rel="noopener" onclick="return openPdfPreview(this)">
             <i class="bi bi-eye text-primary"></i>PDFプレビュー{{ draft_hint }}
           </a>
         </li>
         <li>
+          {% if is_confirmed %}
           <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.excel', period_id=period.id) }}">
-            <i class="bi bi-file-earmark-spreadsheet text-success"></i>Excel出力{{ draft_hint }}
+            <i class="bi bi-file-earmark-spreadsheet text-success"></i>Excel出力
           </a>
+          {% else %}
+          <span class="dropdown-item disabled d-flex align-items-center gap-2" aria-disabled="true" title="確定後に出力できます">
+            <i class="bi bi-file-earmark-spreadsheet text-success"></i>Excel出力（確定後）
+          </span>
+          {% endif %}
         </li>
         <li>
+          {% if is_confirmed %}
           <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('export.pdf', period_id=period.id) }}">
-            <i class="bi bi-file-earmark-pdf text-danger"></i>PDF出力{{ draft_hint }}
+            <i class="bi bi-file-earmark-pdf text-danger"></i>PDF出力
           </a>
+          {% else %}
+          <span class="dropdown-item disabled d-flex align-items-center gap-2" aria-disabled="true" title="確定後に出力できます">
+            <i class="bi bi-file-earmark-pdf text-danger"></i>PDF出力（確定後）
+          </span>
+          {% endif %}
         </li>
       </ul>
     </div>
@@ -714,6 +727,8 @@ const IS_CONFIRMED      = {{ 'true' if period.status == 'confirmed' else 'false'
 const TOTAL_SHORTAGE    = {{ total_shortage }};
 const UNSUBMITTED_COUNT = {{ unsubmitted_count }};
 const PERIOD_ID         = {{ period.id }};
+// PDF/Excel出力と同じ並び順のスタッフIDリスト（タイムラインの並び替えに使用）
+const EXPORT_EMP_ORDER  = {{ export_emp_order | tojson }};
 // スタッフ個別コメントキャッシュ {empId_date: note}
 const CELL_NOTES = {
   {% for (emp_id, date), note in cell_notes.items() %}
@@ -729,6 +744,7 @@ const TL_ASGN = {
     "{{ sv }}": [
       {% for a in alist %}
       { emp: {{ (emp_map[a.employee_id].name if a.employee_id in emp_map else '(不明)') | tojson }},
+        empId: {{ a.employee_id }},
         pos: "{{ a.position.value }}",
         reinf: {{ 'true' if a.is_reinforcement else 'false' }},
         rs: {{ (a.reinf_start or '') | tojson }},
@@ -782,6 +798,14 @@ function toggleShortage(header) {
   chevron.classList.toggle('open', open);
 }
 
+// PDFプレビューは常に最新内容を表示させたいため、毎回キャッシュバスター付きURLで新規タブを開く
+// （ブラウザのPDFビューアが同一URLのタブを再利用し、編集前の内容を表示し続けるのを防ぐ）
+function openPdfPreview(el) {
+  const url = el.href + (el.href.includes('?') ? '&' : '?') + '_=' + Date.now();
+  window.open(url, '_blank', 'noopener');
+  return false;
+}
+
 function openTimeline(ds) {
   const day = TL_ASGN[ds] || {};
   const dow = ['月','火','水','木','金','土','日'];
@@ -799,7 +823,15 @@ function openTimeline(ds) {
     ...(day['breakfast'] || []).map(a=>({...a, slot:'breakfast'})),
     ...(day['dinner']    || []).map(a=>({...a, slot:'dinner'})),
   ];
-  allItems.sort((a,b)=>a.emp.localeCompare(b.emp));
+  // PDF/Excel出力と同じ並び順（キッチン社員→キッチンA・P→ホール社員→ホールA・P）でソート
+  allItems.sort((a,b) => {
+    let ia = EXPORT_EMP_ORDER.indexOf(a.empId);
+    let ib = EXPORT_EMP_ORDER.indexOf(b.empId);
+    if (ia === -1) ia = EXPORT_EMP_ORDER.length;
+    if (ib === -1) ib = EXPORT_EMP_ORDER.length;
+    if (ia !== ib) return ia - ib;
+    return a.emp.localeCompare(b.emp);
+  });
 
   const SLOT_RANGE = { breakfast:[6,11], dinner:[17,23] };
   allItems.forEach(a => {
