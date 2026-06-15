@@ -402,18 +402,25 @@ def solve(
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
     req_hours: dict[tuple[int, str, str], float] = {}
+    # (emp_id, date_str) -> 朝食シフトの終了時刻（Issue #60: 片付け対応可否の判定用）
+    breakfast_end_hour: dict[tuple[int, str], float] = {}
     for r in requests:
         from utils.shift_patterns import PATTERN_MAP, ShiftPattern
         if r.pattern_id and r.pattern_id != "custom":
             p = PATTERN_MAP.get(r.pattern_id)
             dur = p.duration_hours() if p else 5.0
+            end_hour = p.end_hour() if p else None
         elif r.pattern_id == "custom" and r.custom_start and r.custom_end:
             sp = ShiftPattern("_c", "c", r.custom_start, r.custom_end)
             dur = sp.duration_hours()
+            end_hour = sp.end_hour()
         else:
             dur = 5.0  # フォールバック
+            end_hour = None
         if r.breakfast:
             req_hours[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = dur
+            if end_hour is not None:
+                breakfast_end_hour[(r.employee_id, r.date)] = end_hour
         if r.dinner:
             req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
 
@@ -515,6 +522,29 @@ def solve(
                 model.add(sum(staff_vars) >= base_min)
                 model.add(sum(staff_vars) <= base_max)
 
+    # 4b. 予約数閾値超過時のキッチン人員構成（ハード制約 / Issue #59）
+    # 社員2名、または社員1名＋ベテラン以上のアルバイト2名のいずれかを必須とする
+    for ds in date_strs:
+        rc = reservation_counts.get(ds, {})
+        for slot, count, thresh in (
+            (TimeSlot.BREAKFAST, rc.get("breakfast", 0), reserv_tiers_b[0][0]),
+            (TimeSlot.DINNER,    rc.get("dinner", 0),    reserv_tiers_d[0][0]),
+        ):
+            if thresh <= 0 or count < thresh:
+                continue
+            kitchen_vars = {e.id: assign[e.id][ds][slot.value][Position.KITCHEN.value] for e in active_employees}
+            ft_vars = [kitchen_vars[e.id] for e in active_employees if e.employment_type == EmploymentType.FULL_TIME]
+            vet_vars = [
+                kitchen_vars[e.id] for e in active_employees
+                if e.employment_type == EmploymentType.PART_TIME and e.is_skilled(Position.KITCHEN.value, slot)
+            ]
+            cond_2ft = model.new_bool_var(f"kc2ft_{ds}_{slot.value}")
+            cond_1ft2v = model.new_bool_var(f"kc1ft2v_{ds}_{slot.value}")
+            model.add(sum(ft_vars) >= 2).only_enforce_if(cond_2ft)
+            model.add(sum(ft_vars) >= 1).only_enforce_if(cond_1ft2v)
+            model.add(sum(vet_vars) >= 2).only_enforce_if(cond_1ft2v)
+            model.add_bool_or([cond_2ft, cond_1ft2v])
+
     # 5. リーダー配置制約（絶対制約：リーダーの最低配置数）
     for ds in date_strs:
         for slot in slots:
@@ -556,9 +586,31 @@ def solve(
                 if len(can_open_req) >= min_open:
                     model.add(sum(open_vars) >= min_open)
                 else:
-                    warnings.append(
-                        f"{ds} 開店準備 {pos.label()}: 対応可 {len(can_open_req)} 名（必要 {min_open} 名）"
-                    )
+                    # Issue #61: 対応可能スタッフが不足 → 全員割当 + ホール社員フォールバックで必須数を確保
+                    if open_vars:
+                        model.add(sum(open_vars) >= len(open_vars))
+                    shortfall = min_open - len(can_open_req)
+                    if pos == Position.HALL:
+                        can_open_ids = {e.id for e in can_open_req}
+                        ft_fallback_vars = [
+                            assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                            for emp in active_employees
+                            if emp.employment_type == EmploymentType.FULL_TIME
+                            and emp.id not in can_open_ids
+                            and not off_map.get((emp.id, ds), False)
+                            and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
+                        ]
+                        if ft_fallback_vars:
+                            model.add(sum(ft_fallback_vars) >= min(shortfall, len(ft_fallback_vars)))
+                        else:
+                            warnings.append(
+                                f"{ds} 開店準備 {pos.label()}: 対応可 {len(can_open_req)} 名"
+                                f"（必要 {min_open} 名）・社員フォールバックも不可"
+                            )
+                    else:
+                        warnings.append(
+                            f"{ds} 開店準備 {pos.label()}: 対応可 {len(can_open_req)} 名（必要 {min_open} 名）"
+                        )
             if min_open_ldr > 0:
                 # FIX⑥: FT社員もリーダーチェックに含める（can_open_req は FT 含む）
                 ldr_open_vars = [
@@ -571,6 +623,9 @@ def solve(
     # 5c. 片付け制約（ポジション別）
     # can_cleanup スタッフが存在する場合はそのスタッフを対象にする。
     # 存在しない場合はリーダー以上を対象にしてフォールバック。
+    # ホールについては、対応可能スタッフが必要数に満たない場合、社員を必ずフォールバック割当する（Issue #60）。
+    CLEANUP_PRIORITY_PENALTY = 5_000
+    cleanup_priority_terms = []  # Issue #60: 11:00まで勤務可能なスタッフを優先するソフト項
     cleanup_emps_by_pos = {
         pos: [e for e in active_employees if e.can_cleanup]
         for pos in positions
@@ -583,7 +638,54 @@ def solve(
             continue
         cleanup_pool = cleanup_emps_by_pos[pos]
         for ds in date_strs:
-            if cleanup_pool:
+            if pos == Position.HALL:
+                # FIX④: FT社員も can_cleanup 要件に含める
+                cln_emps = [
+                    emp for emp in cleanup_pool
+                    if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                    or emp.always_available_breakfast
+                    or (emp.employment_type == EmploymentType.FULL_TIME
+                        and not off_map.get((emp.id, ds), False)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                ]
+                cln_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in cln_emps]
+                n_avail = len(cln_emps)
+                if min_cln > 0:
+                    if n_avail >= min_cln:
+                        model.add(sum(cln_vars) >= min_cln)
+                    else:
+                        # Issue #60: 対応可能スタッフが不足 → 全員割当 + ホール社員フォールバックで必須数を確保
+                        if cln_vars:
+                            model.add(sum(cln_vars) >= n_avail)
+                        shortfall = min_cln - n_avail
+                        cleanup_emp_ids = {e.id for e in cleanup_pool}
+                        ft_fallback_vars = [
+                            assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                            for emp in active_employees
+                            if emp.employment_type == EmploymentType.FULL_TIME
+                            and emp.id not in cleanup_emp_ids
+                            and not off_map.get((emp.id, ds), False)
+                            and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
+                        ]
+                        if ft_fallback_vars:
+                            model.add(sum(ft_fallback_vars) >= min(shortfall, len(ft_fallback_vars)))
+                        else:
+                            warnings.append(
+                                f"{ds} 朝食ホール片付け: 対応可スタッフ不足・社員フォールバックも不可"
+                            )
+                if min_cln_ldr > 0:
+                    ldr_cln_vars = [
+                        assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                        for emp in cln_emps if emp.is_leader(pos.value, TimeSlot.BREAKFAST)
+                    ]
+                    if ldr_cln_vars:
+                        model.add(sum(ldr_cln_vars) >= min(min_cln_ldr, len(ldr_cln_vars)))
+                # Issue #60: 11:00まで勤務可能なスタッフを優先する（ソフト選好）
+                for emp, var in zip(cln_emps, cln_vars):
+                    end_hour = breakfast_end_hour.get((emp.id, ds))
+                    if end_hour is not None and end_hour < 11.0:
+                        cleanup_priority_terms.append(CLEANUP_PRIORITY_PENALTY * var)
+            elif cleanup_pool:
                 # FIX④: FT社員も can_cleanup 要件に含める
                 cln_vars = [
                     assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
@@ -696,11 +798,13 @@ def solve(
         model, worked_day, active_employees, date_strs, max_consecutive_days, prev_tail
     )
 
-    # 6d. 正社員は期間内（半月=2週間）で希望休含め最低日数の休みを取得（ハード制約 / Issue #4）
+    # 6d. 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
+    # 希望休含め最低日数の休みを取得（ハード制約 / Issue #4, #62）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
-            if emp.employment_type == EmploymentType.FULL_TIME:
+            if emp.employment_type == EmploymentType.FULL_TIME \
+               or emp.always_available_breakfast or emp.always_available_dinner:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
 
     # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
@@ -733,6 +837,9 @@ def solve(
     # ── ソフト制約（ペナルティ最小化） ──────────────────────────────────
 
     penalty_terms = []
+
+    # Issue #60: 片付け11:00優先ソフト項
+    penalty_terms.extend(cleanup_priority_terms)
 
     # P0: 社保加入・短時間勤務許可者が9時間未満の希望で割当された場合のペナルティ（Issue #7拡張）
     for term in si_short_shift_terms:
@@ -994,6 +1101,7 @@ def solve(
             req_map, off_map, req_hours, config,
             slot_block_map=slot_block_map,
             shift_constraints=shift_constraints,
+            band_constraints=band_constraints,
             reservation_counts=reservation_counts,
             reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d,
             long_breakfast_set=long_breakfast_set,
@@ -1201,6 +1309,7 @@ def _solve_best_effort(
     req_map, off_map, req_hours, config: SolverConfig | None = None,
     slot_block_map: dict | None = None,
     shift_constraints: dict | None = None,
+    band_constraints: dict | None = None,
     reservation_counts: dict | None = None,
     reserv_tiers_b: list[tuple[int, int]] | None = None,
     reserv_tiers_d: list[tuple[int, int]] | None = None,
@@ -1216,6 +1325,8 @@ def _solve_best_effort(
     if shift_constraints is None:
         from db import repositories as repo
         shift_constraints = repo.get_shift_constraints()
+    if band_constraints is None:
+        band_constraints = {}
     if slot_block_map is None:
         slot_block_map = {}
     if reserv_tiers_b is None:
@@ -1226,6 +1337,7 @@ def _solve_best_effort(
         long_breakfast_set = set()
     if prev_tail is None:
         prev_tail = {}
+    warnings: list[str] = []
     model = cp_model.CpModel()
 
     assign: dict = {}
@@ -1341,11 +1453,13 @@ def _solve_best_effort(
         model, worked_day, active_employees, date_strs, max_consecutive_days, prev_tail
     )
 
-    # 正社員は期間内（半月=2週間）で希望休含め最低日数の休みを取得（ハード制約 / Issue #4）
+    # 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
+    # 希望休含め最低日数の休みを取得（ハード制約 / Issue #4, #62）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
-            if emp.employment_type == EmploymentType.FULL_TIME:
+            if emp.employment_type == EmploymentType.FULL_TIME \
+               or emp.always_available_breakfast or emp.always_available_dinner:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
 
     penalty_terms = []
@@ -1393,6 +1507,114 @@ def _solve_best_effort(
                     lshortfall = model.new_int_var(0, min_leader, f"lsf_{ds}_{slot.value}_{pos.value}")
                     model.add(sum(leader_vars) + lshortfall >= min_leader)
                     penalty_terms.append(LEADER_PENALTY * lshortfall)
+
+    # 4b. 予約数閾値超過時のキッチン人員構成（ソフト化版 / Issue #59）
+    KITCHEN_COMPOSITION_PENALTY = 600_000
+    for ds in date_strs:
+        rc = rc_map.get(ds, {})
+        for slot, count, thresh in (
+            (TimeSlot.BREAKFAST, rc.get("breakfast", 0), (reserv_tiers_b[0][0] if reserv_tiers_b else 0)),
+            (TimeSlot.DINNER,    rc.get("dinner", 0),    (reserv_tiers_d[0][0] if reserv_tiers_d else 0)),
+        ):
+            if thresh <= 0 or count < thresh:
+                continue
+            kitchen_vars = {e.id: assign[e.id][ds][slot.value][Position.KITCHEN.value] for e in active_employees}
+            ft_vars = [kitchen_vars[e.id] for e in active_employees if e.employment_type == EmploymentType.FULL_TIME]
+            vet_vars = [
+                kitchen_vars[e.id] for e in active_employees
+                if e.employment_type == EmploymentType.PART_TIME and e.is_skilled(Position.KITCHEN.value, slot)
+            ]
+            cond_2ft = model.new_bool_var(f"be_kc2ft_{ds}_{slot.value}")
+            cond_1ft2v = model.new_bool_var(f"be_kc1ft2v_{ds}_{slot.value}")
+            violation = model.new_bool_var(f"be_kc_violation_{ds}_{slot.value}")
+            model.add(sum(ft_vars) >= 2).only_enforce_if(cond_2ft)
+            model.add(sum(ft_vars) >= 1).only_enforce_if(cond_1ft2v)
+            model.add(sum(vet_vars) >= 2).only_enforce_if(cond_1ft2v)
+            model.add_bool_or([cond_2ft, cond_1ft2v, violation])
+            penalty_terms.append(KITCHEN_COMPOSITION_PENALTY * violation)
+
+    # 5b. 開店準備制約（ソフト化版 / Issue #61）
+    OPEN_PENALTY = 600_000
+    for pos in positions:
+        bc_open = band_constraints.get(("open", pos.value), {})
+        min_open = bc_open.get("min", 0)
+        if min_open <= 0:
+            continue
+        for ds in date_strs:
+            can_open_req = [
+                emp for emp in active_employees
+                if emp.can_open and (
+                    req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                    or (emp.employment_type == EmploymentType.FULL_TIME
+                        and not off_map.get((emp.id, ds), False)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                )
+            ]
+            open_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in can_open_req]
+            if len(can_open_req) >= min_open:
+                osf = model.new_int_var(0, min_open, f"be_osf_{ds}_{pos.value}")
+                model.add(sum(open_vars) + osf >= min_open)
+                penalty_terms.append(OPEN_PENALTY * osf)
+            else:
+                if open_vars:
+                    model.add(sum(open_vars) >= len(open_vars))
+                if pos == Position.HALL:
+                    shortfall = min_open - len(can_open_req)
+                    can_open_ids = {e.id for e in can_open_req}
+                    ft_fallback_vars = [
+                        assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                        for emp in active_employees
+                        if emp.employment_type == EmploymentType.FULL_TIME
+                        and emp.id not in can_open_ids
+                        and not off_map.get((emp.id, ds), False)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
+                    ]
+                    if ft_fallback_vars:
+                        target = min(shortfall, len(ft_fallback_vars))
+                        osf_ft = model.new_int_var(0, target, f"be_osf_ft_{ds}_{pos.value}")
+                        model.add(sum(ft_fallback_vars) + osf_ft >= target)
+                        penalty_terms.append(OPEN_PENALTY * osf_ft)
+
+    # 5c. 片付け制約（ホール・ソフト化版 / Issue #60）
+    CLEANUP_PENALTY = 600_000
+    bc_cln_hall = band_constraints.get(("cleanup", "hall"), {})
+    min_cln_hall = bc_cln_hall.get("min", 0)
+    if min_cln_hall > 0:
+        for ds in date_strs:
+            cln_vars = [
+                assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.HALL.value]
+                for emp in active_employees
+                if emp.can_cleanup and (
+                    req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                    or emp.always_available_breakfast
+                    or (emp.employment_type == EmploymentType.FULL_TIME
+                        and not off_map.get((emp.id, ds), False)
+                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                )
+            ]
+            n_avail = len(cln_vars)
+            if n_avail >= min_cln_hall:
+                csf = model.new_int_var(0, min_cln_hall, f"be_csf_{ds}")
+                model.add(sum(cln_vars) + csf >= min_cln_hall)
+                penalty_terms.append(CLEANUP_PENALTY * csf)
+            else:
+                if cln_vars:
+                    model.add(sum(cln_vars) >= n_avail)
+                shortfall = min_cln_hall - n_avail
+                cleanup_emp_ids = {e.id for e in active_employees if e.can_cleanup}
+                ft_fallback_vars = [
+                    assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.HALL.value]
+                    for emp in active_employees
+                    if emp.employment_type == EmploymentType.FULL_TIME
+                    and emp.id not in cleanup_emp_ids
+                    and not off_map.get((emp.id, ds), False)
+                    and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
+                ]
+                if ft_fallback_vars:
+                    target = min(shortfall, len(ft_fallback_vars))
+                    csf_ft = model.new_int_var(0, target, f"be_csf_ft_{ds}")
+                    model.add(sum(ft_fallback_vars) + csf_ft >= target)
+                    penalty_terms.append(CLEANUP_PENALTY * csf_ft)
 
     # 朝食キッチンのロング勤務必須（ソフト化版 / Issue #6）
     LONG_BREAKFAST_PENALTY = 700_000
@@ -1485,7 +1707,6 @@ def _solve_best_effort(
     logger.info(f"  [フェーズ2 CP-SAT 求解完了] status={status_name}  "
                 f"branches={nb}  conflicts={nc}")
 
-    warnings: list[str] = []
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return _extract_assignments(solver, assign, active_employees, date_strs, slots, positions), warnings
     # フォールバック: 全員不在
