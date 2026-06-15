@@ -105,6 +105,17 @@ def index():
         days_left = (end - today).days
         needs_regen = repo.get_period_gen_status(latest.id).get("needs_regen", False)
 
+        # ── 希望シフト提出期日 ──
+        deadline_info = None
+        if latest.submission_deadline:
+            try:
+                dl_date = _date.fromisoformat(latest.submission_deadline)
+                dl_days = (dl_date - today).days
+                level = 'over' if dl_days < 0 else 'soon' if dl_days <= 2 else 'normal'
+                deadline_info = {'date': latest.submission_deadline, 'days_left': dl_days, 'level': level}
+            except ValueError:
+                deadline_info = None
+
         period_info = {
             'period':          latest,
             'days_left':       days_left,
@@ -113,6 +124,7 @@ def index():
             'request_count':   len(submitted_ids),
             'in_range':        latest.start_date <= today_str <= latest.end_date,
             'needs_regen':     needs_regen,
+            'deadline':        deadline_info,
         }
 
         # ── TODOリスト自動生成（優先度順） ──
@@ -128,10 +140,18 @@ def index():
             names = '、'.join(e.name for e in unsubmitted[:5])
             if len(unsubmitted) > 5:
                 names += f' 他{len(unsubmitted)-5}名'
+            sub_text = names
+            if deadline_info and deadline_info['level'] in ('over', 'soon'):
+                if deadline_info['level'] == 'over':
+                    sub_text = f'提出期日を超過しています — {names}'
+                elif deadline_info['days_left'] == 0:
+                    sub_text = f'本日提出期日 — {names}'
+                else:
+                    sub_text = f"提出期日まであと{deadline_info['days_left']}日 — {names}"
             todos.append({
                 'level': 'warn', 'icon': 'bi-person-exclamation',
                 'text': f'希望シフト未提出 {len(unsubmitted)}名',
-                'sub':  names,
+                'sub':  sub_text,
                 'url':  url_for('shifts.index'),
             })
 
@@ -167,6 +187,28 @@ def index():
                 'url':  url_for('customers.list_periods'),
             })
 
+    # ── 未提出スタッフへのリマインド文（再周知用） ──
+    reminder_text = None
+    if unsubmitted:
+        lines_ = ['【希望シフト提出のお願い】']
+        lines_.append(f'{latest.start_date}〜{latest.end_date}の希望シフトをご提出ください。')
+        if latest.submission_deadline:
+            dl_str = f'提出期日: {latest.submission_deadline}'
+            if deadline_info:
+                if deadline_info['level'] == 'over':
+                    dl_str += '（期日を超過しています）'
+                elif deadline_info['days_left'] == 0:
+                    dl_str += '（本日締切）'
+                else:
+                    dl_str += f"（あと{deadline_info['days_left']}日）"
+            lines_.append(dl_str)
+        lines_.append(f'現在の提出状況: {len(submitted_ids)}/{staff_count}名')
+        lines_.append('未提出: ' + '、'.join(e.name for e in unsubmitted))
+        if latest.google_form_id:
+            lines_.append(f'提出フォーム: https://docs.google.com/forms/d/{latest.google_form_id}/viewform')
+        lines_.append('お早めにご提出をお願いします。')
+        reminder_text = '\n'.join(lines_)
+
     return render_template(
         'dashboard/index.html',
         today=today,
@@ -180,4 +222,5 @@ def index():
         upcoming_short_days=upcoming_short_days,
         todos=todos,
         DAY_JP=_DAY_JP,
+        reminder_text=reminder_text,
     )

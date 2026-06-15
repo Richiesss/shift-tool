@@ -383,6 +383,7 @@ _MIGRATIONS = [
     ("reservation_counts", "is_special_day",            "INTEGER NOT NULL DEFAULT 0"),
     ("schedule_periods",  "google_form_id",             "TEXT"),
     ("employees",         "si_allow_short_shift",       "INTEGER NOT NULL DEFAULT 0"),
+    ("schedule_periods",  "submission_deadline",        "TEXT DEFAULT NULL"),
 ]
 
 _INDEXES = [

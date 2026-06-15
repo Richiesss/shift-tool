@@ -156,6 +156,8 @@
     margin-left: .5rem;
     border: 1px solid rgba(56,189,248,.1);
   }
+  .days-left-chip.dl-over { background: rgba(239,68,68,.15); color: #f87171; border-color: rgba(239,68,68,.15); }
+  .days-left-chip.dl-soon { background: rgba(245,158,11,.15); color: #f59e0b; border-color: rgba(245,158,11,.1); }
 
   /* ── アラート詳細 ── */
   .alert-section { margin-bottom: .85rem; }
@@ -340,6 +342,22 @@
       <span style="color:#475569;font-size:.72rem;margin-left:.5rem">終了</span>
       {% endif %}
     </div>
+    {% if period_info.deadline %}
+    {% set dl = period_info.deadline %}
+    <div class="period-meta" style="margin-top:.35rem">
+      <i class="bi bi-flag-fill" style="color:#f59e0b"></i>
+      提出期日 <strong>{{ dl.date }}</strong>
+      <span class="days-left-chip {{ 'dl-over' if dl.level == 'over' else 'dl-soon' if dl.level == 'soon' else '' }}">
+        {% if dl.level == 'over' %}期日超過{% elif dl.days_left == 0 %}本日締切{% else %}あと{{ dl.days_left }}日{% endif %}
+      </span>
+    </div>
+    {% else %}
+    <div class="period-meta" style="margin-top:.35rem">
+      <a href="{{ url_for('shifts.input', period_id=p.id) }}" style="color:#64748b;font-size:.75rem;text-decoration:none">
+        <i class="bi bi-flag me-1"></i>提出期日を設定する
+      </a>
+    </div>
+    {% endif %}
     <div style="margin-top:.55rem;font-size:.78rem;color:#64748b">
       希望提出 <strong style="color:#e2e8f0">{{ period_info.request_count }}</strong> /
       <strong style="color:#e2e8f0">{{ staff_count }}</strong> 名
@@ -379,6 +397,11 @@
       {% for e in unsubmitted %}
       <span class="name-chip">{{ e.name }}</span>
       {% endfor %}
+      {% if reminder_text %}
+      <button type="button" id="reminder-copy-btn" class="btn btn-sm btn-outline-primary" style="flex-basis:100%;margin-top:.4rem" onclick="copyReminder()">
+        <i class="bi bi-clipboard-check me-1"></i>リマインド文をコピー
+      </button>
+      {% endif %}
     </div>
   </div>
   {% endif %}
@@ -395,4 +418,17 @@ function toggleAlert(bodyId, chevId) {
   chev.classList.toggle('open', open);
 }
 </script>
+{% if reminder_text %}
+<script>
+const _reminderText = {{ reminder_text | tojson }};
+function copyReminder() {
+  navigator.clipboard.writeText(_reminderText).then(() => {
+    const btn = document.getElementById('reminder-copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>コピーしました';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  });
+}
+</script>
+{% endif %}
 {% endblock %}

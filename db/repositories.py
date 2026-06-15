@@ -321,7 +321,8 @@ def get_all_periods() -> list[SchedulePeriod]:
     conn.close()
     return [SchedulePeriod(
         id=r["id"], start_date=r["start_date"], end_date=r["end_date"], status=r["status"],
-        google_form_id=r["google_form_id"] if "google_form_id" in r.keys() else None
+        google_form_id=r["google_form_id"] if "google_form_id" in r.keys() else None,
+        submission_deadline=r["submission_deadline"] if "submission_deadline" in r.keys() else None
     ) for r in rows]
 
 
@@ -334,7 +335,8 @@ def get_period(period_id: int) -> Optional[SchedulePeriod]:
         return None
     return SchedulePeriod(
         id=row["id"], start_date=row["start_date"], end_date=row["end_date"], status=row["status"],
-        google_form_id=row["google_form_id"] if "google_form_id" in row.keys() else None
+        google_form_id=row["google_form_id"] if "google_form_id" in row.keys() else None,
+        submission_deadline=row["submission_deadline"] if "submission_deadline" in row.keys() else None
     )
 
 
@@ -342,13 +344,13 @@ def save_period(period: SchedulePeriod) -> SchedulePeriod:
     conn = get_connection()
     if period.id is None:
         period.id = conn.execute_insert(
-            "INSERT INTO schedule_periods (start_date, end_date, status, google_form_id) VALUES (?,?,?,?)",
-            (period.start_date, period.end_date, period.status, period.google_form_id)
+            "INSERT INTO schedule_periods (start_date, end_date, status, google_form_id, submission_deadline) VALUES (?,?,?,?,?)",
+            (period.start_date, period.end_date, period.status, period.google_form_id, period.submission_deadline)
         )
     else:
         conn.execute(
-            "UPDATE schedule_periods SET start_date=?, end_date=?, status=?, google_form_id=? WHERE id=?",
-            (period.start_date, period.end_date, period.status, period.google_form_id, period.id)
+            "UPDATE schedule_periods SET start_date=?, end_date=?, status=?, google_form_id=?, submission_deadline=? WHERE id=?",
+            (period.start_date, period.end_date, period.status, period.google_form_id, period.submission_deadline, period.id)
         )
     conn.commit()
     conn.close()

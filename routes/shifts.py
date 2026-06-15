@@ -159,6 +159,14 @@ def input(period_id):
                 emp_note = r.note
                 break
 
+    # 希望シフト提出期日までの残り日数
+    deadline_days_left = None
+    if period.submission_deadline:
+        try:
+            deadline_days_left = (date.fromisoformat(period.submission_deadline) - date.today()).days
+        except ValueError:
+            deadline_days_left = None
+
     # Google 連携情報
     google_forms_enabled = repo.get_app_setting("google_forms_enabled", "1") == "1"
     google_token = repo.get_google_token()
@@ -192,8 +200,22 @@ def input(period_id):
         has_google_credentials=has_google_credentials,
         google_forms_enabled=google_forms_enabled,
         emp_note=emp_note,
+        deadline_days_left=deadline_days_left,
     )
 
+
+
+@bp.post("/<int:period_id>/deadline")
+def set_deadline(period_id):
+    period = repo.get_period(period_id)
+    if not period:
+        flash("期間が見つかりません", "error")
+        return redirect(url_for("shifts.index"))
+    deadline = request.form.get("deadline", "").strip()
+    period.submission_deadline = deadline or None
+    repo.save_period(period)
+    flash("提出期日を設定しました" if deadline else "提出期日を解除しました", "success")
+    return redirect(url_for("shifts.input", period_id=period_id))
 
 
 @bp.post("/<int:period_id>/save")
