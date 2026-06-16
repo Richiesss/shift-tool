@@ -129,7 +129,7 @@
       <h6 class="card-title text-muted mb-3">勤務日数ルール
         <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
               data-bs-title="勤務日数ルール"
-              data-bs-content="連続勤務日数の上限：1人のスタッフが連続して出勤できる日数の上限です。最低休日数：作成期間中に各スタッフへ最低限割り当てる休日の日数です。">?</span>
+              data-bs-content="連続勤務日数の上限：1人のスタッフが連続して出勤できる日数の上限です。期間内の休日数：希望休と未割当日を合わせた期間中の休日合計が、この日数以上になるように割り当てます。">?</span>
       </h6>
       <div class="row g-3">
         <div class="col-auto">
@@ -140,7 +140,7 @@
           </div>
         </div>
         <div class="col-auto">
-          <label class="form-label small fw-semibold mb-1">期間内の最低休日数</label>
+          <label class="form-label small fw-semibold mb-1">期間内の休日数</label>
           <div class="d-flex align-items-center gap-1">
             <input type="number" name="min_days_off" value="{{ settings.get('min_days_off', '5') }}" class="form-control form-control-sm" min="0" style="width:70px">
             <span class="text-muted small">日</span>

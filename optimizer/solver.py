@@ -375,9 +375,9 @@ def solve(
                     if e.employment_type == EmploymentType.FULL_TIME:
                         ok = not off_map.get((e.id, ds), False)
                     elif slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
-                        ok = True
+                        ok = not off_map.get((e.id, ds), False)
                     elif slot == TimeSlot.DINNER and e.always_available_dinner:
-                        ok = True
+                        ok = not off_map.get((e.id, ds), False)
                     else:
                         ok = req_map.get((e.id, ds, slot.value), False)
                     if not ok:
@@ -480,9 +480,9 @@ def solve(
                     can_work = not off_map.get((emp.id, ds), False) \
                                and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
-                    can_work = True
+                    can_work = not off_map.get((emp.id, ds), False)
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
-                    can_work = True
+                    can_work = not off_map.get((emp.id, ds), False)
                 else:
                     can_work = req_map.get((emp.id, ds, slot.value), False)
                 for pos in positions:
@@ -1388,9 +1388,9 @@ def _solve_best_effort(
                     can_work = not off_map.get((emp.id, ds), False) \
                                and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
-                    can_work = True
+                    can_work = not off_map.get((emp.id, ds), False)
                 elif slot == TimeSlot.DINNER and emp.always_available_dinner:
-                    can_work = True
+                    can_work = not off_map.get((emp.id, ds), False)
                 else:
                     can_work = req_map.get((emp.id, ds, slot.value), False)
                 for pos in positions:
