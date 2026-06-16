@@ -1092,7 +1092,8 @@ def solve(
             pass
         result_assignments = _extract_assignments(solver, assign, active_employees, date_strs, slots, positions)
         _log_employee_analysis(result_assignments, active_employees, date_strs, slots, positions,
-                               req_map, req_hours, shift_constraints)
+                               req_map, req_hours, shift_constraints,
+                               off_map=off_map, min_days_off=min_days_off)
         _log_assignment_summary(result_assignments, date_strs)
         _check_warnings(result_assignments, date_strs, warnings,
                         reservation_counts=reservation_counts,
@@ -1138,7 +1139,8 @@ def solve(
             breakfast_end_hour=breakfast_end_hour,
         )
         _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
-                               req_map, req_hours, shift_constraints)
+                               req_map, req_hours, shift_constraints,
+                               off_map=off_map, min_days_off=min_days_off)
         _check_warnings(best_assignments, date_strs, best_warnings,
                         reservation_counts=reservation_counts,
                         reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d)
@@ -1159,12 +1161,15 @@ def solve(
 
 
 def _log_employee_analysis(assignments, active_employees, date_strs, slots, positions,
-                            req_map, req_hours, shift_constraints):
+                            req_map, req_hours, shift_constraints,
+                            off_map: dict | None = None, min_days_off: int = 5):
     """スタッフ別の割当状況・ペナルティ根拠・リーダー/SI診断を詳細ログ出力"""
     from collections import defaultdict
     SOCIAL_INSURANCE_MIN_HOURS = 9.0   # 実働8h + 休憩1h（duration_hours は休憩考慮なし総拘束時間）
     SI_PREF_PENALTY = 50_000
     DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
+    if off_map is None:
+        off_map = {}
 
     assigned_b = defaultdict(int)
     assigned_d = defaultdict(int)
@@ -1194,6 +1199,27 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
     if any_leader_issue:
         logger.warning("  ⚠️  リーダースキル設定済スタッフが1名もいません。"
                        "スタッフ編集画面でスキルレベルを「リーダー」に設定してください。")
+
+    # ── FT社員別勤務日数 ────────────────────────────────────────────────
+    ft_emps = [e for e in active_employees if e.employment_type == EmploymentType.FULL_TIME]
+    if ft_emps:
+        max_work_days = len(date_strs) - min_days_off if len(date_strs) > min_days_off else len(date_strs)
+        logger.info("  [FT社員別勤務日数]")
+        logger.info(f"    {'名前':<12} {'希望休':>4} {'出勤可':>4} {'勤務日':>4} {'上限':>4} {'休日':>4} {'目標達成':>6}  注記")
+        for emp in sorted(ft_emps, key=lambda e: e.name):
+            off_days = sum(1 for ds in date_strs if off_map.get((emp.id, ds), False))
+            avail_days = len(date_strs) - off_days
+            worked_dates = {a.date for a in assignments if a.employee_id == emp.id}
+            work_days = len(worked_dates)
+            rest_days = len(date_strs) - work_days
+            ok = "✓" if work_days >= max_work_days or avail_days <= max_work_days else "❌"
+            note = ""
+            if avail_days < max_work_days:
+                note = f"出勤可能日({avail_days})が上限({max_work_days})未満"
+            elif work_days < max_work_days:
+                short = max_work_days - work_days
+                note = f"未達({short}日不足)"
+            logger.info(f"    {emp.name:<12} {off_days:>4} {avail_days:>4} {work_days:>4} {max_work_days:>4} {rest_days:>4} {ok:>6}  {note}")
 
     # ── PT スタッフ別詳細 ───────────────────────────────────────────────
     pt_emps = [e for e in active_employees if e.employment_type != EmploymentType.FULL_TIME]
