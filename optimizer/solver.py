@@ -402,25 +402,37 @@ def solve(
     # ── 従業員×日付のパターン別勤務時間マップ ────────────────────────────
     # (emp_id, date_str, slot_value) -> 実勤務時間(float)
     req_hours: dict[tuple[int, str, str], float] = {}
-    # (emp_id, date_str) -> 朝食シフトの終了時刻（Issue #60: 片付け対応可否の判定用）
+    # (emp_id, date_str) -> 朝食シフトの終了時刻（片付け可否判定: >=11:00が条件）
     breakfast_end_hour: dict[tuple[int, str], float] = {}
+    # (emp_id, date_str) -> 朝食シフトの開始時刻（開店準備可否判定: <=6:00が条件）
+    breakfast_start_hour: dict[tuple[int, str], float] = {}
     for r in requests:
         from utils.shift_patterns import PATTERN_MAP, ShiftPattern
         if r.pattern_id and r.pattern_id != "custom":
             p = PATTERN_MAP.get(r.pattern_id)
             dur = p.duration_hours() if p else 5.0
-            end_hour = p.end_hour() if p else None
+            if p and p.force_both:
+                # ダブルシフトは朝食全体をカバー（開店準備・片付けとも対応可）
+                end_hour = 23.0
+                start_hour = 0.0
+            else:
+                end_hour = p.end_hour() if p else None
+                start_hour = p.start_hour() if p else None
         elif r.pattern_id == "custom" and r.custom_start and r.custom_end:
             sp = ShiftPattern("_c", "c", r.custom_start, r.custom_end)
             dur = sp.duration_hours()
             end_hour = sp.end_hour()
+            start_hour = sp.start_hour()
         else:
             dur = 5.0  # フォールバック
             end_hour = None
+            start_hour = None
         if r.breakfast:
             req_hours[(r.employee_id, r.date, TimeSlot.BREAKFAST.value)] = dur
             if end_hour is not None:
                 breakfast_end_hour[(r.employee_id, r.date)] = end_hour
+            if start_hour is not None:
+                breakfast_start_hour[(r.employee_id, r.date)] = start_hour
         if r.dinner:
             req_hours[(r.employee_id, r.date, TimeSlot.DINNER.value)] = dur
 
@@ -571,14 +583,19 @@ def solve(
         if min_open <= 0 and min_open_ldr <= 0:
             continue
         for ds in date_strs:
-            # FIX③: FT社員も can_open 要件に含める
+            # FIX③+Issue #61拡張: 実際に開店準備（5:45〜6:30）に参加できるスタッフのみ対象
+            # FT社員・おまかせPTは常時可能。提出シフトがある場合は開始時刻6:00以前のもののみ。
+            # b_std/b_half（6:30開始）は5:45〜6:30の開店準備に間に合わないため除外する
             can_open_req = [
                 emp for emp in active_employees
                 if emp.can_open and (
-                    req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
-                    or (emp.employment_type == EmploymentType.FULL_TIME
-                        and not off_map.get((emp.id, ds), False)
-                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    (emp.employment_type == EmploymentType.FULL_TIME
+                     and not off_map.get((emp.id, ds), False)
+                     and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    or (emp.always_available_breakfast
+                        and breakfast_start_hour.get((emp.id, ds), 6.0) <= 6.0)
+                    or (req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                        and breakfast_start_hour.get((emp.id, ds), 6.0) <= 6.0)
                 )
             ]
             open_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in can_open_req]
@@ -624,8 +641,7 @@ def solve(
     # can_cleanup スタッフが存在する場合はそのスタッフを対象にする。
     # 存在しない場合はリーダー以上を対象にしてフォールバック。
     # ホールについては、対応可能スタッフが必要数に満たない場合、社員を必ずフォールバック割当する（Issue #60）。
-    CLEANUP_PRIORITY_PENALTY = 5_000
-    cleanup_priority_terms = []  # Issue #60: 11:00まで勤務可能なスタッフを優先するソフト項
+    # 片付けは10:00〜11:30のため、勤務終了が10:00（b_short）のスタッフは対象外とする。
     cleanup_emps_by_pos = {
         pos: [e for e in active_employees if e.can_cleanup]
         for pos in positions
@@ -639,14 +655,18 @@ def solve(
         cleanup_pool = cleanup_emps_by_pos[pos]
         for ds in date_strs:
             if pos == Position.HALL:
-                # FIX④: FT社員も can_cleanup 要件に含める
+                # FIX④+Issue #60拡張: FT社員も含め、かつ実際に片付け可能なスタッフのみ対象
+                # 片付けは10:00〜11:30のため、勤務終了が11:00未満（b_short=10:00終了）は除外
+                # FT社員・おまかせPTは提出パターンに関わらず常時対応可能とみなす
                 cln_emps = [
                     emp for emp in cleanup_pool
-                    if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
-                    or emp.always_available_breakfast
-                    or (emp.employment_type == EmploymentType.FULL_TIME
+                    if (emp.employment_type == EmploymentType.FULL_TIME
                         and not off_map.get((emp.id, ds), False)
                         and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    or (emp.always_available_breakfast
+                        and breakfast_end_hour.get((emp.id, ds), 11.0) >= 11.0)
+                    or (req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                        and breakfast_end_hour.get((emp.id, ds), 11.0) >= 11.0)
                 ]
                 cln_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in cln_emps]
                 n_avail = len(cln_emps)
@@ -680,11 +700,6 @@ def solve(
                     ]
                     if ldr_cln_vars:
                         model.add(sum(ldr_cln_vars) >= min(min_cln_ldr, len(ldr_cln_vars)))
-                # Issue #60: 11:00まで勤務可能なスタッフを優先する（ソフト選好）
-                for emp, var in zip(cln_emps, cln_vars):
-                    end_hour = breakfast_end_hour.get((emp.id, ds))
-                    if end_hour is not None and end_hour < 11.0:
-                        cleanup_priority_terms.append(CLEANUP_PRIORITY_PENALTY * var)
             elif cleanup_pool:
                 # FIX④: FT社員も can_cleanup 要件に含める
                 cln_vars = [
@@ -837,9 +852,6 @@ def solve(
     # ── ソフト制約（ペナルティ最小化） ──────────────────────────────────
 
     penalty_terms = []
-
-    # Issue #60: 片付け11:00優先ソフト項
-    penalty_terms.extend(cleanup_priority_terms)
 
     # P0: 社保加入・短時間勤務許可者が9時間未満の希望で割当された場合のペナルティ（Issue #7拡張）
     for term in si_short_shift_terms:
@@ -1109,6 +1121,8 @@ def solve(
             max_consecutive_days=max_consecutive_days,
             min_days_off=min_days_off,
             prev_tail=prev_tail,
+            breakfast_start_hour=breakfast_start_hour,
+            breakfast_end_hour=breakfast_end_hour,
         )
         _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints)
@@ -1318,6 +1332,8 @@ def _solve_best_effort(
     max_consecutive_days: int = 6,
     min_days_off: int = 5,
     prev_tail: dict[int, list[int]] | None = None,
+    breakfast_start_hour: dict | None = None,
+    breakfast_end_hour: dict | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     if config is None:
@@ -1327,6 +1343,10 @@ def _solve_best_effort(
         shift_constraints = repo.get_shift_constraints()
     if band_constraints is None:
         band_constraints = {}
+    if breakfast_start_hour is None:
+        breakfast_start_hour = {}
+    if breakfast_end_hour is None:
+        breakfast_end_hour = {}
     if slot_block_map is None:
         slot_block_map = {}
     if reserv_tiers_b is None:
@@ -1534,20 +1554,24 @@ def _solve_best_effort(
             penalty_terms.append(KITCHEN_COMPOSITION_PENALTY * violation)
 
     # 5b. 開店準備制約（ソフト化版 / Issue #61）
-    OPEN_PENALTY = 600_000
+    OPEN_PENALTY = 1_000_000
     for pos in positions:
         bc_open = band_constraints.get(("open", pos.value), {})
         min_open = bc_open.get("min", 0)
         if min_open <= 0:
             continue
         for ds in date_strs:
+            # 開店準備（5:45〜6:30）に実際に参加できるスタッフのみ対象（開始時刻6:00以前）
             can_open_req = [
                 emp for emp in active_employees
                 if emp.can_open and (
-                    req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
-                    or (emp.employment_type == EmploymentType.FULL_TIME
-                        and not off_map.get((emp.id, ds), False)
-                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    (emp.employment_type == EmploymentType.FULL_TIME
+                     and not off_map.get((emp.id, ds), False)
+                     and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    or (emp.always_available_breakfast
+                        and breakfast_start_hour.get((emp.id, ds), 6.0) <= 6.0)
+                    or (req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                        and breakfast_start_hour.get((emp.id, ds), 6.0) <= 6.0)
                 )
             ]
             open_vars = [assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value] for emp in can_open_req]
@@ -1576,20 +1600,24 @@ def _solve_best_effort(
                         penalty_terms.append(OPEN_PENALTY * osf_ft)
 
     # 5c. 片付け制約（ホール・ソフト化版 / Issue #60）
-    CLEANUP_PENALTY = 600_000
+    CLEANUP_PENALTY = 1_000_000
     bc_cln_hall = band_constraints.get(("cleanup", "hall"), {})
     min_cln_hall = bc_cln_hall.get("min", 0)
     if min_cln_hall > 0:
         for ds in date_strs:
+            # 片付け（10:00〜11:30）に実際に参加できるスタッフのみ対象（勤務終了11:00以上）
+            # b_short（10:00終了）は10:00に退勤するため片付け不可
             cln_vars = [
                 assign[emp.id][ds][TimeSlot.BREAKFAST.value][Position.HALL.value]
                 for emp in active_employees
                 if emp.can_cleanup and (
-                    req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
-                    or emp.always_available_breakfast
-                    or (emp.employment_type == EmploymentType.FULL_TIME
-                        and not off_map.get((emp.id, ds), False)
-                        and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    (emp.employment_type == EmploymentType.FULL_TIME
+                     and not off_map.get((emp.id, ds), False)
+                     and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
+                    or (emp.always_available_breakfast
+                        and breakfast_end_hour.get((emp.id, ds), 11.0) >= 11.0)
+                    or (req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
+                        and breakfast_end_hour.get((emp.id, ds), 11.0) >= 11.0)
                 )
             ]
             n_avail = len(cln_vars)
