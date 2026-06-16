@@ -815,12 +815,18 @@ def solve(
 
     # 6d. 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
     # 希望休含め最低日数の休みを取得（ハード制約 / Issue #4, #62）
+    ft_excess_rest_vars: list = []  # ソフト下限用補助変数（P_ft で使用）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
             if emp.employment_type == EmploymentType.FULL_TIME \
                or emp.always_available_breakfast or emp.always_available_dinner:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
+                # 実勤務日数が max_work_days を下回る分（超過休暇）を補助変数で保持
+                # → ペナルティを与えることで「ちょうど min_days_off 日休み」に誘導
+                er = model.new_int_var(0, max_work_days, f"excess_rest_{emp.id}")
+                model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
+                ft_excess_rest_vars.append(er)
 
     # 社会保険加入アルバイトは、出勤する場合は必ず実働8時間勤務になるようハード制約（Issue #7）
     # duration_hours() は休憩考慮なしの総拘束時間を返す。
@@ -856,6 +862,13 @@ def solve(
     # P0: 社保加入・短時間勤務許可者が9時間未満の希望で割当された場合のペナルティ（Issue #7拡張）
     for term in si_short_shift_terms:
         penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
+
+    # Pft: 正社員・おまかせPTの超過休暇ペナルティ
+    # 実勤務日数がmax_work_daysを下回るとペナルティ → 「ちょうどmin_days_off日休み」に誘導
+    # P1（人件費=約50000〜60000/日）を上回る重みで設定し、コスト最小化より休日数厳守を優先させる
+    FT_EXCESS_REST_PENALTY = max(1, int(200_000 * config.cost_scale))
+    for v in ft_excess_rest_vars:
+        penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
 
     # P1: 人件費最小化 = 実勤務時間を最小化（パターン別の時間を使用）
     DEFAULT_SLOT_HOURS = {TimeSlot.BREAKFAST: 5.0, TimeSlot.DINNER: 6.0}
@@ -1475,12 +1488,16 @@ def _solve_best_effort(
 
     # 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
     # 希望休含め最低日数の休みを取得（ハード制約 / Issue #4, #62）
+    be_excess_rest_vars: list = []  # ソフト下限用補助変数（Pft で使用）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
             if emp.employment_type == EmploymentType.FULL_TIME \
                or emp.always_available_breakfast or emp.always_available_dinner:
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
+                er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
+                model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
+                be_excess_rest_vars.append(er)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
@@ -1489,6 +1506,11 @@ def _solve_best_effort(
     # P0: 社保加入・短時間勤務許可者が9時間未満の希望で割当された場合のペナルティ（Issue #7拡張）
     for term in si_short_shift_terms:
         penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
+
+    # Pft: 正社員・おまかせPTの超過休暇ペナルティ（フェーズ2）
+    FT_EXCESS_REST_PENALTY = max(1, int(200_000 * (config.cost_scale if config else 1.0)))
+    for v in be_excess_rest_vars:
+        penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
 
     rc_map = reservation_counts or {}
     for ds in date_strs:
