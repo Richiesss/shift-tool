@@ -888,8 +888,8 @@ def solve(
     # Pft: 正社員・おまかせPTの超過休暇ペナルティ
     # 実勤務日数がmax_work_daysを下回るとペナルティ → 「ちょうどmin_days_off日休み」に誘導
     # P1（人件費=約50000〜60000/日）を上回る重みで設定し、コスト最小化より休日数厳守を優先させる
-    # BE_BREAKFAST_FT_COST(500,000)を上回る値にすることで
-    # ディナーが満席の日でも朝食に入ってmax_work_daysを達成させる
+    # PTスキル別ペナルティ（max 400k）を上回る値にすることで
+    # FTが朝食・ディナー両方に柔軟に入ってmax_work_daysを達成させる
     FT_EXCESS_REST_PENALTY = max(1, int(800_000 * config.cost_scale))
     for v in ft_excess_rest_vars:
         penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
@@ -978,14 +978,18 @@ def solve(
     # ──────────────────────────────────────────────────────────────────
     # 設計方針（大前提）:
     #   - FT休日数 = ハード制約（6dセクションで下限・上限とも強制）
-    #   - FTを先にアサイン（ディナー中心）→ PTで補完（朝食中心）
-    #   - 朝食: PT中心（ソフト誘導：FT朝食入りにペナルティ）。ただし
-    #     FT休日数制約の達成のため朝食参加も許容する（ハード禁止しない）
+    #   - 朝食: FT最優先（ペナルティなし）→ リーダーPT → ベテランPT → 一般PT → 初心者PT
+    #     FTはリーダー相当人員かつ勤務日数確保が必要なため最優先アサイン
     #   - ディナー: FT中心（ハード：FT充足時はPTを配置禁止）
     # ──────────────────────────────────────────────────────────────────
     logger.info("  [P5 スロット別分業チェック]")
-    BREAKFAST_FT_COST = 500_000  # FT朝食入りペナルティ（FT_EXCESS_REST_PENALTY=800kより低く設定）
-    DINNER_PT_COST    = 300_000  # PT夜入りペナルティ
+    BREAKFAST_PT_COST = {  # 朝食PT習熟度別ペナルティ（FTはペナルティなし＝最優先）
+        SkillLevel.LEADER:    50_000,
+        SkillLevel.VETERAN:  150_000,
+        SkillLevel.GENERAL:  250_000,
+        SkillLevel.BEGINNER: 400_000,
+    }
+    DINNER_PT_COST = 300_000  # PT夜入りペナルティ（FT不足時ソフト誘導）
     for ds in date_strs:
         rc = reservation_counts.get(ds, {})
         for slot in slots:
@@ -1040,31 +1044,15 @@ def solve(
                 slot_pos = f"{ds} {slot.value}/{pos.value}"
 
                 if slot == TimeSlot.BREAKFAST:
-                    # 朝食: FT入りをソフトペナルティで抑制（ハード禁止はしない）
-                    # FT休日数ハード制約（6d）を満たすため、FTが朝食に入れる余地を残す。
-                    # BREAKFAST_FT_COST(500k) < FT_EXCESS_REST_PENALTY(800k) により、
-                    # FTが休日数不足の際は朝食参加を許容しつつも、通常はPT中心を維持する。
+                    # 朝食: FT最優先（ペナルティなし）、PTは習熟度に応じたペナルティ
                     for emp in active_employees:
-                        if emp.employment_type == EmploymentType.FULL_TIME:
-                            penalty_terms.append(
-                                BREAKFAST_FT_COST * assign[emp.id][ds][slot.value][pos.value]
-                            )
-                    if pt_avail >= base_min and pt_leader_avail >= min_leader:
-                        logger.info(
-                            f"    {slot_pos}: PT={pt_avail}≥min={base_min}, "
-                            f"リーダーPT={pt_leader_avail}≥min_leader={min_leader} "
-                            f"→ FT朝食入りソフト抑制（{BREAKFAST_FT_COST}）"
-                        )
-                    elif pt_avail >= base_min:
-                        logger.info(
-                            f"    {slot_pos}: PT={pt_avail}≥min={base_min} リーダーPT不足({pt_leader_avail}<{min_leader}) "
-                            f"→ FT朝食入りソフト抑制（{BREAKFAST_FT_COST}）"
-                        )
-                    else:
-                        logger.info(
-                            f"    {slot_pos}: PT不足({pt_avail}<{base_min},FT={ft_avail}) "
-                            f"→ FT朝食入り許容（ソフト抑制{BREAKFAST_FT_COST}のみ）"
-                        )
+                        if emp.employment_type != EmploymentType.FULL_TIME:
+                            cost = BREAKFAST_PT_COST[emp.skill_for(pos.value, slot)]
+                            penalty_terms.append(cost * assign[emp.id][ds][slot.value][pos.value])
+                    logger.info(
+                        f"    {slot_pos}: FT={ft_avail} PT={pt_avail}(リーダー={pt_leader_avail}) "
+                        f"→ FT最優先（ペナルティ0）＋PTスキル別ペナルティ"
+                    )
                 elif slot == TimeSlot.DINNER and ft_avail >= base_min:
                     # ディナー：FT が充足 → PT を物理的に配置禁止（FT中心配置）
                     for emp in active_employees:
@@ -1574,7 +1562,7 @@ def _solve_best_effort(
 
     # Pft: FT・おまかせPTの超過休暇ペナルティ（フェーズ2）
     # フェーズ1のハード下限が効かないため20Mに引き上げ、強制的に max_work_days を目指させる
-    # BREAKFAST_FT_COST(500k) << 20M なので、FTは朝食に入ってでも休日数を守ろうとする
+    # FTの朝食ペナルティはなし（最優先）なので、FTは朝食・ディナー両方に柔軟に入れる
     FT_EXCESS_REST_PENALTY = max(1, int(20_000_000 * (config.cost_scale if config else 1.0)))
     for v in be_excess_rest_vars:
         penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
@@ -1788,16 +1776,23 @@ def _solve_best_effort(
                     penalty_terms.append(SI_PREF_PENALTY * assign[emp.id][ds][slot.value][pos.value])
 
     # FIX⑥: ベストエフォートにも P5 スロット分業のソフト誘導を追加
-    BE_BREAKFAST_FT_COST = 500_000
-    BE_DINNER_PT_COST    = 300_000
+    # 朝食: FT最優先（ペナルティなし）→ 習熟度順PT
+    # ディナー: FT中心（FT充足時はPhase 1でハード禁止だが、Phase 2はソフト誘導のみ）
+    BE_BREAKFAST_PT_COST = {
+        SkillLevel.LEADER:    50_000,
+        SkillLevel.VETERAN:  150_000,
+        SkillLevel.GENERAL:  250_000,
+        SkillLevel.BEGINNER: 400_000,
+    }
+    BE_DINNER_PT_COST = 300_000
     for emp in active_employees:
         for ds in date_strs:
             for pos in positions:
-                if emp.employment_type == EmploymentType.FULL_TIME:
+                if emp.employment_type != EmploymentType.FULL_TIME:
+                    cost = BE_BREAKFAST_PT_COST[emp.skill_for(pos.value, TimeSlot.BREAKFAST)]
                     penalty_terms.append(
-                        BE_BREAKFAST_FT_COST * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
+                        cost * assign[emp.id][ds][TimeSlot.BREAKFAST.value][pos.value]
                     )
-                else:
                     penalty_terms.append(
                         BE_DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
                     )
