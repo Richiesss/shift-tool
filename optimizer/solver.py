@@ -866,7 +866,9 @@ def solve(
     # Pft: 正社員・おまかせPTの超過休暇ペナルティ
     # 実勤務日数がmax_work_daysを下回るとペナルティ → 「ちょうどmin_days_off日休み」に誘導
     # P1（人件費=約50000〜60000/日）を上回る重みで設定し、コスト最小化より休日数厳守を優先させる
-    FT_EXCESS_REST_PENALTY = max(1, int(200_000 * config.cost_scale))
+    # BE_BREAKFAST_FT_COST(500,000)を上回る値にすることで
+    # ディナーが満席の日でも朝食に入ってmax_work_daysを達成させる
+    FT_EXCESS_REST_PENALTY = max(1, int(800_000 * config.cost_scale))
     for v in ft_excess_rest_vars:
         penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
 
@@ -1534,7 +1536,7 @@ def _solve_best_effort(
         penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
 
     # Pft: 正社員・おまかせPTの超過休暇ペナルティ（フェーズ2）
-    FT_EXCESS_REST_PENALTY = max(1, int(200_000 * (config.cost_scale if config else 1.0)))
+    FT_EXCESS_REST_PENALTY = max(1, int(800_000 * (config.cost_scale if config else 1.0)))
     for v in be_excess_rest_vars:
         penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
 
