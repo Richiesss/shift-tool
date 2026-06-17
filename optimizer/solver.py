@@ -1528,16 +1528,28 @@ def _solve_best_effort(
 
     # 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
     # 希望休含め最低日数の休みを取得（ハード制約 / Issue #4, #62）
-    be_excess_rest_vars: list = []  # ソフト下限用補助変数（Pft で使用）
+    # FT社員はハード下限に変更（ソフト下限はgap_limit=1%の早期終了で無効化される恐れがあるため）
+    be_excess_rest_vars: list = []  # ソフト下限用補助変数（おまかせPT専用）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
             if emp.employment_type == EmploymentType.FULL_TIME \
                or emp.always_available_breakfast or emp.always_available_dinner:
+                # ハード上限（最低休日数の保証）
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
-                er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
-                model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
-                be_excess_rest_vars.append(er)
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    # FT: ハード下限（off_map 考慮）
+                    avail_days = sum(
+                        1 for d in date_strs if not off_map.get((emp.id, d), False)
+                    )
+                    target = min(max_work_days, avail_days)
+                    if target > 0:
+                        model.add(sum(worked_day[emp.id][d] for d in date_strs) >= target)
+                else:
+                    # おまかせPT: ソフト下限（スタッフィング上限との競合リスクを避けるため）
+                    er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
+                    model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
+                    be_excess_rest_vars.append(er)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
@@ -1547,7 +1559,8 @@ def _solve_best_effort(
     for term in si_short_shift_terms:
         penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
 
-    # Pft: 正社員・おまかせPTの超過休暇ペナルティ（フェーズ2）
+    # Pft: おまかせPTの超過休暇ペナルティ（フェーズ2）
+    # ※ FT社員はハード制約に変更済みのためこのペナルティ変数は不要
     FT_EXCESS_REST_PENALTY = max(1, int(800_000 * (config.cost_scale if config else 1.0)))
     for v in be_excess_rest_vars:
         penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
