@@ -809,6 +809,18 @@ def solve(
     # 6c. 連続勤務日数を制限（7日間スライディングウィンドウ・ハード制約 / Issue #5）
     # 直前期間末尾の出勤状況も連結してチェックし、期間境界をまたぐ連続勤務を防ぐ（Issue #23）
     prev_tail = _load_prev_period_tail(period, active_employees, CONSECUTIVE_WINDOW - 1)
+    # FT社員のprev_tailをログ出力（連続勤務制約の診断用）
+    ft_tail_lines = []
+    for emp in active_employees:
+        if emp.employment_type == EmploymentType.FULL_TIME \
+           or emp.always_available_breakfast or emp.always_available_dinner:
+            tail = prev_tail.get(emp.id, [])
+            consec = sum(tail)
+            ft_tail_lines.append(f"      {emp.name:<12} tail={tail}  前期末連続={consec}日")
+    if ft_tail_lines:
+        logger.info("  [前期末尾 prev_tail（FT・おまかせPT）]")
+        for line in ft_tail_lines:
+            logger.info(line)
     _add_consecutive_day_constraints(
         model, worked_day, active_employees, date_strs, max_consecutive_days, prev_tail
     )
