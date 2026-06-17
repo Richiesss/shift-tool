@@ -1548,17 +1548,29 @@ def _solve_best_effort(
     )
 
     # 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
-    # 希望休含め最低日数の休みを取得（ハード制約 / Issue #4, #62）
-    be_excess_rest_vars: list = []  # ソフト下限用補助変数
+    # 休日数をちょうど min_days_off 日に強制（ハード制約 / Issue #4, #62）
+    be_excess_rest_vars: list = []  # ソフト下限用補助変数（おまかせPT用）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
             if emp.employment_type == EmploymentType.FULL_TIME \
                or emp.always_available_breakfast or emp.always_available_dinner:
+                # 上限（ハード）: 休日数が min_days_off を下回らない（= 勤務日数 <= max_work_days）
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
-                er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
-                model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
-                be_excess_rest_vars.append(er)
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    # FT社員: 下限もハード（= 勤務日数 >= hard_lower で休日数をちょうどX日に強制）
+                    # 希望休が min_days_off 超の場合は到達可能な上限に切り下げてINFEASIBLE回避
+                    avail_days = sum(
+                        1 for d in date_strs if not off_map.get((emp.id, d), False)
+                    )
+                    hard_lower = min(max_work_days, avail_days)
+                    if hard_lower > 0:
+                        model.add(sum(worked_day[emp.id][d] for d in date_strs) >= hard_lower)
+                else:
+                    # おまかせPT: ソフト下限（制約矛盾リスクを避けるため）
+                    er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
+                    model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
+                    be_excess_rest_vars.append(er)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
