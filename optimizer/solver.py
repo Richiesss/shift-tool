@@ -1071,6 +1071,18 @@ def solve(
                                 DINNER_PT_COST * assign[emp.id][ds][slot.value][pos.value]
                             )
 
+    # P6: FTホール同一営業時間帯 最大2名制限（ハード）
+    # 同じスロット（朝食 or ディナー）にFT社員がホールに3名以上入るのを禁止
+    for ds in date_strs:
+        for slot in slots:
+            ft_hall_vars = [
+                assign[emp.id][ds][slot.value][Position.HALL.value]
+                for emp in active_employees
+                if emp.employment_type == EmploymentType.FULL_TIME
+            ]
+            model.add(sum(ft_hall_vars) <= 2)
+    logger.info("  [P6 FTホール最大2名] 全日付・全スロットにハード制約を追加")
+
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     # ── 求解 ────────────────────────────────────────────────────────────
@@ -1796,6 +1808,20 @@ def _solve_best_effort(
                     penalty_terms.append(
                         BE_DINNER_PT_COST * assign[emp.id][ds][TimeSlot.DINNER.value][pos.value]
                     )
+
+    # FTホール同一営業時間帯 最大2名制限（ソフト）
+    # Phase 2 はベストエフォートのためハード禁止せず、超過分にペナルティを課す
+    FT_HALL_OVERFLOW_PENALTY = 800_000
+    for ds in date_strs:
+        for slot in slots:
+            ft_hall_vars = [
+                assign[emp.id][ds][slot.value][Position.HALL.value]
+                for emp in active_employees
+                if emp.employment_type == EmploymentType.FULL_TIME
+            ]
+            overflow = model.new_int_var(0, len(ft_hall_vars), f"ft_hall_overflow_{ds}_{slot.value}")
+            model.add(overflow >= sum(ft_hall_vars) - 2)
+            penalty_terms.append(FT_HALL_OVERFLOW_PENALTY * overflow)
 
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
