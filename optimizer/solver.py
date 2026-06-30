@@ -1548,10 +1548,9 @@ def _solve_best_effort(
     )
 
     # 正社員・常時出勤可（おまかせ）アルバイトは期間内（半月=2週間）で
-    # 休日数をちょうど min_days_off 日に近づける（フェーズ2はソフト制約 / Issue #4, #62）
-    # フェーズ1でハード下限を課すと INFEASIBLE のためフォールバックしてくるため、
-    # フェーズ2では非常に高いペナルティで強く誘導するが INFEASIBLE にはしない
-    be_excess_rest_vars: list = []  # ソフト下限用補助変数
+    # 休日数をちょうど min_days_off 日に取得（FT: ハード制約 / おまかせPT: ソフト制約）
+    # FT社員はPhase 1と同様にハード下限を課す（両フェーズ共通要件）
+    be_excess_rest_vars: list = []  # ソフト下限用補助変数（おまかせPT用）
     if len(date_strs) > min_days_off:
         max_work_days = len(date_strs) - min_days_off
         for emp in active_employees:
@@ -1559,10 +1558,20 @@ def _solve_best_effort(
                or emp.always_available_breakfast or emp.always_available_dinner:
                 # 上限（ハード）: 休日数が min_days_off を下回らない（= 勤務日数 <= max_work_days）
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
-                # 下限（ソフト）: 勤務日数が max_work_days に近づくよう強いペナルティで誘導
-                er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
-                model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
-                be_excess_rest_vars.append(er)
+                if emp.employment_type == EmploymentType.FULL_TIME:
+                    # FT社員: 下限もハード（希望休を含め必ず min_days_off 日休む）
+                    # 希望休が min_days_off 超の場合は到達可能な上限に切り下げてINFEASIBLE回避
+                    avail_days = sum(
+                        1 for d in date_strs if not off_map.get((emp.id, d), False)
+                    )
+                    hard_lower = min(max_work_days, avail_days)
+                    if hard_lower > 0:
+                        model.add(sum(worked_day[emp.id][d] for d in date_strs) >= hard_lower)
+                else:
+                    # おまかせPT: ソフト下限（制約矛盾リスクを避けるため）
+                    er = model.new_int_var(0, max_work_days, f"be_excess_rest_{emp.id}")
+                    model.add(er >= max_work_days - sum(worked_day[emp.id][d] for d in date_strs))
+                    be_excess_rest_vars.append(er)
 
     penalty_terms = []
     STAFF_PENALTY = 1_000_000   # 人数不足ペナルティ（非常に高い）
@@ -1572,9 +1581,8 @@ def _solve_best_effort(
     for term in si_short_shift_terms:
         penalty_terms.append(SI_SHORT_SHIFT_PENALTY * term)
 
-    # Pft: FT・おまかせPTの超過休暇ペナルティ（フェーズ2）
-    # フェーズ1のハード下限が効かないため20Mに引き上げ、強制的に max_work_days を目指させる
-    # FTの朝食ペナルティはなし（最優先）なので、FTは朝食・ディナー両方に柔軟に入れる
+    # Pft: おまかせPTの超過休暇ペナルティ（フェーズ2）
+    # FT社員はハード下限で強制されるためここには含まれない
     FT_EXCESS_REST_PENALTY = max(1, int(20_000_000 * (config.cost_scale if config else 1.0)))
     for v in be_excess_rest_vars:
         penalty_terms.append(FT_EXCESS_REST_PENALTY * v)
