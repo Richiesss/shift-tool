@@ -468,7 +468,7 @@ def export_excel(
                 ws.cell(r, col).value     = _num_or_text(s_txt)
                 ws.cell(r, col + 1).value = m_txt or None
                 ws.cell(r, col + 2).value = _num_or_text(e_txt)
-                if style in ("assigned_note", "am_only", "pm_only"):
+                if style == "assigned_note":
                     ws.cell(r, col + 1).fill = FILL_NOTE
                 elif style == "leave":
                     # 有給は3セル全体を緑塗り（完成イメージ準拠）

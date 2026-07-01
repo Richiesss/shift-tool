@@ -504,7 +504,7 @@ def export_pdf(
                     if sz:
                         cmds.append(("FONTSIZE", (cc, r), (cc, r), sz))
                         cmds.append(("LEADING",  (cc, r), (cc, r), sz * 1.2))
-                if style in ("assigned_note", "am_only", "pm_only"):
+                if style == "assigned_note":
                     cmds.append(("BACKGROUND", (c0 + 1, r), (c0 + 1, r), COL_NOTE))
                 elif style == "leave":
                     # 有給は3セル全体を緑塗り（完成イメージ準拠）
