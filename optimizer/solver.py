@@ -267,14 +267,20 @@ def solve(
 
     # 希望シフト（アルバイト用）と社員の休希望・有休を分けて管理
     req_map: dict[tuple[int, str, str], bool] = {}
-    off_map: dict[tuple[int, str], bool] = {}   # 社員の休希望・有休
+    off_map: dict[tuple[int, str], bool] = {}    # 社員の休希望・有休（後方互換用）
+    leave_map: dict[tuple[int, str], bool] = {}  # 有休のみ（FTハード禁止）
+    off_pref_map: dict[tuple[int, str], bool] = {}  # 休希望のみ（FTソフト選好）
     # 社員のフレックス出勤（朝のみ可→ディナー不可、晩のみ可→朝食不可）
     slot_block_map: dict[tuple[int, str], TimeSlot] = {}
     # 朝食「ロング勤務」（〜15:30頃まで）希望の (employee_id, date) 集合
     long_breakfast_set: set[tuple[int, str]] = set()
     for r in requests:
-        if r.pattern_id in ("off_request", "paid_leave"):
+        if r.pattern_id == "paid_leave":
             off_map[(r.employee_id, r.date)] = True
+            leave_map[(r.employee_id, r.date)] = True
+        elif r.pattern_id == "off_request":
+            off_map[(r.employee_id, r.date)] = True
+            off_pref_map[(r.employee_id, r.date)] = True
         elif r.pattern_id == "am_only":
             slot_block_map[(r.employee_id, r.date)] = TimeSlot.DINNER
         elif r.pattern_id == "pm_only":
@@ -373,7 +379,7 @@ def solve(
                 for e in active_employees:
                     # FIX①: FT社員を正しくカウント（実際の可用性チェックと統一）
                     if e.employment_type == EmploymentType.FULL_TIME:
-                        ok = not off_map.get((e.id, ds), False)
+                        ok = not leave_map.get((e.id, ds), False)
                     elif slot == TimeSlot.BREAKFAST and e.always_available_breakfast:
                         ok = not off_map.get((e.id, ds), False)
                     elif slot == TimeSlot.DINNER and e.always_available_dinner:
@@ -475,9 +481,9 @@ def solve(
         for ds in date_strs:
             for slot in slots:
                 if emp.employment_type == EmploymentType.FULL_TIME:
-                    # 社員：休希望・有休の日以外は常時出勤可
+                    # 社員：有休の日以外は常時出勤可。休希望はソフト制約（P7ペナルティ）。
                     # （朝のみ可/晩のみ可の日は該当しない時間帯への配置を禁止）
-                    can_work = not off_map.get((emp.id, ds), False) \
+                    can_work = not leave_map.get((emp.id, ds), False) \
                                and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = not off_map.get((emp.id, ds), False)
@@ -590,7 +596,7 @@ def solve(
                 emp for emp in active_employees
                 if emp.can_open and (
                     (emp.employment_type == EmploymentType.FULL_TIME
-                     and not off_map.get((emp.id, ds), False)
+                     and not leave_map.get((emp.id, ds), False)
                      and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                     or (emp.always_available_breakfast
                         and breakfast_start_hour.get((emp.id, ds), 6.0) <= 6.0)
@@ -614,7 +620,7 @@ def solve(
                             for emp in active_employees
                             if emp.employment_type == EmploymentType.FULL_TIME
                             and emp.id not in can_open_ids
-                            and not off_map.get((emp.id, ds), False)
+                            and not leave_map.get((emp.id, ds), False)
                             and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                         ]
                         if ft_fallback_vars:
@@ -661,7 +667,7 @@ def solve(
                 cln_emps = [
                     emp for emp in cleanup_pool
                     if (emp.employment_type == EmploymentType.FULL_TIME
-                        and not off_map.get((emp.id, ds), False)
+                        and not leave_map.get((emp.id, ds), False)
                         and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                     or (emp.always_available_breakfast
                         and breakfast_end_hour.get((emp.id, ds), 11.0) >= 11.0)
@@ -684,7 +690,7 @@ def solve(
                             for emp in active_employees
                             if emp.employment_type == EmploymentType.FULL_TIME
                             and emp.id not in cleanup_emp_ids
-                            and not off_map.get((emp.id, ds), False)
+                            and not leave_map.get((emp.id, ds), False)
                             and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                         ]
                         if ft_fallback_vars:
@@ -708,7 +714,7 @@ def solve(
                     if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                     or emp.always_available_breakfast
                     or (emp.employment_type == EmploymentType.FULL_TIME
-                        and not off_map.get((emp.id, ds), False)
+                        and not leave_map.get((emp.id, ds), False)
                         and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                 ]
                 if min_cln > 0 and cln_vars:
@@ -721,7 +727,7 @@ def solve(
                         if req_map.get((emp.id, ds, TimeSlot.BREAKFAST.value))
                         or emp.always_available_breakfast
                         or (emp.employment_type == EmploymentType.FULL_TIME
-                            and not off_map.get((emp.id, ds), False)
+                            and not leave_map.get((emp.id, ds), False)
                             and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                     ]
                     if ldr_cln_vars:
@@ -837,11 +843,12 @@ def solve(
                 model.add(sum(worked_day[emp.id][d] for d in date_strs) <= max_work_days)
                 if emp.employment_type == EmploymentType.FULL_TIME:
                     # FT社員: 下限もハード（休日数をちょうど min_days_off 日に強制）
-                    # 希望休が min_days_off 超の場合は到達可能な上限に切り下げてINFEASIBLE回避
-                    avail_days = sum(
-                        1 for d in date_strs if not off_map.get((emp.id, d), False)
+                    # 有休（leave_map）のみ出勤不可扱い。休希望（off_pref_map）は
+                    # ソフト制約（P7）で扱うためカウントせず、PT割当より正社員出勤を優先させる。
+                    non_leave_days = sum(
+                        1 for d in date_strs if not leave_map.get((emp.id, d), False)
                     )
-                    hard_lower = min(max_work_days, avail_days)
+                    hard_lower = min(max_work_days, non_leave_days)
                     if hard_lower > 0:
                         model.add(sum(worked_day[emp.id][d] for d in date_strs) >= hard_lower)
                 else:
@@ -1031,7 +1038,7 @@ def solve(
                 for emp in active_employees:
                     if emp.employment_type != EmploymentType.FULL_TIME:
                         continue
-                    if off_map.get((emp.id, ds), False):
+                    if leave_map.get((emp.id, ds), False):
                         continue
                     if slot_block_map.get((emp.id, ds)) == slot:
                         continue
@@ -1083,6 +1090,22 @@ def solve(
             model.add(sum(ft_hall_vars) <= 2)
     logger.info("  [P6 FTホール最大2名] 全日付・全スロットにハード制約を追加")
 
+    # P7: 正社員が休希望日に出勤した場合のソフトペナルティ
+    # 有休（leave_map）はハード禁止。休希望（off_pref_map）はPT割当ペナルティより低く設定し、
+    # PT使用（ディナー300k）よりFT出勤（200k）を優先させる。
+    FT_OFF_REQ_PENALTY = 200_000
+    for emp in active_employees:
+        if emp.employment_type != EmploymentType.FULL_TIME:
+            continue
+        for ds in date_strs:
+            if not off_pref_map.get((emp.id, ds), False):
+                continue
+            worked_on_off_req = sum(
+                assign[emp.id][ds][slot.value][pos.value]
+                for slot in slots for pos in positions
+            )
+            penalty_terms.append(FT_OFF_REQ_PENALTY * worked_on_off_req)
+
     model.minimize(cp_model.LinearExpr.Sum(penalty_terms))
 
     # ── 求解 ────────────────────────────────────────────────────────────
@@ -1128,7 +1151,8 @@ def solve(
         result_assignments = _extract_assignments(solver, assign, active_employees, date_strs, slots, positions)
         _log_employee_analysis(result_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints,
-                               off_map=off_map, min_days_off=min_days_off)
+                               off_map=off_map, min_days_off=min_days_off,
+                               leave_map=leave_map, off_pref_map=off_pref_map)
         _log_assignment_summary(result_assignments, date_strs)
         _check_warnings(result_assignments, date_strs, warnings,
                         reservation_counts=reservation_counts,
@@ -1148,7 +1172,7 @@ def solve(
     else:
         logger.error(f"  [INFEASIBLE/UNKNOWN] status={status_name} → フェーズ2へ移行")
         # 実行不可能 → 制約違反の診断メッセージを収集
-        errs = _diagnose_infeasible(active_employees, date_strs, req_map, off_map)
+        errs = _diagnose_infeasible(active_employees, date_strs, req_map, off_map, leave_map=leave_map)
         for e in errs:
             logger.error(f"  [診断] {e}")
 
@@ -1172,10 +1196,12 @@ def solve(
             prev_tail=prev_tail,
             breakfast_start_hour=breakfast_start_hour,
             breakfast_end_hour=breakfast_end_hour,
+            leave_map=leave_map,
         )
         _log_employee_analysis(best_assignments, active_employees, date_strs, slots, positions,
                                req_map, req_hours, shift_constraints,
-                               off_map=off_map, min_days_off=min_days_off)
+                               off_map=off_map, min_days_off=min_days_off,
+                               leave_map=leave_map, off_pref_map=off_pref_map)
         _check_warnings(best_assignments, date_strs, best_warnings,
                         reservation_counts=reservation_counts,
                         reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d)
@@ -1197,7 +1223,8 @@ def solve(
 
 def _log_employee_analysis(assignments, active_employees, date_strs, slots, positions,
                             req_map, req_hours, shift_constraints,
-                            off_map: dict | None = None, min_days_off: int = 5):
+                            off_map: dict | None = None, min_days_off: int = 5,
+                            leave_map: dict | None = None, off_pref_map: dict | None = None):
     """スタッフ別の割当状況・ペナルティ根拠・リーダー/SI診断を詳細ログ出力"""
     from collections import defaultdict
     SOCIAL_INSURANCE_MIN_HOURS = 9.0   # 実働8h + 休憩1h（duration_hours は休憩考慮なし総拘束時間）
@@ -1240,21 +1267,24 @@ def _log_employee_analysis(assignments, active_employees, date_strs, slots, posi
     if ft_emps:
         max_work_days = len(date_strs) - min_days_off if len(date_strs) > min_days_off else len(date_strs)
         logger.info("  [FT社員別勤務日数]")
-        logger.info(f"    {'名前':<12} {'希望休':>4} {'出勤可':>4} {'勤務日':>4} {'上限':>4} {'休日':>4} {'目標達成':>6}  注記")
+        logger.info(f"    {'名前':<12} {'有休':>4} {'休希望':>5} {'出勤可':>5} {'勤務日':>4} {'上限':>4} {'休日':>4} {'目標達成':>6}  注記")
+        _lmap = leave_map or {}
+        _pmap = off_pref_map or {}
         for emp in sorted(ft_emps, key=lambda e: e.name):
-            off_days = sum(1 for ds in date_strs if off_map.get((emp.id, ds), False))
-            avail_days = len(date_strs) - off_days
+            leave_days    = sum(1 for ds in date_strs if _lmap.get((emp.id, ds), False))
+            off_pref_days = sum(1 for ds in date_strs if _pmap.get((emp.id, ds), False))
+            non_leave_days = len(date_strs) - leave_days
             worked_dates = {a.date for a in assignments if a.employee_id == emp.id}
             work_days = len(worked_dates)
             rest_days = len(date_strs) - work_days
-            ok = "✓" if work_days >= max_work_days or avail_days <= max_work_days else "❌"
+            ok = "✓" if work_days >= max_work_days or non_leave_days <= max_work_days else "❌"
             note = ""
-            if avail_days < max_work_days:
-                note = f"出勤可能日({avail_days})が上限({max_work_days})未満"
+            if non_leave_days < max_work_days:
+                note = f"出勤可能日({non_leave_days})が上限({max_work_days})未満"
             elif work_days < max_work_days:
                 short = max_work_days - work_days
                 note = f"未達({short}日不足)"
-            logger.info(f"    {emp.name:<12} {off_days:>4} {avail_days:>4} {work_days:>4} {max_work_days:>4} {rest_days:>4} {ok:>6}  {note}")
+            logger.info(f"    {emp.name:<12} {leave_days:>4} {off_pref_days:>5} {non_leave_days:>5} {work_days:>4} {max_work_days:>4} {rest_days:>4} {ok:>6}  {note}")
 
     # ── PT スタッフ別詳細 ───────────────────────────────────────────────
     pt_emps = [e for e in active_employees if e.employment_type != EmploymentType.FULL_TIME]
@@ -1408,10 +1438,13 @@ def _solve_best_effort(
     prev_tail: dict[int, list[int]] | None = None,
     breakfast_start_hour: dict | None = None,
     breakfast_end_hour: dict | None = None,
+    leave_map: dict | None = None,
 ) -> tuple[list[ShiftAssignment], list[str]]:
     """人数・リーダー制約をソフト化してベストエフォートのシフトを生成する"""
     if config is None:
         config = SolverConfig()
+    # FTの有休ハード禁止マップ。未提供時はoff_map全体で代替（後方互換）
+    _leave = leave_map if leave_map is not None else off_map
     if shift_constraints is None:
         from db import repositories as repo
         shift_constraints = repo.get_shift_constraints()
@@ -1459,7 +1492,7 @@ def _solve_best_effort(
         for ds in date_strs:
             for slot in slots:
                 if emp.employment_type == EmploymentType.FULL_TIME:
-                    can_work = not off_map.get((emp.id, ds), False) \
+                    can_work = not _leave.get((emp.id, ds), False) \
                                and slot_block_map.get((emp.id, ds)) != slot
                 elif slot == TimeSlot.BREAKFAST and emp.always_available_breakfast:
                     can_work = not off_map.get((emp.id, ds), False)
@@ -1656,7 +1689,7 @@ def _solve_best_effort(
                 emp for emp in active_employees
                 if emp.can_open and (
                     (emp.employment_type == EmploymentType.FULL_TIME
-                     and not off_map.get((emp.id, ds), False)
+                     and not _leave.get((emp.id, ds), False)
                      and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                     or (emp.always_available_breakfast
                         and breakfast_start_hour.get((emp.id, ds), 6.0) <= 6.0)
@@ -1680,7 +1713,7 @@ def _solve_best_effort(
                         for emp in active_employees
                         if emp.employment_type == EmploymentType.FULL_TIME
                         and emp.id not in can_open_ids
-                        and not off_map.get((emp.id, ds), False)
+                        and not _leave.get((emp.id, ds), False)
                         and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                     ]
                     if ft_fallback_vars:
@@ -1702,7 +1735,7 @@ def _solve_best_effort(
                 for emp in active_employees
                 if emp.can_cleanup and (
                     (emp.employment_type == EmploymentType.FULL_TIME
-                     and not off_map.get((emp.id, ds), False)
+                     and not _leave.get((emp.id, ds), False)
                      and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST)
                     or (emp.always_available_breakfast
                         and breakfast_end_hour.get((emp.id, ds), 11.0) >= 11.0)
@@ -1725,7 +1758,7 @@ def _solve_best_effort(
                     for emp in active_employees
                     if emp.employment_type == EmploymentType.FULL_TIME
                     and emp.id not in cleanup_emp_ids
-                    and not off_map.get((emp.id, ds), False)
+                    and not _leave.get((emp.id, ds), False)
                     and slot_block_map.get((emp.id, ds)) != TimeSlot.BREAKFAST
                 ]
                 if ft_fallback_vars:
@@ -1900,6 +1933,7 @@ def _diagnose_infeasible(
     date_strs: list[str],
     req_map: dict,
     off_map: dict | None = None,
+    leave_map: dict | None = None,
 ) -> list[str]:
     """実行不可能の原因を診断してエラーメッセージを返す"""
     errors = []
@@ -1907,6 +1941,7 @@ def _diagnose_infeasible(
     shift_constraints = repo.get_shift_constraints()
     if off_map is None:
         off_map = {}
+    _leave = leave_map if leave_map is not None else off_map
 
     for ds in date_strs:
         d = date.fromisoformat(ds)
@@ -1927,8 +1962,8 @@ def _diagnose_infeasible(
                             or e.primary_position.value == pos.value):
                         continue
                     if e.employment_type == EmploymentType.FULL_TIME:
-                        # 正社員: off_mapのみで可否判断
-                        if off_map.get((e.id, ds), False):
+                        # 正社員: 有休のみ出勤不可（休希望はソフト制約のため可否判断に含めない）
+                        if _leave.get((e.id, ds), False):
                             continue
                         available.append(e)
                     else:
