@@ -444,10 +444,10 @@
       <i class="bi bi-calendar-check me-1"></i>有休
     </button>
     <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('am_only')">
-      <i class="bi bi-sunrise me-1"></i>朝のみ可
+      <i class="bi bi-sunrise me-1"></i>6:00〜15:00
     </button>
     <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('pm_only')">
-      <i class="bi bi-sunset me-1"></i>晩のみ可
+      <i class="bi bi-sunset me-1"></i>14:00〜23:00
     </button>
     {% else %}
     <span class="label">全日：</span>
@@ -485,8 +485,8 @@
     {% set btn_html %}
       {% if cur_pid == 'off_request' %}<i class="bi bi-x-circle me-1"></i>休希望
       {% elif cur_pid == 'paid_leave' %}<i class="bi bi-calendar-check me-1"></i>有休
-      {% elif cur_pid == 'am_only' %}<i class="bi bi-sunrise me-1"></i>朝のみ可
-      {% elif cur_pid == 'pm_only' %}<i class="bi bi-sunset me-1"></i>晩のみ可
+      {% elif cur_pid == 'am_only' %}<i class="bi bi-sunrise me-1"></i>6:00〜15:00
+      {% elif cur_pid == 'pm_only' %}<i class="bi bi-sunset me-1"></i>14:00〜23:00
       {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
     {% endset %}
   {% else %}
@@ -702,8 +702,8 @@ const FULL_STATES = [
   { val: '',            cls: 'pat-work', html: '<i class="bi bi-check2 me-1"></i>出勤予定' },
   { val: 'off_request', cls: 'pat-ofr',  html: '<i class="bi bi-x-circle me-1"></i>休希望' },
   { val: 'paid_leave',  cls: 'pat-leave',html: '<i class="bi bi-calendar-check me-1"></i>有休' },
-  { val: 'am_only',     cls: 'pat-am',   html: '<i class="bi bi-sunrise me-1"></i>朝のみ可' },
-  { val: 'pm_only',     cls: 'pat-pm',   html: '<i class="bi bi-sunset me-1"></i>晩のみ可' },
+  { val: 'am_only',     cls: 'pat-am',   html: '<i class="bi bi-sunrise me-1"></i>6:00〜15:00' },
+  { val: 'pm_only',     cls: 'pat-pm',   html: '<i class="bi bi-sunset me-1"></i>14:00〜23:00' },
 ];
 
 function cycleOff(btn) {

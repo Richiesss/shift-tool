@@ -166,9 +166,9 @@ def _get_shift_cells(
 
     if not b_raw and not d_raw:
         if req and req.pattern_id == "am_only":
-            return "", "朝のみ可", "", "am_only"
+            return "", "6:00〜15:00", "", "am_only"
         if req and req.pattern_id == "pm_only":
-            return "", "晩のみ可", "", "pm_only"
+            return "", "14:00〜23:00", "", "pm_only"
         if cnote:
             return "", cnote, "", "assigned_note"
         return "", "-", "", "off"
