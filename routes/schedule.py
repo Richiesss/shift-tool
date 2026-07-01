@@ -50,15 +50,18 @@ def _compute_staffing(assignments, employees, dates, constraints,
                     min_s += tiered_extra(b_count, tiers_b)
                 elif slot == TimeSlot.DINNER:
                     min_s += tiered_extra(d_count, tiers_d)
+                max_s = c.get("max", 0)
                 cnt  = count_map[(ds, slot.value, pos.value)]
                 ldrs = leader_map[(ds, slot.value, pos.value)]
                 result[(ds, slot.value, pos.value)] = {
                     "count":        cnt,
                     "min":          min_s,
+                    "max":          max_s,
                     "leaders":      ldrs,
                     "min_leader":   min_l,
                     "short_staff":  cnt < min_s,
                     "short_leader": min_l > 0 and ldrs < min_l,
+                    "over_staff":   max_s > 0 and cnt > max_s,
                 }
     return result
 

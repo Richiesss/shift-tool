@@ -45,6 +45,7 @@
                  padding: 1px 4px; display: inline-block; margin-top: 2px; }
   .count-ok     { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
   .count-short  { background: #ef4444; color: white; }
+  .count-over   { background: #ef4444; color: white; }
   .count-leader { background: #f59e0b; color: white; }
 
   /* ── 人員状況グリッド（4区分） ── */
@@ -455,12 +456,12 @@
             </div>
             {% endif %}
             <div class="d-flex gap-1 justify-content-center flex-wrap mt-1">
-              {% set badge_b = 'count-short' if st_b.short_staff else 'count-leader' if st_b.short_leader else 'count-ok' %}
-              <span class="count-badge {{ badge_b }}" title="朝食">
+              {% set badge_b = 'count-short' if st_b.short_staff else 'count-over' if st_b.over_staff else 'count-leader' if st_b.short_leader else 'count-ok' %}
+              <span class="count-badge {{ badge_b }}" title="朝食{% if st_b.over_staff %}（過剰）{% endif %}">
                 <i class="bi bi-sunrise"></i> {{ st_b.count }}/{{ st_b.min }}
               </span>
-              {% set badge_d = 'count-short' if st_d.short_staff else 'count-leader' if st_d.short_leader else 'count-ok' %}
-              <span class="count-badge {{ badge_d }}" title="ディナー">
+              {% set badge_d = 'count-short' if st_d.short_staff else 'count-over' if st_d.over_staff else 'count-leader' if st_d.short_leader else 'count-ok' %}
+              <span class="count-badge {{ badge_d }}" title="ディナー{% if st_d.over_staff %}（過剰）{% endif %}">
                 <i class="bi bi-moon-stars"></i> {{ st_d.count }}/{{ st_d.min }}
               </span>
             </div>
