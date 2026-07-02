@@ -1,3 +1,2 @@
 export/templates/*.xlsx filter=lfs diff=lfs merge=lfs -text
 export/fonts/*.ttf filter=lfs diff=lfs merge=lfs -text
-static/help/*.jpg filter=lfs diff=lfs merge=lfs -text
