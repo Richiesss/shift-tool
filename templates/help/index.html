@@ -73,7 +73,7 @@
   .toc-chip:hover { border-color: #0ea5e9; color: #0ea5e9; }
   .toc-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
-  /* ── スクリーンショット ── */
+  /* スクリーンショット */
   .ss-row {
     display: flex; gap: 1rem; align-items: flex-start; margin: .6rem 0;
   }
@@ -91,7 +91,6 @@
     padding: 3px 4px 4px; background: var(--bg-card);
     border-top: 1px solid var(--border);
   }
-  /* 複数並べる場合 */
   .ss-duo { display: flex; gap: .6rem; margin-top: .75rem; }
   .ss-duo .ss-phone { width: 130px; flex-shrink: 0; }
 
@@ -103,6 +102,8 @@
   }
 </style>
 {% endblock %}
+
+{% set SS = "https://raw.githubusercontent.com/Richiesss/shift-tool/main/static/help/%23" %}
 
 {% block content %}
 <div class="help-hero">
@@ -157,7 +158,6 @@
       <div class="ss-row">
         <div class="ss-body">
           <p style="font-size:.82rem;margin-bottom:.6rem">ログイン後に最初に表示される画面です。「今やるべきこと」と「今日の状況」をひとめで確認できます。</p>
-
           <div class="sub-heading" style="margin-top:.5rem">TODO</div>
           <p style="font-size:.82rem">優先度の高い順に対応すべき項目が並びます。タップすると該当画面に移動します。</p>
           <ul class="step-list mb-2" style="font-size:.82rem">
@@ -166,16 +166,14 @@
             <li><span class="step-num" style="background:#38bdf8"><i class="bi bi-arrow-right"></i></span><div>シフトの<strong>自動生成</strong>・確定がまだ</div></li>
             <li><span class="step-num" style="background:#a78bfa"><i class="bi bi-arrow-right"></i></span><div><strong>予約客数</strong>の入力・更新</div></li>
           </ul>
-
           <div class="sub-heading">今日の状況</div>
           <p style="font-size:.82rem">本日の予約客数と、現在の時間帯の出勤予定人数（ホール・キッチン別）を表示します。</p>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%235.jpg" alt="ホーム画面" loading="lazy">
+          <img src="{{ SS }}5.jpg" alt="ホーム画面" loading="lazy">
           <div class="ss-caption">ホーム画面</div>
         </div>
       </div>
-
       <div class="sub-heading">期間ステータス</div>
       <p style="font-size:.82rem">直近のシフト期間について「希望収集 → 自動生成 → 確定」の進行状況をバーで表示します。提出済みスタッフ数もここで確認できます。</p>
       <div class="info-box">
@@ -195,13 +193,13 @@
           <div class="sub-heading" style="margin-top:0">基本操作</div>
           <ul class="step-list">
             <li><span class="step-num">1</span><div><strong>スタッフを追加</strong> — 右上「＋ 新規登録」をタップします。</div></li>
-            <li><span class="step-num">2</span><div><strong>並び順を変更</strong> — 各行左端の <i class="bi bi-grip-vertical text-muted"></i> をドラッグして入れ替えます。変更は自動保存されます。</div></li>
+            <li><span class="step-num">2</span><div><strong>並び順を変更</strong> — 各行左端の <i class="bi bi-grip-vertical text-muted"></i> をドラッグして入れ替えます。自動保存されます。</div></li>
             <li><span class="step-num">3</span><div><strong>編集</strong> — <i class="bi bi-pencil text-primary"></i> ボタンをタップして編集フォームを開きます。</div></li>
             <li><span class="step-num">4</span><div><strong>アーカイブ</strong> — <i class="bi bi-archive text-muted"></i> ボタンで非表示にします。データは保持されます。</div></li>
           </ul>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%238.jpg" alt="スタッフ管理一覧" loading="lazy">
+          <img src="{{ SS }}8.jpg" alt="スタッフ管理一覧" loading="lazy">
           <div class="ss-caption">スタッフ一覧</div>
         </div>
       </div>
@@ -233,11 +231,10 @@
           </table>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%239.jpg" alt="スタッフ編集フォーム" loading="lazy">
+          <img src="{{ SS }}9.jpg" alt="スタッフ編集フォーム" loading="lazy">
           <div class="ss-caption">編集フォーム</div>
         </div>
       </div>
-
       <div class="warn-box" style="margin-top:.5rem">
         <i class="bi bi-exclamation-triangle-fill me-1"></i>
         「完全削除」を実行するとスタッフと関連する全データが消えます。<strong>元に戻せません。</strong>退職・休職の場合は「アーカイブ」を使ってください。
@@ -263,14 +260,12 @@
           </div>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%236.jpg" alt="希望シフト入力" loading="lazy">
+          <img src="{{ SS }}6.jpg" alt="希望シフト入力" loading="lazy">
           <div class="ss-caption">希望シフト入力</div>
         </div>
       </div>
-
       <div class="sub-heading">一括設定ボタン</div>
       <p style="font-size:.82rem">各スタッフの入力欄上部にある一括ボタンで、全日分をまとめてパターン設定できます。正社員は「出勤」「休希望」「有休」など、アルバイト/パートは「全日休み」や過去の利用頻度が高いパターン（最大3件）から選べます。</p>
-
       <div class="sub-heading">外部フォーム＆CSV連携（β）</div>
       <p style="font-size:.82rem">画面下部のパネルから <strong>Google フォームでの希望収集</strong>と<strong>CSVインポート</strong>が利用できます。Googleフォーム連携は、設定ページであらかじめGoogleアカウントとの連携が必要です。</p>
       <ul class="step-list mb-2" style="font-size:.82rem">
@@ -295,11 +290,10 @@
           </ul>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%237.jpg" alt="シフト自動生成" loading="lazy">
+          <img src="{{ SS }}7.jpg" alt="シフト自動生成" loading="lazy">
           <div class="ss-caption">自動生成画面</div>
         </div>
       </div>
-
       <div class="sub-heading">優先度設定の意味</div>
       <table class="table table-sm table-bordered mb-2" style="font-size:.82rem">
         <thead class="table-light"><tr><th style="width:45%">設定項目</th><th>内容</th></tr></thead>
@@ -310,7 +304,6 @@
           <tr><td>深夜勤務分散</td><td>ディナー遅番が特定のスタッフに集中しないよう分散します。</td></tr>
         </tbody>
       </table>
-
       <div class="info-box">
         <i class="bi bi-arrow-repeat me-1"></i>
         生成はバックグラウンドで実行されます。生成中でも他の画面に移動できます。完了後に「シフト表」から結果を確認してください。
@@ -327,7 +320,6 @@
   {# ── シフト表 ── #}
   {{ section('schedule','bi-calendar3','rgba(14,165,233,.13)','#0ea5e9','シフト表','body-schedule') }}
 
-      <!-- 全体概要 -->
       <div class="ss-row">
         <div class="ss-body">
           <ul class="step-list">
@@ -345,12 +337,11 @@
           </div>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%231.jpg" alt="シフト表全体" loading="lazy">
+          <img src="{{ SS }}1.jpg" alt="シフト表全体" loading="lazy">
           <div class="ss-caption">シフト表</div>
         </div>
       </div>
 
-      <!-- 確定・解除 -->
       <div class="sub-heading">確定・確定解除</div>
       <table class="table table-sm table-bordered mb-2" style="font-size:.82rem">
         <thead class="table-light"><tr><th>操作</th><th>内容</th></tr></thead>
@@ -366,7 +357,6 @@
         </tbody>
       </table>
 
-      <!-- 出力 -->
       <div class="sub-heading">Excel / PDF 出力</div>
       <div class="ss-row">
         <div class="ss-body">
@@ -377,21 +367,20 @@
           </ul>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%233.jpg" alt="出力ドロップダウン" loading="lazy">
+          <img src="{{ SS }}3.jpg" alt="出力ドロップダウン" loading="lazy">
           <div class="ss-caption">出力メニュー</div>
         </div>
       </div>
 
-      <!-- 担当編集 -->
       <div class="sub-heading">担当の追加・変更</div>
       <p style="font-size:.82rem">セルをタップすると担当編集モーダルが開きます。ポジション（ホール／キッチン）と勤務時間を選んで「担当として追加」を押します。</p>
       <div class="ss-duo">
         <div class="ss-phone">
-          <img src="/static/help/%232_2.jpg" alt="希望シフト通りモード" loading="lazy">
+          <img src="{{ SS }}2_2.jpg" alt="希望シフト通りモード" loading="lazy">
           <div class="ss-caption">希望シフト通り</div>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%232_1.jpg" alt="応援モード" loading="lazy">
+          <img src="{{ SS }}2_1.jpg" alt="応援モード" loading="lazy">
           <div class="ss-caption">応援をお願いする</div>
         </div>
       </div>
@@ -408,28 +397,26 @@
         担当の追加・削除はページリロードなしで即時反映されます。人員バッジ・不足グリッドも自動で更新されます。
       </div>
 
-      <!-- タイムライン -->
       <div class="sub-heading">タイムライン</div>
       <div class="ss-row">
         <div class="ss-body">
           <p style="font-size:.82rem">日付ヘッダーをタップするとその日の全スタッフの勤務時間帯がグリッドで表示されます。<strong>H</strong>＝ホール、<strong>K</strong>＝キッチンで色分けされます。</p>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%234.jpg" alt="タイムライン" loading="lazy">
+          <img src="{{ SS }}4.jpg" alt="タイムライン" loading="lazy">
           <div class="ss-caption">タイムライン</div>
         </div>
       </div>
 
-      <!-- その他の機能 -->
       <div class="sub-heading">その他の機能</div>
       <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
         <thead class="table-light"><tr><th style="width:40%">機能</th><th>内容</th></tr></thead>
         <tbody>
           <tr><td><i class="bi bi-chat-fill me-1"></i>セルコメント</td><td>担当編集モーダル下部の「コメント（任意）」欄に補足メモを残せます。セルに <i class="bi bi-chat-fill"></i> アイコンで表示されます。</td></tr>
           <tr><td><i class="bi bi-clock-history me-1"></i>変更履歴</td><td>右上の <i class="bi bi-clock-history"></i> ボタンから手動変更の履歴（直近60件）を確認できます。</td></tr>
-          <tr><td>予約行のインライン編集</td><td>「予約」行のセルをタップするとその場で朝食・ディナーの予約客数を編集できます。</td></tr>
-          <tr><td>メモ1 / メモ2</td><td>日付ごとに自由にメモを入力できます（メモ1：全体向け、メモ2：社員向け）。PDF/Excel出力にも反映されます。</td></tr>
-          <tr><td>天気・気温</td><td>「設定」で店舗の緯度・経度を登録すると、日付ヘッダーに天気アイコンと最高/最低気温が表示されます。</td></tr>
+          <tr><td>予約行のインライン編集</td><td>「予約」行のセルをタップするとその場で予約客数を編集できます。</td></tr>
+          <tr><td>メモ1 / メモ2</td><td>日付ごとに自由にメモを入力できます。PDF/Excel出力にも反映されます。</td></tr>
+          <tr><td>天気・気温</td><td>「設定」で店舗の緯度・経度を登録すると、日付ヘッダーに天気と気温が表示されます。</td></tr>
         </tbody>
       </table>
 
@@ -453,13 +440,12 @@
           </div>
         </div>
         <div class="ss-phone">
-          <img src="/static/help/%2310.jpg" alt="客数管理" loading="lazy">
+          <img src="{{ SS }}10.jpg" alt="客数管理" loading="lazy">
           <div class="ss-caption">客数管理</div>
         </div>
       </div>
-
       <div class="sub-heading">客数予測（β）</div>
-      <p style="font-size:.82rem">「設定」で客数予測を有効にすると、過去のデータと天気予報から各日の予測客数が表示されます（「予測 N人」）。未入力の日に「予測値を未入力欄に反映」で一括入力できます（入力済みの値は上書きされません）。</p>
+      <p style="font-size:.82rem">「設定」で客数予測を有効にすると、過去のデータと天気予報から各日の予測客数が表示されます。未入力の日に「予測値を未入力欄に反映」で一括入力できます（入力済みの値は上書きされません）。</p>
 
       </div>
     </div>
