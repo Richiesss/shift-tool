@@ -197,8 +197,12 @@
 <div class="page-header">
   <a href="{{ url_for('shifts.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
   <h1 class="fs-6">{{ period.start_date }} 〜 {{ period.end_date }}</h1>
-  <div class="ms-auto">
+  <div class="ms-auto d-flex flex-column align-items-end gap-1">
     <span class="small opacity-75">{{ filled_count }} / {{ employees|length }} 人</span>
+    {% set pct = ((filled_count / employees|length * 100) | round | int) if employees|length > 0 else 0 %}
+    <div style="width:80px;height:5px;background:rgba(255,255,255,.2);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:{{ pct }}%;background:{% if pct == 100 %}#22c55e{% elif pct >= 50 %}#38bdf8{% else %}#f59e0b{% endif %};border-radius:3px;transition:width .4s"></div>
+    </div>
   </div>
 </div>
 

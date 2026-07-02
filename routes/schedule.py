@@ -213,6 +213,24 @@ def _compute_shortage_summary(sel_periods, employees, constraints,
     return result
 
 
+def _get_reserv_tiers():
+    """予約客数による増員閾値をアプリ設定から読み込む"""
+    return (
+        [
+            (safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100),
+             safe_int(repo.get_app_setting("reserv_extra_breakfast",      "1"),   1)),
+            (safe_int(repo.get_app_setting("reserv_threshold_breakfast2", "0"),   0),
+             safe_int(repo.get_app_setting("reserv_extra_breakfast2",     "0"),   0)),
+        ],
+        [
+            (safe_int(repo.get_app_setting("reserv_threshold_dinner",     "25"),  25),
+             safe_int(repo.get_app_setting("reserv_extra_dinner",         "1"),   1)),
+            (safe_int(repo.get_app_setting("reserv_threshold_dinner2",    "0"),   0),
+             safe_int(repo.get_app_setting("reserv_extra_dinner2",        "0"),   0)),
+        ],
+    )
+
+
 bp = Blueprint("schedule", __name__, url_prefix="/schedule")
 
 
@@ -280,16 +298,7 @@ def index(period_id):
 
     constraints      = repo.get_shift_constraints()
     reservation_counts = repo.get_reservation_counts(period_id)
-    reserv_thresh_b  = safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100)
-    reserv_extra_b   = safe_int(repo.get_app_setting("reserv_extra_breakfast",      "1"), 1)
-    reserv_thresh_b2 = safe_int(repo.get_app_setting("reserv_threshold_breakfast2", "0"), 0)
-    reserv_extra_b2  = safe_int(repo.get_app_setting("reserv_extra_breakfast2",     "0"), 0)
-    reserv_thresh_d  = safe_int(repo.get_app_setting("reserv_threshold_dinner",     "25"), 25)
-    reserv_extra_d   = safe_int(repo.get_app_setting("reserv_extra_dinner",         "1"), 1)
-    reserv_thresh_d2 = safe_int(repo.get_app_setting("reserv_threshold_dinner2",    "0"), 0)
-    reserv_extra_d2  = safe_int(repo.get_app_setting("reserv_extra_dinner2",        "0"), 0)
-    reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
-    reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
+    reserv_tiers_b, reserv_tiers_d = _get_reserv_tiers()
     staffing = _compute_staffing(
         assignments, all_employees, dates, constraints,
         reservation_counts=reservation_counts,
@@ -335,29 +344,38 @@ def index(period_id):
     ]
     total_shortage = sum(g['short_count'] for g in shortage_groups)
 
-    # ポジションでメンバーを絞り込み（朝食/ディナーは1画面に両方表示するため、スロットごとのリストを用意する）
-    # 並び順は employees の取得順（社員 → 専任 → 兼任、各カテゴリ内は display_order）をそのまま維持
-    def _filter_employees_for_slot(slot_val):
-        # このスロットで実際に担当が入っている従業員ID（手動割当済みは専任外でも表示）
-        assigned_in_slot = {a.employee_id for a in assignments if a.time_slot.value == slot_val}
-        # このスロットで希望シフトを提出している従業員ID（専任外でも「希望はあるのに未アサイン」が見えるよう表示対象に含める）
+    # ポジション別スタッフリスト（クライアントサイド切替のため両ポジション分を計算する）
+    def _filter_ids_for_pos(slot_val, pos_val):
+        assigned_in_slot  = {a.employee_id for a in assignments if a.time_slot.value == slot_val}
         submitted_in_slot = {eid for (eid, _ds, sv) in time_map.keys() if sv == slot_val}
-        return [
-            e for e in employees
-            if (e.primary_position is None or e.can_work_both_positions or e.primary_position.value == pos)
+        return {
+            e.id for e in employees
+            if (e.primary_position is None or e.can_work_both_positions
+                or e.primary_position.value == pos_val)
             and (e.primary_timeslot is None or e.primary_timeslot.value == slot_val
                  or e.id in assigned_in_slot or e.id in submitted_in_slot)
-        ]
+        }
 
-    employees_by_slot = {
-        "breakfast": _filter_employees_for_slot("breakfast"),
-        "dinner":    _filter_employees_for_slot("dinner"),
+    slot_ids_hall    = {"breakfast": _filter_ids_for_pos("breakfast", "hall"),
+                        "dinner":    _filter_ids_for_pos("dinner",    "hall")}
+    slot_ids_kitchen = {"breakfast": _filter_ids_for_pos("breakfast", "kitchen"),
+                        "dinner":    _filter_ids_for_pos("dinner",    "kitchen")}
+    employees_combined_hall    = [e for e in employees
+                                  if e.id in (slot_ids_hall["breakfast"]    | slot_ids_hall["dinner"])]
+    employees_combined_kitchen = [e for e in employees
+                                  if e.id in (slot_ids_kitchen["breakfast"] | slot_ids_kitchen["dinner"])]
+
+    # JavaScriptにわたす人員充足データ（ポジション切替時のヘッダーバッジ更新に使用）
+    staffing_js = {
+        f"{ds}_{sv}_{pv}": {
+            "count":        data["count"],
+            "min":          data["min"],
+            "short_staff":  data["short_staff"],
+            "short_leader": data["short_leader"],
+            "over_staff":   data["over_staff"],
+        }
+        for (ds, sv, pv), data in staffing.items()
     }
-    # 朝食/ディナーを1つの表にまとめるため、どちらかのスロットに該当する従業員を統合した一覧と、
-    # 各従業員がどのスロットに該当するか（セルを実セルとして描画するか「該当なし」にするか）を渡す
-    slot_ids = {sk: {e.id for e in lst} for sk, lst in employees_by_slot.items()}
-    _combined_ids = slot_ids["breakfast"] | slot_ids["dinner"]
-    employees_combined = [e for e in employees if e.id in _combined_ids]
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
@@ -407,8 +425,10 @@ def index(period_id):
         "schedule/index.html",
         period=period,
         periods=periods,
-        employees_combined=employees_combined,
-        slot_ids=slot_ids,
+        employees_combined_hall=employees_combined_hall,
+        employees_combined_kitchen=employees_combined_kitchen,
+        slot_ids_hall=slot_ids_hall,
+        slot_ids_kitchen=slot_ids_kitchen,
         emp_map=emp_map,
         dates=dates,
         asgn_map=asgn_map,
@@ -418,6 +438,7 @@ def index(period_id):
         export_warnings=export_warnings,
         time_map=time_map,
         staffing=staffing,
+        staffing_js=staffing_js,
         shortage_groups=shortage_groups,
         total_shortage=total_shortage,
         needs_regen=needs_regen,
@@ -437,6 +458,72 @@ def index(period_id):
         any_wage=any_wage,
         base_hourly_wage=base_hourly_wage,
     )
+
+
+@bp.get("/<int:period_id>/staffing_json")
+def staffing_json_view(period_id):
+    """割当変更後のDOM更新用：人員充足データをJSONで返す"""
+    period = repo.get_period(period_id)
+    if not period:
+        return jsonify({"error": "not found"}), 404
+
+    employees          = repo.get_all_employees(active_only=True)
+    assignments        = repo.get_assignments(period_id)
+    dates              = period.date_range()
+    constraints        = repo.get_shift_constraints()
+    reservation_counts = repo.get_reservation_counts(period_id)
+    reserv_tiers_b, reserv_tiers_d = _get_reserv_tiers()
+    staffing = _compute_staffing(
+        assignments, employees, dates, constraints,
+        reservation_counts=reservation_counts,
+        reserv_tiers_b=reserv_tiers_b, reserv_tiers_d=reserv_tiers_d,
+    )
+
+    staffing_dict = {
+        f"{ds}_{sv}_{pv}": {
+            "count":        data["count"],
+            "min":          data["min"],
+            "short_staff":  data["short_staff"],
+            "short_leader": data["short_leader"],
+            "over_staff":   data["over_staff"],
+        }
+        for (ds, sv, pv), data in staffing.items()
+    }
+
+    _DAY_JP = ['月', '火', '水', '木', '金', '土', '日']
+    _COMBOS = [
+        ('breakfast', '朝食',    'hall',    'ホール'),
+        ('breakfast', '朝食',    'kitchen', 'キッチン'),
+        ('dinner',    'ディナー', 'hall',    'ホール'),
+        ('dinner',    'ディナー', 'kitchen', 'キッチン'),
+    ]
+    _bucket = {(sl, pl): [] for _, sl, _, pl in _COMBOS}
+    for d in dates:
+        ds     = d.isoformat()
+        dlabel = f"{d.month}/{d.day}({_DAY_JP[d.weekday()]})"
+        for sv, sl, pv, pl in _COMBOS:
+            st = staffing.get((ds, sv, pv), {})
+            if st.get('short_staff') or st.get('short_leader'):
+                _bucket[(sl, pl)].append({
+                    'label':    dlabel,
+                    'is_staff': bool(st.get('short_staff')),
+                    'count':    st.get('count', 0),
+                    'min':      st.get('min', 0),
+                })
+
+    shortage_groups = [
+        {
+            'slot':             sl,
+            'pos':              pl,
+            'chips':            _bucket[(sl, pl)],
+            'short_count':      len(_bucket[(sl, pl)]),
+            'has_short_staff':  any(c['is_staff']     for c in _bucket[(sl, pl)]),
+            'has_short_leader': any(not c['is_staff'] for c in _bucket[(sl, pl)]),
+        }
+        for _, sl, _, pl in _COMBOS
+    ]
+
+    return jsonify({"staffing": staffing_dict, "shortage_groups": shortage_groups})
 
 
 @bp.post("/<int:period_id>/assign")
@@ -622,16 +709,7 @@ def stats_multi():
 
     # 人員不足の発生頻度（朝食/ディナー × ホール/キッチン）
     constraints = repo.get_shift_constraints()
-    reserv_thresh_b  = safe_int(repo.get_app_setting("reserv_threshold_breakfast",  "100"), 100)
-    reserv_extra_b   = safe_int(repo.get_app_setting("reserv_extra_breakfast",      "1"), 1)
-    reserv_thresh_b2 = safe_int(repo.get_app_setting("reserv_threshold_breakfast2", "0"), 0)
-    reserv_extra_b2  = safe_int(repo.get_app_setting("reserv_extra_breakfast2",     "0"), 0)
-    reserv_thresh_d  = safe_int(repo.get_app_setting("reserv_threshold_dinner",     "25"), 25)
-    reserv_extra_d   = safe_int(repo.get_app_setting("reserv_extra_dinner",         "1"), 1)
-    reserv_thresh_d2 = safe_int(repo.get_app_setting("reserv_threshold_dinner2",    "0"), 0)
-    reserv_extra_d2  = safe_int(repo.get_app_setting("reserv_extra_dinner2",        "0"), 0)
-    reserv_tiers_b = [(reserv_thresh_b, reserv_extra_b), (reserv_thresh_b2, reserv_extra_b2)]
-    reserv_tiers_d = [(reserv_thresh_d, reserv_extra_d), (reserv_thresh_d2, reserv_extra_d2)]
+    reserv_tiers_b, reserv_tiers_d = _get_reserv_tiers()
     shortage_summary = _compute_shortage_summary(
         sel_periods, employees, constraints, reserv_tiers_b, reserv_tiers_d
     )

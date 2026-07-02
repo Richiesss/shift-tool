@@ -371,7 +371,8 @@
 
   {% if upcoming_short_days %}
   <div class="alert-card mb-2">
-    <div class="alert-header ah-red" onclick="toggleAlert('short-body','short-chv')">
+    <div class="alert-header ah-red" onclick="toggleAlert('short-body','short-chv')"
+         role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')toggleAlert('short-body','short-chv')">
       <i class="bi bi-exclamation-triangle-fill ah-icon"></i>
       <span class="ah-title">直近7日の人員不足</span>
       <span class="ah-count">{{ upcoming_short_days | length }}日</span>
@@ -387,7 +388,8 @@
 
   {% if unsubmitted %}
   <div class="alert-card mb-2">
-    <div class="alert-header ah-amber" onclick="toggleAlert('unsub-body','unsub-chv')">
+    <div class="alert-header ah-amber" onclick="toggleAlert('unsub-body','unsub-chv')"
+         role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')toggleAlert('unsub-body','unsub-chv')">
       <i class="bi bi-person-exclamation ah-icon"></i>
       <span class="ah-title">希望シフト未提出</span>
       <span class="ah-count">{{ unsubmitted | length }}名</span>

@@ -20,7 +20,7 @@
   .sched-grid thead th { position: sticky; top: 0; z-index: 2; background: var(--sidebar-bg, #1e293b); color: white; border-bottom: 2px solid var(--border) !important; }
   /* 左上セル：縦横両方固定 */
   .sched-grid thead th.emp-col { z-index: 3; background: var(--sidebar-bg, #0f172a); border-right: 2px solid var(--border) !important; }
-  
+
   [data-theme="light"] .sat td, [data-theme="light"] .sat th { background: #eff6ff !important; }
   [data-theme="light"] .sun td, [data-theme="light"] .sun th { background: #fff1f2 !important; }
   [data-theme="dark"] .sat td, [data-theme="dark"] .sat th { background: rgba(59, 130, 246, 0.12) !important; }
@@ -32,12 +32,12 @@
     --bs-table-bg: rgba(255, 255, 255, 0.04);
     color: var(--text);
   }
-  
+
   /* 今日の列 */
   .sched-grid thead th.today-col { background: #1d4ed8 !important; color: #fff !important; }
   [data-theme="light"] .sched-grid td.today-col { background: #dbeafe !important; }
   [data-theme="dark"] .sched-grid td.today-col { background: rgba(29, 78, 216, 0.2) !important; }
-  
+
   /* 人員不足の日付ヘッダー：下部ボーダー */
   .sched-grid thead th.short-staff  { box-shadow: inset 0 -4px 0 #ef4444 !important; }
   .sched-grid thead th.short-leader { box-shadow: inset 0 -4px 0 #f59e0b !important; }
@@ -53,9 +53,7 @@
     display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
   }
   @media (max-width: 767px) {
-    .shortage-grid {
-      grid-template-columns: 1fr;
-    }
+    .shortage-grid { grid-template-columns: 1fr; }
   }
   .sg-cell {
     background: var(--glass-bg);
@@ -67,10 +65,7 @@
     -webkit-backdrop-filter: blur(12px);
     transition: all var(--transition);
   }
-  .sg-cell:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
-  }
+  .sg-cell:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
   .sg-ok     { border-left-color: #22c55e; }
   .sg-staff  { border-left-color: #ef4444; }
   .sg-leader { border-left-color: #f59e0b; }
@@ -81,6 +76,7 @@
   }
   .sg-expandable { cursor: pointer; user-select: none; }
   .sg-expandable:hover { background: rgba(148, 163, 184, 0.08); }
+  .sg-expandable:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
   .sg-label { color: var(--text-muted); font-size: .75rem; }
   .sg-count {
     font-size: .72rem; font-weight: 700; color: var(--text);
@@ -94,25 +90,18 @@
     border-top: 1px solid var(--border);
   }
 
-  /* ── 人員不足サマリーカード（旧・互換） ── */
+  /* ── 人員不足サマリーカード（互換） ── */
   .shortage-card {
-    background: var(--glass-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
+    background: var(--glass-bg); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden;
     border-left: 4px solid #f59e0b;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     transition: all var(--transition);
   }
-  .shortage-card:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
-  }
+  .shortage-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
   .shortage-header {
     display: flex; align-items: center; gap: .5rem;
-    padding: .6rem .8rem; cursor: pointer;
-    user-select: none;
+    padding: .6rem .8rem; cursor: pointer; user-select: none;
   }
   .shortage-header:hover { background: rgba(148, 163, 184, 0.08); }
   .shortage-icon { color: #f59e0b; font-size: 1rem; line-height: 1; }
@@ -143,13 +132,13 @@
   .chip-leader { background: rgba(245, 158, 11, 0.15); }
   [data-theme="light"] .chip-leader { color: #b45309; }
   [data-theme="dark"] .chip-leader { color: #fbbf24; }
-  
+
   /* 土日・祝日ヘッダーの文字色 */
   [data-theme="light"] .sched-grid thead th.sat { color: #1e40af !important; }
   [data-theme="light"] .sched-grid thead th.sun { color: #be123c !important; }
   [data-theme="dark"] .sched-grid thead th.sat { color: #60a5fa !important; }
   [data-theme="dark"] .sched-grid thead th.sun { color: #f87171 !important; }
-  
+
   /* 今日 + 土日が重なるケースの文字保証 */
   .sched-grid thead th.today-col.sat,
   .sched-grid thead th.today-col.sun { color: white !important; }
@@ -158,6 +147,9 @@
   .chip-hall    { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-kitchen { background: rgba(34, 197, 94, 0.15); color: #22c55e; border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   .chip-empty   { color: var(--text-muted); }
+  /* ダークモードのホール/キッチンチップ：コントラスト確保 */
+  [data-theme="dark"] .chip-hall    { color: #60a5fa; }
+  [data-theme="dark"] .chip-kitchen { color: #4ade80; }
   /* 希望提出済みだが未アサイン */
   .chip-unassigned { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   /* 1セル内に朝食・ディナーを上下に並べて表示 */
@@ -165,10 +157,10 @@
   .cell-half:hover { background: rgba(148, 163, 184, 0.08); }
   .cell-half + .cell-half { border-top: 1px dashed var(--border); margin-top: 2px; padding-top: 2px; border-radius: 0 0 4px 4px; }
   .cell-half-na { color: var(--text-muted); cursor: default; font-size: .7rem; }
-  
+
   [data-theme="light"] .cell-half.has-unassigned-request { background-color: #f1f5f9; }
   [data-theme="dark"] .cell-half.has-unassigned-request { background-color: rgba(148, 163, 184, 0.08); }
-  
+
   /* 正社員の希望休：赤塗りつぶし */
   .ft-off { background-color: rgba(239, 68, 68, 0.25) !important; color: #ef4444 !important; }
   /* スタッフ個別コメント表示 */
@@ -183,26 +175,18 @@
   .emp-name-link {
     color: inherit; text-decoration: none; display: block;
   }
-  .emp-name-link:hover {
-    color: #0ea5e9; text-decoration: underline;
-  }
+  .emp-name-link:hover { color: #0ea5e9; text-decoration: underline; }
 
   /* ── 担当編集モーダル ── */
-  /* 背景が常にダーク（--dark-card-bg）なため、配色もダーク固定にしてライトテーマでの
-     文字色とのコントラスト不足（暗い背景に暗い文字）を防ぐ */
   .asgn-modal-content {
     --text: var(--dark-card-text, #f8fafc);
     --text-muted: #94a3b8;
     --bg-card: rgba(30, 41, 59, 0.65);
     --border: rgba(51, 65, 85, 0.5);
     background: var(--dark-card-bg, #1e293b); color: var(--text); border: 1px solid var(--border); border-radius: 16px;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   }
-  .asgn-section {
-    padding: .65rem 0;
-    border-bottom: 1px solid var(--border);
-  }
+  .asgn-section { padding: .65rem 0; border-bottom: 1px solid var(--border); }
   .asgn-section:last-child { border-bottom: none; }
   .asgn-section-label {
     font-size: .68rem; font-weight: 700; letter-spacing: .06em;
@@ -238,28 +222,99 @@
   }
   .time-mode-opt:hover { border-color: var(--text-muted); }
   .time-mode-opt.selected { border-color: #38bdf8; background: rgba(56,189,248,.07); }
-  .time-mode-opt.disabled {
-    opacity: .35; cursor: not-allowed; pointer-events: none;
-  }
+  .time-mode-opt.disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
   .time-mode-opt input[type=radio] { margin-top: 3px; accent-color: #38bdf8; flex-shrink: 0; }
   .time-mode-title { font-size: .88rem; font-weight: 600; color: var(--text); line-height: 1.3; }
   .time-mode-sub   { font-size: .73rem; color: var(--text-muted); }
 
-  /* ── インライン編集ヒント ─────────────────────────────────── */
-  .res-cell  { cursor: pointer; transition: all var(--transition); border-radius: 4px; }
+  /* ── インライン編集 ── */
+  .res-cell  { cursor: pointer; transition: all var(--transition); border-radius: 4px; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .res-cell:hover  { background: rgba(14,165,233,.08); outline: 1px dashed rgba(14,165,233,.3); }
+  .res-cell:focus-visible { outline: 2px solid var(--primary); }
   .note-cell { cursor: pointer; min-height: 18px; transition: all var(--transition); border-radius: 4px; display: block; }
   .note-cell:hover { background: rgba(14,165,233,.08); outline: 1px dashed rgba(14,165,233,.3); }
+  .note-cell:focus-visible { outline: 2px solid var(--primary); }
 
-  /* ── モーダル内フォームコントロール（CSSカスタムプロパティで自動ダーク） ── */
+  /* ── モーダル内フォームコントロール ── */
   .asgn-modal-content .form-control,
   .asgn-modal-content .form-control:focus {
-    background: var(--bg-card);
-    border-color: var(--border);
-    color: var(--text);
+    background: var(--bg-card); border-color: var(--border); color: var(--text);
   }
+
+  /* ── ポジションタブ ── */
+  .pos-tab-btn { transition: all var(--transition); }
 </style>
 {% endblock %}
+
+{# ── スタッフ行レンダリングマクロ（ホール/キッチン共用） ── #}
+{% macro render_emp_rows(employees_combined, slot_ids, pos_val) %}
+{% set chip_cls     = 'chip-hall'    if pos_val == 'hall' else 'chip-kitchen' %}
+{% set pos_label_s  = 'H'            if pos_val == 'hall' else 'K' %}
+{% for emp in employees_combined %}
+<tr>
+  <td class="emp-col">
+    <a href="{{ url_for('employees.edit', emp_id=emp.id) }}" class="emp-name-link">{{ emp.name }}</a>
+  </td>
+  {% for d in dates %}
+  {% set ds = d|string %}
+  {% set dow = d.weekday() %}
+  {% set is_holiday = ds in holidays %}
+  {% set is_ft = emp.employment_type.value == 'full_time' %}
+  {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
+  {% set cell_note = cell_notes.get((emp.id, ds), '') %}
+  <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} {{ 'ft-off' if is_ft_off else '' }}">
+    {% for sk in ['breakfast', 'dinner'] %}
+    {% if emp.id in slot_ids[sk] %}
+    {% set day_assignments = asgn_map.get(ds, {}).get(sk, []) %}
+    {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos_val) | list | first %}
+    {% set default_slot_time = ft_times.get(pos_val, ft_times['hall'])[sk] %}
+    {% set req_time = time_map.get((emp.id, ds, sk), '') %}
+    {% set has_request = (emp.id, ds, sk) in time_map %}
+    {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
+    {% set is_unassigned_request = has_request and not emp_asgn %}
+    <div class="cell-half {{ 'has-unassigned-request' if is_unassigned_request else '' }}"
+         data-emp-id="{{ emp.id }}"
+         data-emp-name="{{ emp.name }}"
+         data-date="{{ ds }}"
+         data-slot="{{ sk }}"
+         data-pos="{{ emp_asgn.position.value if emp_asgn else '' }}"
+         data-assigned="{{ 'true' if emp_asgn else 'false' }}"
+         data-reinf-start="{{ emp_asgn.reinf_start if emp_asgn and emp_asgn.reinf_start else '' }}"
+         data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
+         data-shift-time="{{ display_time }}"
+         data-has-request="{{ 'true' if is_ft or has_request else 'false' }}"
+         data-cell-note="{{ cell_note }}"
+         onclick="openAssignModal(this)">
+      {% if emp_asgn %}
+        {% set has_custom_time = emp_asgn.reinf_start and emp_asgn.reinf_end %}
+        {% set t = (emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end) if has_custom_time else display_time %}
+        <span class="{{ chip_cls }}{% if emp_asgn.is_reinforcement %} opacity-75{% endif %}"
+              {% if emp_asgn.is_reinforcement %}title="希望にない応援"{% elif has_custom_time %}title="希望時間から変更"{% endif %}>
+          {{ pos_label_s }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% elif has_custom_time %}<sup style="font-size:.6rem">変</sup>{% endif %}
+        </span>
+        {% if t %}<div style="font-size:.6rem;color:#475569;line-height:1.15">{{ t }}</div>{% endif %}
+      {% elif is_unassigned_request %}
+        <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
+        {% if req_time %}<div style="font-size:.6rem;color:#94a3b8;line-height:1.15">{{ req_time }}</div>{% endif %}
+      {% else %}
+        <span class="chip-empty">+</span>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="cell-half cell-half-na">—</div>
+    {% endif %}
+    {% endfor %}
+    {% if cell_note %}
+    <span class="cell-note-badge" title="{{ cell_note }}">
+      <i class="bi bi-chat-fill" style="font-size:.55rem"></i> {{ cell_note[:8] }}{% if cell_note|length > 8 %}…{% endif %}
+    </span>
+    {% endif %}
+  </td>
+  {% endfor %}
+</tr>
+{% endfor %}
+{% endmacro %}
+
 {% block content %}
 <div class="page-header">
   <div>
@@ -364,20 +419,24 @@
       </form>
       {% endif %}
     </div>
-    <!-- 2行目：ホール/キッチン -->
+    <!-- 2行目：ホール/キッチン（クライアントサイド切替） -->
     <div class="d-flex gap-2 align-items-center flex-wrap">
       <div class="btn-group btn-group-sm">
-        <a href="?pos=hall"    class="btn {{ 'btn-success' if pos == 'hall'    else 'btn-outline-secondary' }}">
+        <button type="button" data-pos="hall"
+                class="btn pos-tab-btn {{ 'btn-success' if pos == 'hall' else 'btn-outline-secondary' }}"
+                onclick="switchPos('hall')">
           <i class="bi bi-people me-1"></i>ホール
-        </a>
-        <a href="?pos=kitchen" class="btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}">
+        </button>
+        <button type="button" data-pos="kitchen"
+                class="btn pos-tab-btn {{ 'btn-success' if pos == 'kitchen' else 'btn-outline-secondary' }}"
+                onclick="switchPos('kitchen')">
           <i class="bi bi-egg-fried me-1"></i>キッチン
-        </a>
+        </button>
       </div>
     </div>
   </div>
 
-  {% if not employees_combined %}
+  {% if not (employees_combined_hall or employees_combined_kitchen) %}
   <div class="alert alert-info mx-0 mb-3">
     <i class="bi bi-info-circle me-2"></i>
     表示するスタッフがいません。
@@ -442,15 +501,15 @@
   </div>
   {% endif %}
 
-  {# ── 人員状況グリッド（朝食/ディナー × ホール/キッチン 4区分） ── #}
+  {# ── 人員状況グリッド ── #}
   <div class="shortage-grid mb-3">
     {% for group in shortage_groups %}
     {% set cell_id = 'sg-' ~ loop.index %}
     {% set state = 'staff' if group.has_short_staff else 'leader' if group.has_short_leader else 'ok' %}
-    <div class="sg-cell sg-{{ state }}">
-      <!-- ヘッダー（不足がある場合はタップで展開） -->
+    <div class="sg-cell sg-{{ state }}" data-slot="{{ group.slot }}" data-pos="{{ group.pos }}">
       <div class="sg-header {% if state != 'ok' %}sg-expandable{% endif %}"
-           {% if state != 'ok' %}onclick="toggleSg('{{ cell_id }}')"{% endif %}>
+           {% if state != 'ok' %}onclick="toggleSg('{{ cell_id }}')" role="button" tabindex="0"
+           onkeydown="if(event.key==='Enter'||event.key===' ')toggleSg('{{ cell_id }}')"{% endif %}>
         <span class="sg-label">{{ group.slot }}<span style="opacity:.5;margin:0 2px">/</span>{{ group.pos }}</span>
         {% if state == 'ok' %}
           <i class="bi bi-check-circle-fill ms-auto" style="color:#22c55e;font-size:.9rem"></i>
@@ -459,7 +518,6 @@
           <i class="bi bi-chevron-down sg-chevron" style="font-size:.7rem"></i>
         {% endif %}
       </div>
-      <!-- 不足日チップ（展開時のみ表示） -->
       {% if state != 'ok' %}
       <div class="sg-body" id="{{ cell_id }}" style="display:none">
         {% for c in group.chips %}
@@ -481,7 +539,7 @@
     <span class="text-secondary">— 対象外</span>
   </div>
 
-  <!-- シフトグリッド（朝食・ディナーを1つの表にまとめて表示） -->
+  <!-- シフトグリッド -->
   <div class="sched-grid {{ 'sched-locked' if period.status == 'confirmed' else '' }}">
     <table class="table table-bordered table-sm mb-0">
       <thead>
@@ -498,6 +556,7 @@
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           {% set w = weather_map.get(ds_h) %}
           <th class="text-center {{ day_cls }} {{ hdr_cls }} {{ 'today-col' if is_today else '' }}"
+              data-date="{{ ds_h }}"
               style="cursor:pointer" onclick="openTimeline('{{ ds_h }}')">
             {{ '★ ' if is_today else '' }}{{ d.strftime('%m/%d') }}<br>
             <small>{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
@@ -509,7 +568,7 @@
               {% if w.temp_min is not none %}/<span class="text-primary">{{ w.temp_min | round | int }}°</span>{% endif %}
             </div>
             {% endif %}
-            <div class="d-flex gap-1 justify-content-center flex-wrap mt-1">
+            <div class="d-flex gap-1 justify-content-center flex-wrap mt-1 pos-count-badges">
               {% set badge_b = 'count-short' if st_b.short_staff else 'count-over' if st_b.over_staff else 'count-leader' if st_b.short_leader else 'count-ok' %}
               <span class="count-badge {{ badge_b }}" title="朝食{% if st_b.over_staff %}（過剰）{% endif %}">
                 <i class="bi bi-sunrise"></i> {{ st_b.count }}/{{ st_b.min }}
@@ -537,7 +596,8 @@
           <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.7rem;line-height:1.3;color:#94a3b8">
             <div class="res-cell" title="クリックで予約客数を編集（朝食見込・夜予約欄に印字されます）"
                  data-date="{{ ds }}" data-b="{{ res_b }}" data-d="{{ res_d }}"
-                 onclick="editReservation(this)">
+                 onclick="editReservation(this)" role="button" tabindex="0"
+                 onkeydown="if(event.key==='Enter')editReservation(this)">
               <div><i class="bi bi-sunrise"></i> <span class="res-b">{{ res_b if res_b else '—' }}</span></div>
               <div><i class="bi bi-moon-stars"></i> <span class="res-d">{{ res_d if res_d else '—' }}</span></div>
             </div>
@@ -554,9 +614,9 @@
           {% set is_holiday = ds in holidays %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           <td class="text-center {{ day_cls }}" style="min-width:70px">
-            <span class="note-cell small text-muted"
+            <span class="note-cell small text-muted" role="button" tabindex="0"
               data-date="{{ ds }}" data-period="{{ period.id }}" data-endpoint="note"
-              onclick="editNote(this)">{{ notes.get(ds, '') or '' }}</span>
+              onclick="editNote(this)" onkeydown="if(event.key==='Enter')editNote(this)">{{ notes.get(ds, '') or '' }}</span>
           </td>
           {% endfor %}
         </tr>
@@ -569,87 +629,20 @@
           {% set is_holiday = ds in holidays %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           <td class="text-center {{ day_cls }}" style="min-width:70px">
-            <span class="note-cell small text-muted"
+            <span class="note-cell small text-muted" role="button" tabindex="0"
               data-date="{{ ds }}" data-period="{{ period.id }}" data-endpoint="staff_note"
-              onclick="editNote(this)">{{ staff_notes.get(ds, '') or '' }}</span>
+              onclick="editNote(this)" onkeydown="if(event.key==='Enter')editNote(this)">{{ staff_notes.get(ds, '') or '' }}</span>
           </td>
           {% endfor %}
         </tr>
-        {% for emp in employees_combined %}
-        <tr>
-          <td class="emp-col">
-            <a href="{{ url_for('employees.edit', emp_id=emp.id) }}"
-               class="emp-name-link">{{ emp.name }}</a>
-          </td>
-          {% for d in dates %}
-          {% set ds = d|string %}
-          {% set dow = d.weekday() %}
-          {% set is_holiday = ds in holidays %}
-          {% set is_ft = emp.employment_type.value == 'full_time' %}
-          {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
-          {% set cell_note = cell_notes.get((emp.id, ds), '') %}
-          <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} {{ 'ft-off' if is_ft_off else '' }}">
-            {% for sk in ['breakfast', 'dinner'] %}
-            {% if emp.id in slot_ids[sk] %}
-            {% set day_assignments = asgn_map.get(ds, {}).get(sk, []) %}
-            {% set emp_asgn = day_assignments | selectattr('employee_id', 'equalto', emp.id) | selectattr('position.value', 'equalto', pos) | list | first %}
-            {# 社員はポジション別デフォルトスロット時間を使用（設定画面で変更可） #}
-            {% set default_slot_time = ft_times.get(pos, ft_times['hall'])[sk] %}
-            {% set req_time = time_map.get((emp.id, ds, sk), '') %}
-            {% set has_request = (emp.id, ds, sk) in time_map %}
-            {% set display_time = req_time if req_time else (default_slot_time if is_ft else '') %}
-            {% set is_unassigned_request = has_request and not emp_asgn %}
-            <div class="cell-half {{ 'has-unassigned-request' if is_unassigned_request else '' }}"
-                 data-emp-id="{{ emp.id }}"
-                 data-emp-name="{{ emp.name }}"
-                 data-date="{{ ds }}"
-                 data-slot="{{ sk }}"
-                 data-pos="{{ emp_asgn.position.value if emp_asgn else '' }}"
-                 data-assigned="{{ 'true' if emp_asgn else 'false' }}"
-                 data-reinf-start="{{ emp_asgn.reinf_start if emp_asgn and emp_asgn.reinf_start else '' }}"
-                 data-reinf-end="{{ emp_asgn.reinf_end if emp_asgn and emp_asgn.reinf_end else '' }}"
-                 data-shift-time="{{ display_time }}"
-                 data-has-request="{{ 'true' if is_ft or has_request else 'false' }}"
-                 data-cell-note="{{ cell_note }}"
-                 onclick="openAssignModal(this)">
-              {% if emp_asgn %}
-                {% set pos_label = 'H' if pos == 'hall' else 'K' %}
-                {% set chip_cls = 'chip-hall' if pos == 'hall' else 'chip-kitchen' %}
-                {% set has_custom_time = emp_asgn.reinf_start and emp_asgn.reinf_end %}
-                {% if has_custom_time %}
-                  {% set t = emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end %}
-                {% else %}
-                  {% set t = display_time %}
-                {% endif %}
-                <span class="{{ chip_cls }}{% if emp_asgn.is_reinforcement %} opacity-75{% endif %}"
-                      {% if emp_asgn.is_reinforcement %}title="希望にない応援"{% elif has_custom_time %}title="希望時間から変更"{% endif %}>
-                  {{ pos_label }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% elif has_custom_time %}<sup style="font-size:.6rem">変</sup>{% endif %}
-                </span>
-                {% if t %}
-                <div style="font-size:.6rem;color:#475569;line-height:1.15">{{ t }}</div>
-                {% endif %}
-              {% elif is_unassigned_request %}
-                <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
-                {% if req_time %}
-                <div style="font-size:.6rem;color:#94a3b8;line-height:1.15">{{ req_time }}</div>
-                {% endif %}
-              {% else %}
-                <span class="chip-empty">+</span>
-              {% endif %}
-            </div>
-            {% else %}
-            <div class="cell-half cell-half-na">—</div>
-            {% endif %}
-            {% endfor %}
-            {% if cell_note %}
-            <span class="cell-note-badge" title="{{ cell_note }}">
-              <i class="bi bi-chat-fill" style="font-size:.55rem"></i> {{ cell_note[:8] }}{% if cell_note|length > 8 %}…{% endif %}
-            </span>
-            {% endif %}
-          </td>
-          {% endfor %}
-        </tr>
-        {% endfor %}
+      </tbody>
+      <!-- ホール tbody -->
+      <tbody id="emp-tbody-hall" class="{{ '' if pos == 'hall' else 'd-none' }}">
+        {{ render_emp_rows(employees_combined_hall, slot_ids_hall, 'hall') }}
+      </tbody>
+      <!-- キッチン tbody -->
+      <tbody id="emp-tbody-kitchen" class="{{ '' if pos == 'kitchen' else 'd-none' }}">
+        {{ render_emp_rows(employees_combined_kitchen, slot_ids_kitchen, 'kitchen') }}
       </tbody>
     </table>
   </div>
@@ -658,7 +651,7 @@
   <div class="d-flex gap-3 mt-2 small text-muted flex-wrap">
     <span><span class="chip-hall">H<sup style="font-size:.6rem">変</sup></span> 希望時間から変更</span>
     <span><span class="chip-hall opacity-75">H<sup style="font-size:.6rem">応</sup></span> 希望にない応援</span>
-    <span class="ms-auto">表示中：{{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
+    <span class="ms-auto" id="pos-label-footer">表示中：{{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
   </div>
   {% endif %}
 </div>
@@ -680,8 +673,6 @@
 <div class="modal fade" id="assignModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered" style="max-width:340px">
     <div class="modal-content asgn-modal-content">
-
-      <!-- ヘッダー -->
       <div class="modal-header border-secondary py-2 px-3">
         <div>
           <div class="fw-semibold" id="asgn-name" style="font-size:.95rem"></div>
@@ -689,29 +680,22 @@
         </div>
         <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
       </div>
-
       <div class="modal-body px-3 py-2">
-
         <!-- ① ポジション -->
         <div class="asgn-section">
           <div class="asgn-section-label">ポジション</div>
           <div class="d-flex gap-2">
-            <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-hall"
-                    onclick="selectPos('hall')">
+            <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-hall" onclick="selectPos('hall')">
               <i class="bi bi-people-fill d-block mb-1" style="font-size:1.4rem"></i>ホール
             </button>
-            <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-kitchen"
-                    onclick="selectPos('kitchen')">
+            <button class="asgn-pos-btn flex-grow-1 text-center" id="btn-kitchen" onclick="selectPos('kitchen')">
               <i class="bi bi-egg-fried d-block mb-1" style="font-size:1.4rem"></i>キッチン
             </button>
           </div>
         </div>
-
         <!-- ② 勤務時間 -->
         <div class="asgn-section">
           <div class="asgn-section-label">勤務時間</div>
-
-          <!-- シフト通り -->
           <label class="time-mode-opt" id="opt-default" onclick="setTimeMode('default')">
             <input type="radio" name="time-mode" value="default" checked>
             <div>
@@ -719,8 +703,6 @@
               <div class="time-mode-sub" id="shift-time-hint">—</div>
             </div>
           </label>
-
-          <!-- 時間指定 -->
           <label class="time-mode-opt" id="opt-custom" onclick="setTimeMode('custom')">
             <input type="radio" name="time-mode" value="custom">
             <div>
@@ -728,8 +710,6 @@
               <div class="time-mode-sub" id="custom-mode-sub">希望より短い時間や希望外の応援に</div>
             </div>
           </label>
-
-          <!-- 時間入力（custom選択時のみ表示） -->
           <div id="custom-time-section" style="display:none;margin-top:.5rem">
             <div class="mb-2" id="preset-chips"></div>
             <div class="d-flex align-items-center gap-1">
@@ -742,31 +722,26 @@
             </div>
           </div>
         </div>
-
         <!-- ③ 追加ボタン -->
         <div class="asgn-section">
           <button class="btn btn-primary w-100" id="btn-submit" onclick="doSubmit()">
             <i class="bi bi-person-check me-1"></i>担当として追加
           </button>
         </div>
-
         <!-- ④ コメント -->
         <div class="asgn-section">
           <div class="asgn-section-label">コメント（任意）</div>
           <textarea id="cell-note-input" rows="2" maxlength="100"
                     class="form-control form-control-sm"
                     style="resize:none;font-size:.82rem"
-                    placeholder="初日・オムレツ担当・休憩15:00〜 など（100文字以内）"
-                    maxlength="100"></textarea>
+                    placeholder="初日・オムレツ担当・休憩15:00〜 など（100文字以内）"></textarea>
         </div>
-
         <!-- ⑤ 担当を外す（割当済みの場合のみ） -->
         <div id="remove-section" class="asgn-section" style="display:none">
           <button class="btn btn-outline-danger w-100 btn-sm" onclick="doRemove()">
             <i class="bi bi-x-circle me-1"></i>担当を外す
           </button>
         </div>
-
       </div>
     </div>
   </div>
@@ -777,16 +752,60 @@ const IS_CONFIRMED      = {{ 'true' if period.status == 'confirmed' else 'false'
 const TOTAL_SHORTAGE    = {{ total_shortage }};
 const UNSUBMITTED_COUNT = {{ unsubmitted_count }};
 const PERIOD_ID         = {{ period.id }};
-// PDF/Excel出力と同じ並び順のスタッフIDリスト（タイムラインの並び替えに使用）
 const EXPORT_EMP_ORDER  = {{ export_emp_order | tojson }};
-// スタッフ個別コメントキャッシュ {empId_date: note}
 const CELL_NOTES = {
   {% for (emp_id, date), note in cell_notes.items() %}
   "{{ emp_id }}_{{ date }}": {{ note | tojson }},
   {% endfor %}
 };
 
-// ── タイムライン ─────────────────────────────────────
+// ── ポジション切替 ────────────────────────────────────────────
+let CURRENT_POS = {{ pos | tojson }};
+const STAFFING_DATA = {{ staffing_js | tojson }};
+
+function switchPos(newPos) {
+  if (CURRENT_POS === newPos) return;
+  CURRENT_POS = newPos;
+
+  document.getElementById('emp-tbody-hall').classList.toggle('d-none', newPos !== 'hall');
+  document.getElementById('emp-tbody-kitchen').classList.toggle('d-none', newPos !== 'kitchen');
+
+  document.querySelectorAll('.pos-tab-btn').forEach(btn => {
+    const active = btn.dataset.pos === newPos;
+    btn.className = `btn btn-sm pos-tab-btn ${active ? 'btn-success' : 'btn-outline-secondary'}`;
+  });
+
+  const footer = document.getElementById('pos-label-footer');
+  if (footer) footer.textContent = '表示中：' + (newPos === 'hall' ? 'ホール' : 'キッチン');
+
+  _updateHeaderBadges(newPos);
+  sessionStorage.setItem('schedPos_' + PERIOD_ID, newPos);
+}
+
+function _updateHeaderBadges(pos) {
+  document.querySelectorAll('thead th[data-date]').forEach(th => {
+    const ds  = th.dataset.date;
+    const stB = STAFFING_DATA[`${ds}_breakfast_${pos}`] || {};
+    const stD = STAFFING_DATA[`${ds}_dinner_${pos}`]    || {};
+
+    th.classList.remove('short-staff', 'short-leader');
+    if (stB.short_staff || stD.short_staff)       th.classList.add('short-staff');
+    else if (stB.short_leader || stD.short_leader) th.classList.add('short-leader');
+
+    const container = th.querySelector('.pos-count-badges');
+    if (!container) return;
+
+    const mkBadge = (st, icon, label) => {
+      if (st.count === undefined) return '';
+      const cls = st.short_staff ? 'count-short' : st.over_staff ? 'count-over' : st.short_leader ? 'count-leader' : 'count-ok';
+      const note = st.over_staff ? '（過剰）' : '';
+      return `<span class="count-badge ${cls}" title="${label}${note}"><i class="bi ${icon}"></i> ${st.count}/${st.min}</span>`;
+    };
+    container.innerHTML = mkBadge(stB, 'bi-sunrise', '朝食') + mkBadge(stD, 'bi-moon-stars', 'ディナー');
+  });
+}
+
+// ── タイムライン ──────────────────────────────────────────────
 const TL_ASGN = {
   {% for ds, slot_map in asgn_map.items() %}
   "{{ ds }}": {
@@ -824,7 +843,6 @@ const TL_ASGN = {
     } else {
       const todayTh = grid.querySelector('thead th.today-col');
       if (todayTh) {
-        // 名前列（sticky）の幅分だけ余白を引く
         const empColW = grid.querySelector('thead th.emp-col')?.offsetWidth || 90;
         grid.scrollLeft = Math.max(0, todayTh.offsetLeft - empColW - 8);
       }
@@ -834,22 +852,15 @@ const TL_ASGN = {
 
 function toggleSg(id) {
   const body    = document.getElementById(id);
-  const chevron = body.previousElementSibling.querySelector('.sg-chevron');
+  if (!body) return;
+  const header  = body.previousElementSibling;
+  const chevron = header?.querySelector('.sg-chevron');
   const open    = body.style.display === 'none';
   body.style.display = open ? 'flex' : 'none';
   if (chevron) chevron.classList.toggle('open', open);
 }
 
-function toggleShortage(header) {
-  const body    = document.getElementById('shortage-body');
-  const chevron = header.querySelector('.shortage-chevron');
-  const open    = body.style.display === 'none';
-  body.style.display = open ? 'block' : 'none';
-  chevron.classList.toggle('open', open);
-}
-
 // PDFプレビューは常に最新内容を表示させたいため、毎回キャッシュバスター付きURLで新規タブを開く
-// （ブラウザのPDFビューアが同一URLのタブを再利用し、編集前の内容を表示し続けるのを防ぐ）
 function openPdfPreview(el) {
   const url = el.href + (el.href.includes('?') ? '&' : '?') + '_=' + Date.now();
   window.open(url, '_blank', 'noopener');
@@ -863,7 +874,7 @@ function openTimeline(ds) {
   document.getElementById('timelineTitle').textContent =
     ds.slice(5).replace('-','/') + '（' + dow[d.getDay()] + '）　タイムライン';
 
-  const hours = Array.from({length:18}, (_,i)=>i+5); // 5〜22
+  const hours = Array.from({length:18}, (_,i)=>i+5);
   let html = '<table class="table table-bordered table-sm" style="min-width:500px;font-size:.78rem">';
   html += '<thead class="table-dark"><tr><th style="width:90px">スタッフ</th>';
   hours.forEach(h => { html += `<th class="text-center px-0" style="width:28px">${h}</th>`; });
@@ -873,7 +884,6 @@ function openTimeline(ds) {
     ...(day['breakfast'] || []).map(a=>({...a, slot:'breakfast'})),
     ...(day['dinner']    || []).map(a=>({...a, slot:'dinner'})),
   ];
-  // PDF/Excel出力と同じ並び順（キッチン社員→キッチンA・P→ホール社員→ホールA・P）でソート
   allItems.sort((a,b) => {
     let ia = EXPORT_EMP_ORDER.indexOf(a.empId);
     let ib = EXPORT_EMP_ORDER.indexOf(b.empId);
@@ -992,23 +1002,18 @@ function openAssignModal(cell) {
   document.getElementById('asgn-sub').textContent  =
     date.slice(5).replace('-', '/') + '（' + slotJp + '）';
 
-  // ポジション選択
-  selectPos(pos || '{{ pos }}');
+  selectPos(pos || CURRENT_POS);
 
-  // 「希望シフト通り」の有効/無効切替
   const hasReq = hasRequest === 'true';
   const optDef  = document.getElementById('opt-default');
   const radioDef = optDef.querySelector('input[type=radio]');
   radioDef.disabled = !hasReq;
   optDef.classList.toggle('disabled', !hasReq);
 
-  // 希望シフト時間ヒント
   document.getElementById('shift-time-hint').textContent = hasReq
     ? (shiftTime || '時間指定なし')
     : '希望シフト未提出';
 
-  // 「時間を指定する」の表記を、希望提出済みか否かで切り替える
-  // （希望あり→希望時間からの「変更」、希望なし→「応援」）
   if (hasReq) {
     document.getElementById('custom-mode-title').textContent = '時間を変更する';
     document.getElementById('custom-mode-sub').textContent   = '希望時間より短縮・延長する場合';
@@ -1017,20 +1022,16 @@ function openAssignModal(cell) {
     document.getElementById('custom-mode-sub').textContent   = '希望にない日に出勤してもらう場合';
   }
 
-  // プリセットチップ生成
   const presets = SLOT_PRESETS[slot] || [];
   document.getElementById('preset-chips').innerHTML = presets.map(p =>
     `<span class="preset-chip" onclick="applyPreset('${p.start}','${p.end}',this)">${p.label}</span>`
   ).join(' ');
 
-  // 時間モード初期化
   if (reinfStart && reinfEnd) {
-    // 既にカスタム時間で割当済み → 時間指定モード
     setTimeMode('custom');
     document.getElementById('reinf-start').value = reinfStart;
     document.getElementById('reinf-end').value   = reinfEnd;
   } else if (!hasReq) {
-    // 希望シフト未提出 → 時間指定モードを強制
     setTimeMode('custom');
     if (presets.length) applyPreset(presets[0].start, presets[0].end, null);
   } else {
@@ -1038,21 +1039,17 @@ function openAssignModal(cell) {
     if (presets.length) applyPreset(presets[0].start, presets[0].end, null);
   }
 
-  // 担当を外すボタン
   document.getElementById('remove-section').style.display =
     assigned === 'true' ? 'block' : 'none';
 
-  // 追加ボタンのラベル
   document.getElementById('btn-submit').innerHTML =
     `<i class="bi bi-person-check me-1"></i>${assigned === 'true' ? '担当を変更する' : '担当として追加'}`;
 
-  // コメント欄初期化
   const noteKey = `${cell.dataset.empId}_${cell.dataset.date}`;
   document.getElementById('cell-note-input').value = CELL_NOTES[noteKey] || cell.dataset.cellNote || '';
 
   if (!_modal) {
     _modal = new bootstrap.Modal(document.getElementById('assignModal'));
-    // モーダルを閉じる時にコメントを保存
     document.getElementById('assignModal').addEventListener('hide.bs.modal', _saveCellNote);
   }
   _modal.show();
@@ -1073,7 +1070,6 @@ function doSubmit() {
     document.getElementById('reinf-start').classList.remove('is-invalid');
     document.getElementById('reinf-end').classList.remove('is-invalid');
     document.getElementById('reinf-time-error').classList.add('d-none');
-    // 希望提出済みの日の時間変更は「応援」ではない（is_reinforcementは希望なしの場合のみtrue）
     const hasReq = d.hasRequest === 'true';
     callAssign({ employee_id: +d.empId, date: d.date, time_slot: d.slot,
                  position: _selectedPos, action: 'add',
@@ -1096,14 +1092,13 @@ function _saveCellNote() {
   const date    = _cell.dataset.date;
   const noteKey = `${empId}_${date}`;
   const prev    = CELL_NOTES[noteKey] || _cell.dataset.cellNote || '';
-  if (note === prev) return;  // 変更なしはスキップ
+  if (note === prev) return;
   CELL_NOTES[noteKey] = note;
   const td = _cell.closest('td');
   fetch(`/schedule/${PERIOD_ID}/cell_note`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ employee_id: empId, date, note })
   }).then(() => {
-    // セル内のバッジを即時更新（リロードなし）
     const badge = td.querySelector('.cell-note-badge');
     if (note) {
       const icon = '<i class="bi bi-chat-fill" style="font-size:.55rem"></i> ';
@@ -1121,20 +1116,137 @@ function _saveCellNote() {
   });
 }
 
-function callAssign(payload) {
-  const periodId = PERIOD_ID;
-  // スクロール位置を保存してリロード後に復元
-  const grid = document.querySelector('.sched-grid');
-  if (grid) {
-    sessionStorage.setItem('schedScroll',
-      JSON.stringify({ top: grid.scrollTop, left: grid.scrollLeft }));
+// ── リロードなし割当更新 ─────────────────────────────────────
+async function callAssign(payload) {
+  const btnSubmit = document.getElementById('btn-submit');
+  if (btnSubmit) { btnSubmit.disabled = true; btnSubmit.classList.add('btn-loading'); }
+
+  try {
+    const r = await fetch(`/schedule/${PERIOD_ID}/assign`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const res = await r.json();
+    if (!res.ok) {
+      showToast('エラー: ' + (res.error || '不明'), 'danger');
+      return;
+    }
+
+    _modal.hide();
+
+    // セルチップを即時更新
+    _updateCellChip(_cell, payload);
+
+    // 人員充足データを再取得してヘッダーバッジ＋不足グリッドを更新
+    try {
+      const sRes = await fetch(`/schedule/${PERIOD_ID}/staffing_json`);
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        Object.assign(STAFFING_DATA, sData.staffing);
+        _updateHeaderBadges(CURRENT_POS);
+        _refreshShortageGrid(sData.shortage_groups);
+      }
+    } catch(_) {
+      // 非クリティカル：次回ページ読み込み時に反映される
+    }
+  } finally {
+    if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.classList.remove('btn-loading'); }
   }
-  fetch(`/schedule/${periodId}/assign`, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload)
-  }).then(r => r.json()).then(res => {
-    if (res.ok) { _modal.hide(); location.reload(); }
-    else showToast('エラー: ' + (res.error || '不明'), 'danger');
+}
+
+function _updateCellChip(cell, payload) {
+  const { action, position, is_reinforcement, reinf_start, reinf_end } = payload;
+
+  if (action === 'add' && position === CURRENT_POS) {
+    cell.dataset.assigned   = 'true';
+    cell.dataset.pos        = position;
+    cell.dataset.reinfStart = reinf_start || '';
+    cell.dataset.reinfEnd   = reinf_end   || '';
+
+    const posLabel  = position === 'hall' ? 'H' : 'K';
+    const chipCls   = position === 'hall' ? 'chip-hall' : 'chip-kitchen';
+    const hasCustom = reinf_start && reinf_end;
+    const shiftTime = hasCustom
+      ? `${reinf_start}〜${reinf_end}`
+      : (cell.dataset.shiftTime || '');
+
+    const titleAttr = is_reinforcement ? 'title="希望にない応援"' : hasCustom ? 'title="希望時間から変更"' : '';
+    const sup       = is_reinforcement ? '<sup style="font-size:.6rem">応</sup>' : hasCustom ? '<sup style="font-size:.6rem">変</sup>' : '';
+
+    let html = `<span class="${chipCls}${is_reinforcement ? ' opacity-75' : ''}" ${titleAttr}>${posLabel}${sup}</span>`;
+    if (shiftTime) html += `<div style="font-size:.6rem;color:#475569;line-height:1.15">${shiftTime}</div>`;
+    cell.innerHTML = html;
+    cell.classList.remove('has-unassigned-request');
+
+  } else if (action === 'remove') {
+    cell.dataset.assigned   = 'false';
+    cell.dataset.pos        = '';
+    cell.dataset.reinfStart = '';
+    cell.dataset.reinfEnd   = '';
+
+    const hasRequest = cell.dataset.hasRequest === 'true';
+    const reqTime    = cell.dataset.shiftTime || '';
+
+    if (hasRequest) {
+      let html = `<span class="chip-unassigned" title="希望提出済み（${reqTime}）ですが、アサインされていません">希</span>`;
+      if (reqTime) html += `<div style="font-size:.6rem;color:#94a3b8;line-height:1.15">${reqTime}</div>`;
+      cell.innerHTML = html;
+      cell.classList.add('has-unassigned-request');
+    } else {
+      cell.innerHTML = '<span class="chip-empty">+</span>';
+      cell.classList.remove('has-unassigned-request');
+    }
+  }
+  // action==='add' && position !== CURRENT_POS → 別ポジション割当、当ビューの見た目は変わらず
+}
+
+function _refreshShortageGrid(groups) {
+  groups.forEach(g => {
+    const cell = document.querySelector(`.sg-cell[data-slot="${g.slot}"][data-pos="${g.pos}"]`);
+    if (!cell) return;
+
+    const state = g.has_short_staff ? 'staff' : g.has_short_leader ? 'leader' : 'ok';
+    cell.className = `sg-cell sg-${state}`;
+
+    const header = cell.querySelector('.sg-header');
+    let bodyEl   = cell.querySelector('.sg-body');
+    if (!header) return;
+
+    const cellId = `sg-dyn-${g.slot.replace(/\s/g,'')}-${g.pos.replace(/\s/g,'')}`;
+
+    if (state === 'ok') {
+      header.className = 'sg-header';
+      header.removeAttribute('onclick');
+      header.removeAttribute('tabindex');
+      header.removeAttribute('role');
+      header.onkeydown = null;
+      header.innerHTML = `
+        <span class="sg-label">${g.slot}<span style="opacity:.5;margin:0 2px">/</span>${g.pos}</span>
+        <i class="bi bi-check-circle-fill ms-auto" style="color:#22c55e;font-size:.9rem"></i>`;
+      if (bodyEl) bodyEl.style.display = 'none';
+    } else {
+      header.className = 'sg-header sg-expandable';
+      header.setAttribute('role', 'button');
+      header.setAttribute('tabindex', '0');
+      header.onclick  = () => toggleSg(cellId);
+      header.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') toggleSg(cellId); };
+      header.innerHTML = `
+        <span class="sg-label">${g.slot}<span style="opacity:.5;margin:0 2px">/</span>${g.pos}</span>
+        <span class="sg-count ms-auto">${g.short_count}日</span>
+        <i class="bi bi-chevron-down sg-chevron" style="font-size:.7rem"></i>`;
+
+      if (!bodyEl) {
+        bodyEl = document.createElement('div');
+        cell.appendChild(bodyEl);
+      }
+      bodyEl.id        = cellId;
+      bodyEl.className = 'sg-body';
+      bodyEl.style.display = 'none';
+      bodyEl.innerHTML = g.chips.map(c =>
+        `<span class="shortage-chip ${c.is_staff ? 'chip-staff' : 'chip-leader'}"
+               title="${c.count}名/最低${c.min}名">${c.label}</span>`
+      ).join('');
+    }
   });
 }
 
@@ -1183,17 +1295,19 @@ async function openHistory(periodId) {
 }
 
 function editReservation(el) {
-  if (el.querySelector('input')) return;  // 編集中は無視
+  if (el.querySelector('input')) return;
   const date = el.dataset.date;
   const curB = el.dataset.b === '0' ? '' : el.dataset.b;
   const curD = el.dataset.d === '0' ? '' : el.dataset.d;
   const orig = el.innerHTML;
   el.innerHTML = `
-    <div class="d-flex flex-column gap-1" style="min-width:54px">
+    <div class="d-flex flex-column gap-1" style="min-width:64px">
       <input type="number" min="0" max="999" class="form-control form-control-sm res-in-b"
-             style="font-size:.7rem;padding:1px 4px" placeholder="朝" value="${curB}">
+             style="font-size:.82rem;padding:4px 6px;min-height:34px;-moz-appearance:textfield"
+             placeholder="朝" value="${curB}">
       <input type="number" min="0" max="999" class="form-control form-control-sm res-in-d"
-             style="font-size:.7rem;padding:1px 4px" placeholder="夜" value="${curD}">
+             style="font-size:.82rem;padding:4px 6px;min-height:34px;-moz-appearance:textfield"
+             placeholder="夜" value="${curD}">
     </div>`;
   const inB = el.querySelector('.res-in-b');
   const inD = el.querySelector('.res-in-d');
@@ -1232,11 +1346,11 @@ function editReservation(el) {
 function editNote(el) {
   const date = el.dataset.date;
   const periodId = el.dataset.period;
-  const endpoint = el.dataset.endpoint || 'note';  // note=メモ1(全体) / staff_note=メモ2(社員)
+  const endpoint = el.dataset.endpoint || 'note';
   const current = el.textContent.trim();
   const input = document.createElement('input');
   input.type = 'text'; input.value = current;
-  input.maxLength = 200;  // 保存時の上限と揃える（超過分は黙って切り捨てられるため）
+  input.maxLength = 200;
   input.className = 'form-control form-control-sm'; input.style.minWidth = '80px';
   el.replaceWith(input); input.focus();
   function save() {
@@ -1246,7 +1360,10 @@ function editNote(el) {
     span.dataset.date = date;
     span.dataset.period = periodId;
     span.dataset.endpoint = endpoint;
+    span.setAttribute('role', 'button');
+    span.setAttribute('tabindex', '0');
     span.onclick = function(){ editNote(this); };
+    span.onkeydown = function(e){ if(e.key==='Enter') editNote(this); };
     span.textContent = note;
     input.replaceWith(span);
     fetch(`/schedule/${periodId}/${endpoint}`, {
@@ -1286,7 +1403,7 @@ function editNote(el) {
   </div>
 </div>
 
-<!-- 確定解除確認ダイアログ -->
+<!-- 確定済みシフト編集ダイアログ -->
 <div class="modal fade" id="unconfirmDialog" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
     <div class="modal-content">
@@ -1294,7 +1411,8 @@ function editNote(el) {
         <i class="bi bi-lock-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
         <div class="fw-semibold mb-1">確定済みシフトです</div>
         <div style="color:var(--text-muted);font-size:.85rem;margin-bottom:1.25rem">
-          確定を解除して編集しますか？
+          編集するには確定を解除する必要があります。<br>
+          <span style="font-size:.78rem">解除後にセルをタップして変更できます。</span>
         </div>
         <div class="d-flex gap-2">
           <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
