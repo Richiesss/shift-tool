@@ -75,7 +75,19 @@
               <th class="text-center">朝食</th>
               <th class="text-center">ディナー</th>
               {% if forecast_enabled %}
-              <th class="text-center" style="width:64px" title="特殊なイベント等で客数が大きく変動する日（予測モデルの学習・特徴量に使用）">特殊日</th>
+              <th class="text-center" style="width:72px">
+                <i class="bi bi-star-fill text-warning" style="font-size:.8rem"></i>
+                <span class="ms-1">特殊日</span>
+                <span tabindex="0"
+                      style="display:inline-flex;align-items:center;justify-content:center;
+                             width:15px;height:15px;border-radius:50%;
+                             background:rgba(14,165,233,.12);color:var(--accent);
+                             font-size:.6rem;font-weight:700;border:1px solid rgba(14,165,233,.3);
+                             cursor:pointer;vertical-align:middle;margin-left:3px"
+                      data-bs-toggle="popover" data-bs-trigger="click focus" data-bs-placement="bottom"
+                      data-bs-title="特殊日とは？"
+                      data-bs-content="運動会・地域イベント・悪天候など、通常と大きく異なる客数になった日にチェックします。客数予測モデルがこの日を「例外」として学習し、予測精度が上がります。">?</span>
+              </th>
               {% endif %}
             </tr>
           </thead>
@@ -100,6 +112,15 @@
               <td>
                 {{ d.strftime('%m/%d') }}
                 <small class="text-muted">{{ ['月','火','水','木','金','土','日'][dow] }}{{ '(祝)' if is_holiday else '' }}</small>
+                {% if forecast_enabled and cnt.get('is_special_day') %}
+                <span class="special-day-badge ms-1" title="特殊日">
+                  <i class="bi bi-star-fill text-warning" style="font-size:.75rem"></i>
+                </span>
+                {% elif forecast_enabled %}
+                <span class="special-day-badge ms-1" style="display:none">
+                  <i class="bi bi-star-fill text-warning" style="font-size:.75rem"></i>
+                </span>
+                {% endif %}
               </td>
               <td>
                 <div class="d-flex align-items-center gap-1">
@@ -139,9 +160,13 @@
               </td>
               {% if forecast_enabled %}
               <td class="text-center align-middle">
-                <input type="checkbox" class="form-check-input" name="special_{{ ds }}" value="1"
-                       {{ 'checked' if cnt.get('is_special_day') else '' }}
-                       onchange="window._formDirty = true">
+                <label style="cursor:pointer;margin:0" title="クリックで特殊日にマーク（運動会・イベント・悪天候など）">
+                  <input type="checkbox" class="d-none special-day-cb" name="special_{{ ds }}" value="1"
+                         {{ 'checked' if cnt.get('is_special_day') else '' }}
+                         onchange="toggleSpecialDay(this)">
+                  <i class="bi {{ 'bi-star-fill text-warning' if cnt.get('is_special_day') else 'bi-star text-muted' }}"
+                     style="font-size:1.25rem;transition:color .15s"></i>
+                </label>
               </td>
               {% endif %}
             </tr>
@@ -154,6 +179,10 @@
   <div class="small text-muted mt-2">
     <span class="badge bg-danger me-1">↑閾値</span>閾値以上で増員が推奨されます
     <span class="badge bg-success ms-2 me-1">↓閾値</span>閾値未満
+    {% if forecast_enabled %}
+    <span class="ms-2"><i class="bi bi-star-fill text-warning"></i> 特殊日</span>
+    <span class="ms-1">— イベント・悪天候など通常と異なる客数の日（予測モデルが例外として学習）</span>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
@@ -190,6 +219,18 @@ function applyForecast() {
       inputD.dispatchEvent(new Event('input', { bubbles: true }));
     }
   });
+}
+
+function toggleSpecialDay(cb) {
+  window._formDirty = true;
+  const icon = cb.nextElementSibling;
+  icon.className = cb.checked
+    ? 'bi bi-star-fill text-warning'
+    : 'bi bi-star text-muted';
+  icon.style.fontSize = '1.25rem';
+  // 日付セルの★バッジを同期
+  const badge = cb.closest('tr').querySelector('.special-day-badge');
+  if (badge) badge.style.display = cb.checked ? '' : 'none';
 }
 
 async function applyDowAutofill() {
@@ -231,5 +272,16 @@ async function applyDowAutofill() {
     btn.innerHTML = origHtml;
   }
 }
+// 特殊日ヘッダーのポップオーバー初期化
+document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+  new bootstrap.Popover(el, { html: false, sanitize: true });
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('[data-bs-toggle="popover"]') && !e.target.closest('.popover')) {
+    document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+      bootstrap.Popover.getInstance(el)?.hide();
+    });
+  }
+});
 </script>
 {% endblock %}
