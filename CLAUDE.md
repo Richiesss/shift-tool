@@ -87,9 +87,27 @@ python scripts/migrate_to_supabase.py --pg-url "postgresql://postgres.[username]
 git add <変更ファイル>
 git commit -m "..."
 git push origin main
-git push hf main
+# HF へのデプロイは下記「HuggingFace Spaces デプロイ」を参照
 ```
 
 リモートは2つある：
 - `origin` — GitHub (https://github.com/Richiesss/shift-tool.git)
 - `hf` — HuggingFace Spaces (本番環境)
+
+### HuggingFace Spaces デプロイ
+
+HF は Git LFS / バイナリファイルを拒否するため、**`hf-deploy` ブランチ**を経由してデプロイする。
+
+```bash
+# hf-deploy ブランチに移動して最新 main から差分を cherry-pick
+git checkout hf-deploy
+git cherry-pick <コミットハッシュ>   # バイナリ追加コミットは除外
+git push hf hf-deploy:main
+
+# 完了後 main に戻る
+git checkout main
+```
+
+`static/help/*.jpg` は GitHub (origin) 側に Git LFS で管理し、テンプレートは
+`https://raw.githubusercontent.com/Richiesss/shift-tool/main/static/help/%23N.jpg`
+の GitHub raw URL で参照する（HF 側にバイナリを含めない）。
