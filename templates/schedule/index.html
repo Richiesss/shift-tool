@@ -161,7 +161,7 @@
   /* 希望提出済みだが未アサイン */
   .chip-unassigned { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   /* 1セル内に朝食・ディナーを上下に並べて表示 */
-  .cell-half { display: block; padding: 2px 4px; cursor: pointer; border-radius: 4px; transition: background var(--transition); }
+  .cell-half { display: block; padding: 4px; cursor: pointer; border-radius: 4px; transition: background var(--transition); min-height: 26px; }
   .cell-half:hover { background: rgba(148, 163, 184, 0.08); }
   .cell-half + .cell-half { border-top: 1px dashed var(--border); margin-top: 2px; padding-top: 2px; border-radius: 0 0 4px 4px; }
   .cell-half-na { color: var(--text-muted); cursor: default; font-size: .7rem; }
@@ -213,7 +213,7 @@
     border-radius: 10px; padding: .65rem .4rem; font-size: .82rem;
     transition: all var(--transition); cursor: pointer;
   }
-  .asgn-pos-btn:hover  { background: #1e40af; border-color: #1e40af; color: white; }
+  .asgn-pos-btn:hover  { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3); color: white; }
   .asgn-pos-btn.hall   { background: #1d4ed8; border-color: #1d4ed8; color: white; }
   .asgn-pos-btn.kitchen{ background: #15803d; border-color: #15803d; color: white; }
   .reinf-time {
@@ -244,6 +244,20 @@
   .time-mode-opt input[type=radio] { margin-top: 3px; accent-color: #38bdf8; flex-shrink: 0; }
   .time-mode-title { font-size: .88rem; font-weight: 600; color: var(--text); line-height: 1.3; }
   .time-mode-sub   { font-size: .73rem; color: var(--text-muted); }
+
+  /* ── インライン編集ヒント ─────────────────────────────────── */
+  .res-cell  { cursor: pointer; transition: all var(--transition); border-radius: 4px; }
+  .res-cell:hover  { background: rgba(14,165,233,.08); outline: 1px dashed rgba(14,165,233,.3); }
+  .note-cell { cursor: pointer; min-height: 18px; transition: all var(--transition); border-radius: 4px; display: block; }
+  .note-cell:hover { background: rgba(14,165,233,.08); outline: 1px dashed rgba(14,165,233,.3); }
+
+  /* ── モーダル内フォームコントロール（CSSカスタムプロパティで自動ダーク） ── */
+  .asgn-modal-content .form-control,
+  .asgn-modal-content .form-control:focus {
+    background: var(--bg-card);
+    border-color: var(--border);
+    color: var(--text);
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -427,6 +441,15 @@
     {% endfor %}
   </div>
 
+  <!-- コンパクト凡例 -->
+  <div class="d-flex gap-3 mb-1 small text-muted flex-wrap">
+    <span><i class="bi bi-sunrise me-1"></i>上段＝朝食　<i class="bi bi-moon-stars ms-1 me-1"></i>下段＝ディナー</span>
+    <span><span class="chip-hall px-1">H</span> ホール</span>
+    <span><span class="chip-kitchen px-1">K</span> キッチン</span>
+    <span><span class="chip-unassigned px-1">希</span> 希望提出・未アサイン</span>
+    <span class="text-secondary">— 対象外</span>
+  </div>
+
   <!-- シフトグリッド（朝食・ディナーを1つの表にまとめて表示） -->
   <div class="sched-grid {{ 'sched-locked' if period.status == 'confirmed' else '' }}">
     <table class="table table-bordered table-sm mb-0">
@@ -481,7 +504,7 @@
           {% set res_b = reservation_counts.get(ds, {}).get('breakfast', 0) %}
           {% set res_d = reservation_counts.get(ds, {}).get('dinner', 0) %}
           <td class="text-center {{ day_cls }} {{ 'today-col' if ds == today else '' }}" style="font-size:.7rem;line-height:1.3;color:#94a3b8">
-            <div class="res-cell" style="cursor:pointer" title="クリックで予約客数を編集（朝食見込・夜予約欄に印字されます）"
+            <div class="res-cell" title="クリックで予約客数を編集（朝食見込・夜予約欄に印字されます）"
                  data-date="{{ ds }}" data-b="{{ res_b }}" data-d="{{ res_d }}"
                  onclick="editReservation(this)">
               <div><i class="bi bi-sunrise"></i> <span class="res-b">{{ res_b if res_b else '—' }}</span></div>
@@ -500,7 +523,7 @@
           {% set is_holiday = ds in holidays %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           <td class="text-center {{ day_cls }}" style="min-width:70px">
-            <span class="note-cell d-block small text-muted" style="cursor:pointer;min-height:18px"
+            <span class="note-cell small text-muted"
               data-date="{{ ds }}" data-period="{{ period.id }}" data-endpoint="note"
               onclick="editNote(this)">{{ notes.get(ds, '') or '' }}</span>
           </td>
@@ -515,7 +538,7 @@
           {% set is_holiday = ds in holidays %}
           {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
           <td class="text-center {{ day_cls }}" style="min-width:70px">
-            <span class="note-cell d-block small text-muted" style="cursor:pointer;min-height:18px"
+            <span class="note-cell small text-muted"
               data-date="{{ ds }}" data-period="{{ period.id }}" data-endpoint="staff_note"
               onclick="editNote(this)">{{ staff_notes.get(ds, '') or '' }}</span>
           </td>
@@ -600,15 +623,10 @@
     </table>
   </div>
 
-  <!-- 凡例 -->
+  <!-- 凡例（補足のみ） -->
   <div class="d-flex gap-3 mt-2 small text-muted flex-wrap">
-    <span><i class="bi bi-sunrise me-1"></i>上段＝朝食　<i class="bi bi-moon-stars ms-2 me-1"></i>下段＝ディナー</span>
-    <span><span class="chip-hall">H</span> ホール出勤</span>
-    <span><span class="chip-kitchen">K</span> キッチン出勤</span>
-    <span><span class="chip-unassigned">希</span> 希望提出済み・未アサイン</span>
     <span><span class="chip-hall">H<sup style="font-size:.6rem">変</sup></span> 希望時間から変更</span>
     <span><span class="chip-hall opacity-75">H<sup style="font-size:.6rem">応</sup></span> 希望にない応援</span>
-    <span class="text-secondary">— 該当なし</span>
     <span class="ms-auto">表示中：{{ 'ホール' if pos == 'hall' else 'キッチン' }}</span>
   </div>
   {% endif %}
@@ -706,7 +724,7 @@
           <div class="asgn-section-label">コメント（任意）</div>
           <textarea id="cell-note-input" rows="2" maxlength="100"
                     class="form-control form-control-sm"
-                    style="background:#0f172a;border-color:#334155;color:#e2e8f0;resize:none;font-size:.82rem"
+                    style="resize:none;font-size:.82rem"
                     placeholder="初日・オムレツ担当・休憩15:00〜 など（100文字以内）"
                     maxlength="100"></textarea>
         </div>
@@ -932,9 +950,7 @@ function openConfirmDialog() {
 
 function openAssignModal(cell) {
   if (IS_CONFIRMED) {
-    if (confirm('このシフトは確定済みです。\n確定を解除して編集しますか？')) {
-      document.getElementById('unconfirm-form').submit();
-    }
+    new bootstrap.Modal(document.getElementById('unconfirmDialog')).show();
     return;
   }
   _cell = cell;
@@ -1195,8 +1211,7 @@ function editNote(el) {
   function save() {
     const note = input.value.trim();
     const span = document.createElement('span');
-    span.className = 'note-cell d-block small text-muted';
-    span.style.cssText = 'cursor:pointer;min-height:18px';
+    span.className = 'note-cell small text-muted';
     span.dataset.date = date;
     span.dataset.period = periodId;
     span.dataset.endpoint = endpoint;
@@ -1235,6 +1250,28 @@ function editNote(el) {
         <button type="button" class="btn btn-success btn-sm" id="btn-do-confirm">
           <i class="bi bi-check-lg me-1"></i>確定する
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 確定解除確認ダイアログ -->
+<div class="modal fade" id="unconfirmDialog" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body p-4 text-center">
+        <i class="bi bi-lock-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
+        <div class="fw-semibold mb-1">確定済みシフトです</div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-bottom:1.25rem">
+          確定を解除して編集しますか？
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-warning flex-grow-1"
+                  onclick="document.getElementById('unconfirm-form').submit()">
+            <i class="bi bi-lock-fill me-1"></i>確定解除
+          </button>
+        </div>
       </div>
     </div>
   </div>
