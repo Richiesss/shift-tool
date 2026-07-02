@@ -9,7 +9,6 @@ class EmploymentType(str, Enum):
         return {"full_time": "正社員", "part_time": "アルバイト/パート"}[self.value]
 
 
-
 class SkillLevel(str, Enum):
     LEADER = "leader"
     VETERAN = "veteran"

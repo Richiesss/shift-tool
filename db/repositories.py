@@ -6,7 +6,11 @@ from db.database import get_connection, Connection
 from models.employee import Employee
 from models.schedule import ShiftRequest, ShiftAssignment, SchedulePeriod
 from utils.constants import EmploymentType, SkillLevel, TimeSlot, Position, PrimaryPosition
+from utils.shift_patterns import default_pattern_from_fixed
 from cache import cache
+
+# SQLite の strftime('%w') は 0=日..6=土、Python の weekday() は 0=月..6=日
+_SQLITE_TO_PY_DOW: dict[int, int] = {0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
 
 
 # ── 従業員 ──────────────────────────────────────────────────────────────
@@ -21,7 +25,7 @@ def get_all_employees(active_only: bool = True) -> list[Employee]:
         conn.close()
         return []
 
-    employees = [_row_to_employee_preloaded(row) for row in rows]
+    employees = [_row_to_employee(row) for row in rows]
     conn.close()
     return employees
 
@@ -32,7 +36,7 @@ def get_employee(employee_id: int) -> Optional[Employee]:
     if not row:
         conn.close()
         return None
-    emp = _row_to_employee(row, conn)
+    emp = _row_to_employee(row)
     conn.close()
     return emp
 
@@ -180,47 +184,11 @@ def reorder_employees(ordered_ids: list[int]):
     cache.delete_memoized(get_all_employees)
 
 
-def _row_to_employee_preloaded(row) -> Employee:
-    eid = row["id"]
+def _row_to_employee(row) -> Employee:
     keys = row.keys()
-    pp_val   = row["primary_position"]   if "primary_position"   in keys and row["primary_position"] else None
-    op_val   = row["output_position"]    if "output_position"    in keys and row["output_position"]  else None
-    pt_val   = row["primary_timeslot"]   if "primary_timeslot"   in keys and row["primary_timeslot"] else None
-    return Employee(
-        id=eid, name=row["name"],
-        employment_type=EmploymentType(row["employment_type"]),
-        hall_skill_breakfast=SkillLevel(row["hall_skill_breakfast"]),
-        hall_skill_dinner=SkillLevel(row["hall_skill_dinner"]),
-        kitchen_skill_breakfast=SkillLevel(row["kitchen_skill_breakfast"]),
-        kitchen_skill_dinner=SkillLevel(row["kitchen_skill_dinner"]),
-        primary_position=PrimaryPosition(pp_val) if pp_val else None,
-        output_position=PrimaryPosition(op_val) if op_val else None,
-        primary_timeslot=TimeSlot(pt_val) if pt_val else None,
-        can_work_both_positions=bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False,
-        can_open=bool(row["can_open"]) if "can_open" in keys else False,
-        can_cleanup=bool(row["can_cleanup"]) if "can_cleanup" in keys else False,
-        always_available_breakfast=bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False,
-        always_available_dinner=bool(row["always_available_dinner"]) if "always_available_dinner" in keys else False,
-        hourly_wage=int(row["hourly_wage"]) if "hourly_wage" in keys and row["hourly_wage"] else 0,
-        has_social_insurance=bool(row["has_social_insurance"]) if "has_social_insurance" in keys else False,
-        si_allow_short_shift=bool(row["si_allow_short_shift"]) if "si_allow_short_shift" in keys else False,
-        is_active=bool(row["is_active"]),
-    )
-
-
-def _row_to_employee(row, conn) -> Employee:
-    keys = row.keys()
-    pp_val   = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
-    op_val   = row["output_position"]  if "output_position"  in keys and row["output_position"]  else None
-    pt_val   = row["primary_timeslot"] if "primary_timeslot" in keys and row["primary_timeslot"] else None
-    both_val = bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False
-    open_val    = bool(row["can_open"])    if "can_open"    in keys else False
-    cleanup_val = bool(row["can_cleanup"]) if "can_cleanup" in keys else False
-    avail_b_val = bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False
-    avail_d_val = bool(row["always_available_dinner"])    if "always_available_dinner"    in keys else False
-    wage_val  = int(row["hourly_wage"])  if "hourly_wage" in keys and row["hourly_wage"] else 0
-    si_val    = bool(row["has_social_insurance"]) if "has_social_insurance" in keys else False
-    si_short_val = bool(row["si_allow_short_shift"]) if "si_allow_short_shift" in keys else False
+    pp_val  = row["primary_position"] if "primary_position" in keys and row["primary_position"] else None
+    op_val  = row["output_position"]  if "output_position"  in keys and row["output_position"]  else None
+    pt_val  = row["primary_timeslot"] if "primary_timeslot" in keys and row["primary_timeslot"] else None
     return Employee(
         id=row["id"],
         name=row["name"],
@@ -231,15 +199,15 @@ def _row_to_employee(row, conn) -> Employee:
         kitchen_skill_dinner=SkillLevel(row["kitchen_skill_dinner"]),
         primary_position=PrimaryPosition(pp_val) if pp_val else None,
         output_position=PrimaryPosition(op_val) if op_val else None,
-        can_work_both_positions=both_val,
-        can_open=open_val,
-        can_cleanup=cleanup_val,
-        always_available_breakfast=avail_b_val,
-        always_available_dinner=avail_d_val,
-        hourly_wage=wage_val,
-        has_social_insurance=si_val,
-        si_allow_short_shift=si_short_val,
         primary_timeslot=TimeSlot(pt_val) if pt_val else None,
+        can_work_both_positions=bool(row["can_work_both_positions"]) if "can_work_both_positions" in keys else False,
+        can_open=bool(row["can_open"])       if "can_open"       in keys else False,
+        can_cleanup=bool(row["can_cleanup"]) if "can_cleanup"     in keys else False,
+        always_available_breakfast=bool(row["always_available_breakfast"]) if "always_available_breakfast" in keys else False,
+        always_available_dinner=bool(row["always_available_dinner"])       if "always_available_dinner"    in keys else False,
+        hourly_wage=int(row["hourly_wage"])   if "hourly_wage" in keys and row["hourly_wage"] else 0,
+        has_social_insurance=bool(row["has_social_insurance"]) if "has_social_insurance" in keys else False,
+        si_allow_short_shift=bool(row["si_allow_short_shift"]) if "si_allow_short_shift" in keys else False,
         is_active=bool(row["is_active"]),
     )
 
@@ -392,7 +360,6 @@ def get_shift_requests(period_id: int) -> list[ShiftRequest]:
             ))
         else:
             # 旧データ（breakfast/dinner boolean）からパターンを推定
-            from utils.shift_patterns import default_pattern_from_fixed
             b = bool(r["breakfast"]) if "breakfast" in keys else False
             d = bool(r["dinner"]) if "dinner" in keys else False
             result.append(ShiftRequest(
@@ -814,14 +781,12 @@ def get_employee_dow_patterns(emp_id: int) -> dict[int, list[str]]:
         (emp_id,)
     ).fetchall()
     conn.close()
-    # SQLite strftime('%w'): 0=日,1=月..6=土 → Python weekday: 0=月..6=日
-    sqlite_to_py = {0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
     dow_counts: dict[int, dict[str, int]] = {}
     for r in rows:
         dow_val = r["dow"]
         if dow_val is None:
             continue
-        py_dow = sqlite_to_py.get(int(dow_val))
+        py_dow = _SQLITE_TO_PY_DOW.get(int(dow_val))
         if py_dow is None:
             continue
         pid = r["pattern_id"]
