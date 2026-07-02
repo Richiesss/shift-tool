@@ -75,3 +75,27 @@ self.addEventListener("fetch", e => {
     e.respondWith(handleOther(e.request));
   }
 });
+
+// ── Web Push 通知（管理者向けβ） ──────────────────────────────────────
+self.addEventListener("push", e => {
+  let title = "SDU-Shift";
+  let body  = "";
+  try {
+    const data = e.data?.json() ?? {};
+    title = data.title ?? title;
+    body  = data.body  ?? body;
+  } catch {}
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon:  "/static/icons/icon-192.png",
+      badge: "/static/icons/icon-192.png",
+      tag:   "sdu-shift-admin",
+    })
+  );
+});
+
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  e.waitUntil(clients.openWindow("/"));
+});

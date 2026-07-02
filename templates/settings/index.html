@@ -462,6 +462,35 @@
         </div>
       </div>
 
+      <!-- 機能：Web Push 通知（管理者向けβ） -->
+      <div class="border-top pt-3 mt-3" style="border-color: var(--border) !important">
+        <div class="d-flex align-items-center mb-2">
+          <div class="fw-semibold small">管理者向け Web Push 通知（β）</div>
+          <span class="help-btn" data-bs-toggle="popover" data-bs-trigger="click" data-bs-placement="bottom"
+                data-bs-title="Web Push 通知（β）"
+                data-bs-content="シフト確定時・スタッフが希望シフトを提出したときに、このデバイスへリアルタイム通知を送る機能です。HTTPS 環境・対応ブラウザのみで動作します。購読するとブラウザを閉じていても通知が届きます。">?</span>
+        </div>
+        <div id="push-status" class="d-flex align-items-center gap-2 p-2 rounded-2 border mb-2"
+             style="background-color: var(--card-bg-hover); border-color: var(--border) !important; font-size:.85rem">
+          <span id="push-badge" class="badge bg-secondary"><i class="bi bi-bell-slash-fill me-1"></i>未登録</span>
+          <span id="push-status-text" class="text-muted small">読み込み中…</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-primary btn-sm" id="push-subscribe-btn" onclick="subscribePush()" disabled>
+            <i class="bi bi-bell-fill me-1"></i>このデバイスで通知を受け取る
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="push-unsubscribe-btn" onclick="unsubscribePush()" style="display:none">
+            <i class="bi bi-bell-slash me-1"></i>通知を解除する
+          </button>
+          <button type="button" class="btn btn-outline-info btn-sm" id="push-test-btn" onclick="sendTestPush()" style="display:none">
+            <i class="bi bi-send me-1"></i>テスト通知を送る
+          </button>
+        </div>
+        <div class="text-muted small mt-2">
+          ※ HTTPS 環境・Chrome / Edge / Firefox などの対応ブラウザが必要です。iOS Safari は現時点では非対応です。
+        </div>
+      </div>
+
     </div>
   </div>
 </form>
@@ -558,5 +587,107 @@
     input.type = show ? 'text' : 'password';
     icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
   }
+
+  // ── Web Push 通知（β） ────────────────────────────────────────────
+  let _swReg = null;
+
+  async function initPushUI() {
+    const badge  = document.getElementById('push-badge');
+    const text   = document.getElementById('push-status-text');
+    const subBtn = document.getElementById('push-subscribe-btn');
+    const unBtn  = document.getElementById('push-unsubscribe-btn');
+    const testBtn = document.getElementById('push-test-btn');
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      badge.className = 'badge bg-warning text-dark';
+      badge.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>非対応';
+      text.textContent = 'このブラウザは Web Push に対応していません';
+      return;
+    }
+
+    try {
+      _swReg = await navigator.serviceWorker.ready;
+      const sub = await _swReg.pushManager.getSubscription();
+      if (sub) {
+        badge.className = 'badge bg-success';
+        badge.innerHTML = '<i class="bi bi-bell-fill me-1"></i>通知ON';
+        text.textContent = 'このデバイスで通知を受け取る設定になっています';
+        subBtn.style.display = 'none';
+        unBtn.style.display  = '';
+        testBtn.style.display = '';
+      } else {
+        badge.className = 'badge bg-secondary';
+        badge.innerHTML = '<i class="bi bi-bell-slash-fill me-1"></i>未登録';
+        text.textContent = '通知の購読が未設定です';
+        subBtn.disabled = false;
+      }
+    } catch (e) {
+      text.textContent = '状態確認エラー: ' + e.message;
+    }
+  }
+
+  async function subscribePush() {
+    const subBtn = document.getElementById('push-subscribe-btn');
+    subBtn.disabled = true;
+    subBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>購読中…';
+    try {
+      const keyResp = await fetch('/push/vapid-public-key');
+      const { publicKey } = await keyResp.json();
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        alert('通知の許可が得られませんでした。ブラウザの設定を確認してください。');
+        subBtn.disabled = false;
+        subBtn.innerHTML = '<i class="bi bi-bell-fill me-1"></i>このデバイスで通知を受け取る';
+        return;
+      }
+      const sub = await _swReg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      await fetch('/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+      initPushUI();
+    } catch (e) {
+      alert('購読に失敗しました: ' + e.message);
+      subBtn.disabled = false;
+      subBtn.innerHTML = '<i class="bi bi-bell-fill me-1"></i>このデバイスで通知を受け取る';
+    }
+  }
+
+  async function unsubscribePush() {
+    const sub = await _swReg.pushManager.getSubscription();
+    if (!sub) { initPushUI(); return; }
+    await fetch('/push/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+    await sub.unsubscribe();
+    initPushUI();
+  }
+
+  async function sendTestPush() {
+    const btn = document.getElementById('push-test-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+    try {
+      await fetch('/push/send-test', { method: 'POST' });
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send me-1"></i>テスト通知を送る';
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = window.atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
+  document.addEventListener('DOMContentLoaded', initPushUI);
 </script>
 {% endblock %}

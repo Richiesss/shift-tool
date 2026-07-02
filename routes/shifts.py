@@ -272,6 +272,18 @@ def save(period_id):
     repo.save_shift_requests(period_id, new_requests)
     flash("希望シフトを保存しました", "success")
 
+    # 管理者に Push 通知を送る（1名分保存時のみ）
+    if emp_id_filter is not None:
+        emp_name = next((e.name for e in employees if e.id == emp_id_filter), "スタッフ")
+        try:
+            from routes.push import _send_push_notification
+            _send_push_notification(
+                "希望シフト提出",
+                f"{emp_name} さんが {period.start_date}〜{period.end_date} の希望シフトを提出しました",
+            )
+        except Exception:
+            pass
+
     # 1人モードなら次の従業員へ
     next_idx = request.form.get("next_emp_idx", type=int)
     if next_idx is not None:
