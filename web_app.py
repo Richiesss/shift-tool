@@ -94,8 +94,7 @@ def create_app():
     def require_login():
         if not APP_PASSWORD:
             return  # パスワード未設定なら全開放
-        exempt = {"auth.login", "auth.login_post", "static", "pwa.service_worker", "pwa.offline",
-                  "push.vapid_public_key", "push.subscribe", "push.unsubscribe", "push.send_test"}
+        exempt = {"auth.login", "auth.login_post", "static", "pwa.service_worker", "pwa.offline"}
         if request.endpoint in exempt:
             return
         if not session.get("authenticated") or session.get("sv") != SESSION_VERSION:
@@ -125,7 +124,6 @@ def create_app():
     from routes.export_routes import bp as export_bp
     from routes.help_routes import bp as help_bp
     from routes.pwa_routes import bp as pwa_bp
-    from routes.push import bp as push_bp
 
     app.register_blueprint(emp_bp)
     app.register_blueprint(shifts_bp)
@@ -136,7 +134,6 @@ def create_app():
     app.register_blueprint(export_bp)
     app.register_blueprint(help_bp)
     app.register_blueprint(pwa_bp)
-    app.register_blueprint(push_bp)
 
     @app.teardown_appcontext
     def close_db(error):

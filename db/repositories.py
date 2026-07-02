@@ -1183,35 +1183,6 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
     return result
 
 
-# ── Web Push サブスクリプション ──────────────────────────────────────────
-
-def get_push_subscriptions() -> list[dict]:
-    """登録済みの管理者 Push サブスクリプションを全件返す"""
-    conn = get_connection()
-    rows = conn.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions").fetchall()
-    conn.close()
-    return [{"endpoint": r["endpoint"], "p256dh": r["p256dh"], "auth": r["auth"]} for r in rows]
-
-
-def save_push_subscription(endpoint: str, p256dh: str, auth: str) -> None:
-    conn = get_connection()
-    conn.execute(
-        """INSERT INTO push_subscriptions (endpoint, p256dh, auth)
-           VALUES (?,?,?)
-           ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth""",
-        (endpoint, p256dh, auth)
-    )
-    conn.commit()
-    conn.close()
-
-
-def delete_push_subscription(endpoint: str) -> None:
-    conn = get_connection()
-    conn.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
-    conn.commit()
-    conn.close()
-
-
 # ── Google API 連携 ───────────────────────────────────────────────────────
 
 def get_google_token() -> str | None:

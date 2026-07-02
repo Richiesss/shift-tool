@@ -662,14 +662,6 @@ def confirm(period_id):
         period.status = "confirmed"
         repo.save_period(period)
         flash("シフトを確定しました", "success")
-        try:
-            from routes.push import _send_push_notification
-            _send_push_notification(
-                "シフト確定",
-                f"{period.start_date}〜{period.end_date} のシフトが確定されました",
-            )
-        except Exception:
-            pass
     return redirect(url_for("schedule.index", period_id=period_id))
 
 
