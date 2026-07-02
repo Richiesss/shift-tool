@@ -219,7 +219,26 @@
 
 <div class="content" style="max-width:480px;margin:0 auto">
 
-  {# ───────────── 1. 今日の状況 ───────────── #}
+  {# ───────────── 1. TODOリスト ───────────── #}
+  <div class="section-label">TODO</div>
+  {% if todos %}
+    {% for t in todos %}
+    <a href="{{ t.url }}" class="todo-item todo-{{ t.level }}">
+      <i class="bi {{ t.icon }} todo-icon"></i>
+      <div>
+        <div class="todo-text">{{ t.text }}</div>
+        {% if t.sub %}<div class="todo-sub">{{ t.sub }}</div>{% endif %}
+      </div>
+      <i class="bi bi-chevron-right todo-arrow"></i>
+    </a>
+    {% endfor %}
+  {% else %}
+  <div class="todo-all-ok">
+    <i class="bi bi-check-circle-fill"></i>対応が必要な項目はありません
+  </div>
+  {% endif %}
+
+  {# ───────────── 2. 今日の状況 ───────────── #}
   <div class="section-label">今日の状況</div>
   <div class="db-card-dark">
     <div class="today-header">
@@ -298,25 +317,6 @@
       {% endif %}
     {% endif %}
   </div>
-
-  {# ───────────── 2. TODOリスト ───────────── #}
-  <div class="section-label">TODO</div>
-  {% if todos %}
-    {% for t in todos %}
-    <a href="{{ t.url }}" class="todo-item todo-{{ t.level }}">
-      <i class="bi {{ t.icon }} todo-icon"></i>
-      <div>
-        <div class="todo-text">{{ t.text }}</div>
-        {% if t.sub %}<div class="todo-sub">{{ t.sub }}</div>{% endif %}
-      </div>
-      <i class="bi bi-chevron-right todo-arrow"></i>
-    </a>
-    {% endfor %}
-  {% else %}
-  <div class="todo-all-ok">
-    <i class="bi bi-check-circle-fill"></i>対応が必要な項目はありません
-  </div>
-  {% endif %}
 
   {# ───────────── 3. 期間ステータス ───────────── #}
   {% if period_info %}
