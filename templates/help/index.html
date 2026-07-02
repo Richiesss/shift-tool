@@ -25,13 +25,14 @@
     transition: background .15s; user-select: none;
   }
   .help-card-header:hover { background: rgba(148, 163, 184, 0.08); }
+  .help-card-header:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
   .help-card-header.open  { border-bottom-color: var(--border); }
   .help-card-icon {
     width: 36px; height: 36px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.1rem; flex-shrink: 0;
   }
-  .help-card-title { font-weight: 600; font-size: .95rem; flex-grow: 1; }
+  .help-card-title { font-weight: 600; font-size: .95rem; flex-grow: 1; color: var(--text); }
   .help-card-chevron { color: var(--text-muted); font-size: .8rem; transition: transform .2s; }
   .help-card-chevron.open { transform: rotate(180deg); }
   .help-card-body { padding: 1rem; display: none; font-size: .88rem; line-height: 1.7; color: var(--text); }
@@ -55,13 +56,9 @@
     border-radius: 0 8px 8px 0; padding: .6rem .85rem;
     font-size: .82rem; margin-top: .75rem;
   }
-  
-  /* tip-box / warn-box / info-box (ライトテーマ) */
   [data-theme="light"] .tip-box  { background: #f0f9ff; color: #0c4a6e; border-left: 3px solid #0ea5e9; }
   [data-theme="light"] .warn-box { background: #fffbeb; color: #78350f; border-left: 3px solid #f59e0b; }
   [data-theme="light"] .info-box { background: #f0fdf4; color: #14532d; border-left: 3px solid #22c55e; }
-  
-  /* tip-box / warn-box / info-box (ダークテーマ) */
   [data-theme="dark"] .tip-box  { background: rgba(14, 165, 233, 0.12); color: #38bdf8; border-left: 3px solid #0ea5e9; }
   [data-theme="dark"] .warn-box { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border-left: 3px solid #f59e0b; }
   [data-theme="dark"] .info-box { background: rgba(34, 197, 94, 0.12); color: #4ade80; border-left: 3px solid #22c55e; }
@@ -82,6 +79,19 @@
     display: inline-block; border-radius: 4px;
     padding: 1px 7px; font-size: .75rem; font-weight: 600;
   }
+
+  /* ── 目次チップ：統一スタイル ── */
+  .toc-chip {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: .78rem; font-weight: 600; color: var(--text);
+    text-decoration: none; transition: all .15s;
+  }
+  .toc-chip:hover { border-color: #0ea5e9; color: #0ea5e9; }
+  .toc-chip-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
 </style>
 {% endblock %}
 
@@ -89,7 +99,7 @@
 <!-- ヒーロー -->
 <div class="help-hero">
   <div class="app-icon">
-    <img src="/static/icons/icon-192.png" alt="SKY DINING UOMAN"
+    <img src="/static/icons/icon-192.png" alt="SDU-Shift"
          style="width:64px;height:64px;object-fit:contain;border-radius:12px">
   </div>
   <h2>SDU-Shift</h2>
@@ -98,35 +108,35 @@
 
 <div class="content">
 
-  <!-- ── 目次 ── -->
+  <!-- 目次 -->
   <div class="d-flex flex-wrap gap-2 mb-3">
-    {% for anchor, label, color in [
-      ('#home',     'ホーム',         '#e0e7ff'),
-      ('#staff',    'スタッフ管理',   '#dbeafe'),
-      ('#shift',    '希望シフト',     '#dcfce7'),
-      ('#generate', '自動生成',       '#fef9c3'),
-      ('#schedule', 'シフト表',       '#ede9fe'),
-      ('#customer', '客数管理',       '#fee2e2'),
-      ('#settings', '設定',           '#e2e8f0'),
-      ('#changelog', '更新履歴',       '#cffafe'),
-      ('#known-issues', '既知の不具合', '#fecaca'),
+    {% for anchor, label, dot_color in [
+      ('#home',         'ホーム',         '#0ea5e9'),
+      ('#staff',        'スタッフ管理',   '#0ea5e9'),
+      ('#shift',        '希望シフト',     '#0ea5e9'),
+      ('#generate',     '自動生成',       '#0ea5e9'),
+      ('#schedule',     'シフト表',       '#0ea5e9'),
+      ('#customer',     '客数管理',       '#0ea5e9'),
+      ('#settings',     '設定',           '#64748b'),
+      ('#changelog',    '更新履歴',       '#64748b'),
+      ('#known-issues', '既知の不具合',   '#ef4444'),
     ] %}
-    <a href="{{ anchor }}" class="text-decoration-none">
-      <span style="background:{{ color }};color:#1e293b;border-radius:20px;
-                   padding:3px 12px;font-size:.78rem;font-weight:600">
-        {{ label }}
-      </span>
+    <a href="{{ anchor }}" class="toc-chip">
+      <span class="toc-chip-dot" style="background:{{ dot_color }}"></span>
+      {{ label }}
     </a>
     {% endfor %}
   </div>
 
-  {# ── セクションマクロ ── #}
-  {% macro section(id, icon, icon_bg, title, content_id) %}
+  {# ── セクションマクロ（icon_color引数を追加） ── #}
+  {% macro section(id, icon, icon_bg, icon_color, title, content_id) %}
   <div class="help-section" id="{{ id }}">
     <div class="help-card">
-      <div class="help-card-header" onclick="toggleCard(this, '{{ content_id }}')">
+      <div class="help-card-header" onclick="toggleCard(this, '{{ content_id }}')"
+           role="button" tabindex="0"
+           onkeydown="if(event.key==='Enter'||event.key===' ')toggleCard(this,'{{ content_id }}')">
         <div class="help-card-icon" style="background:{{ icon_bg }}">
-          <i class="bi {{ icon }}"></i>
+          <i class="bi {{ icon }}" style="color:{{ icon_color }}"></i>
         </div>
         <span class="help-card-title">{{ title }}</span>
         <i class="bi bi-chevron-down help-card-chevron"></i>
@@ -134,14 +144,17 @@
       <div class="help-card-body" id="{{ content_id }}">
   {% endmacro %}
 
-  {# ── ホーム（ダッシュボード） ── #}
-  {{ section('home', 'bi-house-door-fill', '#e0e7ff', 'ホーム（ダッシュボード）', 'body-home') }}
+  {# アイコン配色定数（青／スレート／赤の3色に統一）
+     bg:    rgba(primary, .13) で全セクション同じ透明度
+     color: セクション種別で3色 #}
+
+  {# ── ホーム ── #}
+  {{ section('home', 'bi-house-door-fill', 'rgba(14,165,233,.13)', '#0ea5e9', 'ホーム（ダッシュボード）', 'body-home') }}
 
         <p style="font-size:.82rem">ログイン後に最初に表示される画面です。「今日の状況」や「今やるべきこと」をまとめて確認できます。</p>
 
         <div class="sub-heading">今日の状況</div>
-        <p style="font-size:.82rem">今日の予約客数（朝食・ディナー、入力済みの場合のみ表示）と、現在の時間帯における出勤予定人数をホール・キッチン別に表示します。<br>
-        人員が不足している区分は<span style="color:#ef4444;font-weight:600">赤色</span>でハイライトされ、不足人数が一目で分かります。</p>
+        <p style="font-size:.82rem">今日の予約客数（朝食・ディナー、入力済みの場合のみ表示）と、現在の時間帯における出勤予定人数をホール・キッチン別に表示します。人員が不足している区分は<span style="color:#ef4444;font-weight:600">赤色</span>でハイライトされます。</p>
 
         <div class="sub-heading">TODO（対応が必要な項目）</div>
         <p style="font-size:.82rem">優先度の高い順に、今対応した方がよい項目が自動でリストアップされます。各項目をタップすると関連する画面に移動します。</p>
@@ -157,17 +170,17 @@
         </div>
 
         <div class="sub-heading">期間ステータス</div>
-        <p style="font-size:.82rem">直近のシフト期間について、「希望収集 → 自動生成 → 確定」の進行状況をバーで表示します。期間の開始日・終了日・残り日数、希望シフトの提出人数（提出済み／全体）も確認できます。</p>
+        <p style="font-size:.82rem">直近のシフト期間について「希望収集 → 自動生成 → 確定」の進行状況をバーで表示します。期間の開始日・終了日・残り日数、希望シフトの提出人数（提出済み／全体）も確認できます。</p>
 
         <div class="sub-heading">要対応の詳細</div>
-        <p style="font-size:.82rem">「直近7日間で人員不足が発生する日付」「希望シフト未提出のスタッフ名」はタップして展開表示できます。シフト表・希望シフト入力画面への入口としてご利用ください。</p>
+        <p style="font-size:.82rem">「直近7日間で人員不足が発生する日付」「希望シフト未提出のスタッフ名」は項目をタップすることで展開表示できます。シフト表・希望シフト入力画面への入口としてご利用ください。</p>
 
       </div>
     </div>
   </div>
 
   {# ── スタッフ管理 ── #}
-  {{ section('staff', 'bi-people-fill', '#dbeafe', 'スタッフ管理', 'body-staff') }}
+  {{ section('staff', 'bi-people-fill', 'rgba(14,165,233,.13)', '#0ea5e9', 'スタッフ管理', 'body-staff') }}
 
         <div class="sub-heading">基本操作</div>
         <ul class="step-list">
@@ -217,7 +230,7 @@
         <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
           <thead class="table-light"><tr><th>項目</th><th>内容</th></tr></thead>
           <tbody>
-            <tr><td>勤務時間帯</td><td><strong>どちらでも</strong>（朝食・ディナー両方）/ <strong>朝食専任</strong>（朝食のみ）/ <strong>ディナー専任</strong>（ディナーのみ）。自動生成でのアサイン対象を制限します。</td></tr>
+            <tr><td>勤務時間帯</td><td><strong>どちらでも</strong>（朝食・ディナー両方）/ <strong>朝食専任</strong> / <strong>ディナー専任</strong>。自動生成でのアサイン対象を制限します。</td></tr>
             <tr><td>朝食開店準備対応可<br><small class="text-muted">（5:45〜）</small></td><td>朝食の開店準備（open）バンドに配置できます。設定画面の「朝食バンド制約」で必要人数を設定します。</td></tr>
             <tr><td>朝食片付け対応可<br><small class="text-muted">（〜11:30）</small></td><td>朝食の片付け（cleanup）バンドに配置できます。同様に設定画面で人数を設定します。</td></tr>
             <tr><td>朝食：希望提出不要</td><td>毎日朝食に出勤可能なスタッフ。希望シフト入力がなくても朝食にアサインされます。</td></tr>
@@ -229,14 +242,11 @@
         <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
           <thead class="table-light"><tr><th>操作</th><th>内容</th></tr></thead>
           <tbody>
-            <tr><td>アーカイブ</td><td>スタッフを非表示にします。シフト生成の対象外になりますが、データは保持されます。アーカイブすると現役一覧から消え、一覧画面に切り替わります。</td></tr>
+            <tr><td>アーカイブ</td><td>スタッフを非表示にします。シフト生成の対象外になりますがデータは保持されます。</td></tr>
             <tr><td>復元</td><td>アーカイブしたスタッフを元に戻します（「アーカイブ表示」から操作）。</td></tr>
             <tr><td>完全削除</td><td>スタッフと関連するすべてのデータを完全に削除します。<strong>元に戻せません。</strong></td></tr>
           </tbody>
         </table>
-
-        <div class="sub-heading">アーカイブ表示の切り替え</div>
-        <p style="font-size:.82rem">検索欄の横にある<strong>「アーカイブ」</strong>ボタンでアーカイブ済みスタッフの一覧に切り替えられます。アーカイブ表示中は<strong>「現役のみ」</strong>ボタンで通常表示に戻れます。</p>
 
         <div class="sub-heading">複数選択での一括操作</div>
         <p style="font-size:.82rem">各カード左端のチェックボックス（または上部の「全選択」）で複数のスタッフを選択すると、画面上部に一括操作バーが表示されます。</p>
@@ -254,38 +264,33 @@
   </div>
 
   {# ── 希望シフト入力 ── #}
-  {{ section('shift', 'bi-pencil-square', '#dcfce7', '希望シフト入力', 'body-shift') }}
+  {{ section('shift', 'bi-pencil-square', 'rgba(14,165,233,.13)', '#0ea5e9', '希望シフト入力', 'body-shift') }}
 
         <ul class="step-list">
           <li><span class="step-num">1</span><div><strong>期間を作成</strong> — 年月を選び「前半（1〜15日）」または「後半（16〜末日）」ボタンをタップします。</div></li>
-          <li><span class="step-num">2</span><div><strong>希望を入力</strong> — 上部のスタッフ名チップをタップして対象者を切り替えながら、1人ずつ希望シフトを入力します。</div></li>
+          <li><span class="step-num">2</span><div><strong>希望を入力</strong> — 上部のスタッフ名チップをタップして対象者を切り替えながら、1人ずつ希望シフトを入力します。右上のプログレスバーで提出の進捗状況を確認できます。</div></li>
           <li><span class="step-num">3</span><div><strong>フォーム・CSV連携</strong> — 「外部フォーム＆CSV連携（β）」パネルからGoogleフォームでの収集やCSV取り込みができます。</div></li>
         </ul>
 
         <div class="sub-heading">入力画面の見方</div>
-        <p style="font-size:.82rem">画面上部のスタッフ名チップから対象者を選ぶと、その人の希望シフト入力欄が表示されます。1人ずつ切り替えながら入力してください。</p>
+        <p style="font-size:.82rem">画面上部のスタッフ名チップから対象者を選ぶと、その人の希望シフト入力欄が表示されます。1人ずつ切り替えながら入力してください。入力済みのスタッフはチップが<span style="color:#166534;font-weight:600">緑</span>に変わるため、未提出者をひと目で確認できます。</p>
 
         <div class="sub-heading">一括操作ボタン</div>
-        <p style="font-size:.82rem">各スタッフの入力画面上部に一括ボタンがあります。社員は「出勤」「休希望」「有休」「朝のみ可」「晩のみ可」を全日にまとめて設定でき、アルバイト/パートは「（休み）」または過去によく使われたパターン（最大3件）を全日にまとめて設定できます。</p>
+        <p style="font-size:.82rem">各スタッフの入力画面上部に一括ボタンがあります。正社員は「出勤」「休希望」「有休」「朝のみ可」「晩のみ可」を全日にまとめて設定でき、アルバイト/パートは「（休み）」または過去によく使われたパターン（最大3件）を全日にまとめて設定できます。</p>
 
         <div class="sub-heading">外部フォーム＆CSV連携（β）</div>
         <p style="font-size:.82rem">入力画面下部の「外部フォーム＆CSV連携（β）」パネルから、Googleフォームを使った希望収集やCSVインポートができます。</p>
         <ul class="step-list mb-3" style="font-size:.82rem">
-          <li><span class="step-num">1</span><div><strong>フォームを自動作成</strong> — 「設定」でGoogleアカウント連携済みの場合、「フォームを自動作成」でこの期間専用の希望シフト収集フォームが生成されます。</div></li>
+          <li><span class="step-num">1</span><div><strong>フォームを自動作成</strong> — Googleアカウント連携済みの場合、この期間専用の希望シフト収集フォームを自動生成できます。</div></li>
           <li><span class="step-num">2</span><div><strong>配布</strong> — 発行された配布用URLをコピーしてスタッフへ共有します。</div></li>
-          <li><span class="step-num">3</span><div><strong>内容・選択肢の更新</strong> — タイトルや説明文を変更して「フォームに反映する」を押すと、作成済みフォームに変更が反映されます（回答の選択肢は人員構成に合わせて自動更新されます）。</div></li>
+          <li><span class="step-num">3</span><div><strong>内容・選択肢の更新</strong> — タイトルや説明文を変更して「フォームに反映する」を押すと、作成済みフォームに変更が反映されます。</div></li>
           <li><span class="step-num">4</span><div><strong>回答受付の締切管理</strong> — 「締め切る」でフォームへの新規回答を停止、「再開する」で受付を再開できます。</div></li>
-          <li><span class="step-num">5</span><div><strong>回答データの同期</strong> — 「回答データを同期」でフォームの回答をシフト希望として取り込みます。「未入力のみ追加」（既存入力を保持）と「全て上書き」（フォーム回答を優先）から取り込み方法を選べます。</div></li>
+          <li><span class="step-num">5</span><div><strong>回答データの同期</strong> — 「回答データを同期」でフォームの回答を取り込みます。「未入力のみ追加」と「全て上書き」から選べます。</div></li>
         </ul>
-        <p style="font-size:.82rem">Google連携を行っていない場合は、<strong>CSV手動取り込み</strong>からGoogleフォームなどでエクスポートしたCSVファイルを読み込めます。</p>
+        <p style="font-size:.82rem">Google連携を行っていない場合は、<strong>CSV手動取り込み</strong>からエクスポートしたCSVファイルを読み込めます。</p>
         <div class="info-box">
           <i class="bi bi-info-circle-fill me-1"></i>
-          Googleフォーム連携の利用には、あらかじめ「設定」ページでGoogleアカウントとの連携が必要です（詳しくは「設定」の項目を参照）。
-        </div>
-
-        <div class="tip-box">
-          <i class="bi bi-lightbulb-fill me-1"></i>
-          入力済みのスタッフはチップが<span style="color:#166534;font-weight:600">緑</span>に変わります。誰が未提出かひと目で確認できます。
+          Googleフォーム連携の利用には、「設定」ページでGoogleアカウントとの連携が必要です。
         </div>
         <div class="warn-box">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>
@@ -297,12 +302,12 @@
   </div>
 
   {# ── 自動生成 ── #}
-  {{ section('generate', 'bi-lightning-fill', '#fef9c3', 'シフト自動生成', 'body-generate') }}
+  {{ section('generate', 'bi-lightning-fill', 'rgba(14,165,233,.13)', '#0ea5e9', 'シフト自動生成', 'body-generate') }}
 
         <ul class="step-list">
           <li><span class="step-num">1</span><div><strong>対象期間を選択</strong> — ドロップダウンから希望シフト入力済みの期間を選びます。</div></li>
           <li><span class="step-num">2</span><div><strong>前提条件を確認</strong> — 期間を選ぶと「希望シフト入力人数」と「予約客数の入力状況」が自動チェックされます。</div></li>
-          <li><span class="step-num">3</span><div><strong>優先度を設定</strong> — 各項目の <span class="help-btn" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#e0f2fe;color:#0369a1;font-size:.68rem;font-weight:700;border:1px solid #7dd3fc">?</span> をタップすると詳細説明が表示されます。</div></li>
+          <li><span class="step-num">3</span><div><strong>優先度を設定</strong> — 各項目の <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#e0f2fe;color:#0369a1;font-size:.68rem;font-weight:700;border:1px solid #7dd3fc">?</span> をタップすると詳細説明が表示されます。</div></li>
           <li><span class="step-num">4</span><div><strong>「シフトを生成する」</strong>ボタンを押す。最大25秒で最適なシフトを算出します。</div></li>
         </ul>
 
@@ -313,7 +318,7 @@
             <tr><td>人件費最小化</td><td>総勤務時間の合計を少なくすることを優先します。短時間シフトのスタッフを優先配置して人件費を抑えます。</td></tr>
             <tr><td>アルバイト/パート希望充当</td><td>アルバイト/パートが希望した時間帯にできるだけアサインされるよう配慮します。</td></tr>
             <tr><td>人員バランス均等化</td><td>各スタッフの総勤務回数が均等になるよう調整します。</td></tr>
-            <tr><td>深夜勤務分散</td><td>ディナー時間帯（22時以降）の勤務が特定のアルバイト/パートスタッフに集中しないよう分散させます（正社員は対象外）。</td></tr>
+            <tr><td>深夜勤務分散</td><td>ディナー時間帯（22時以降）の勤務が特定のスタッフに集中しないよう分散させます（正社員は対象外）。</td></tr>
           </tbody>
         </table>
 
@@ -340,12 +345,12 @@
   </div>
 
   {# ── シフト表 ── #}
-  {{ section('schedule', 'bi-calendar3', '#ede9fe', 'シフト表', 'body-schedule') }}
+  {{ section('schedule', 'bi-calendar3', 'rgba(14,165,233,.13)', '#0ea5e9', 'シフト表', 'body-schedule') }}
 
         <ul class="step-list">
-          <li><span class="step-num">1</span><div>上部タブで<strong>朝食 / ディナー</strong>・<strong>ホール / キッチン</strong>の表示を切り替えます。</div></li>
-          <li><span class="step-num">2</span><div><strong>セルをタップ</strong>するとその日・そのスタッフの担当を手動で追加・変更できます。</div></li>
-          <li><span class="step-num">3</span><div><strong>日付ヘッダーをタップ</strong>するとその日の全員のタイムラインが確認できます。</div></li>
+          <li><span class="step-num">1</span><div>ページ上部の<strong>「ホール」「キッチン」ボタン</strong>でポジションを切り替えます。ページの再読み込みなしに即時切り替わります。</div></li>
+          <li><span class="step-num">2</span><div>各セルには<strong>朝食（上段）とディナー（下段）</strong>が並んで表示されます。いずれかをタップすると担当を追加・変更できます。</div></li>
+          <li><span class="step-num">3</span><div><strong>日付ヘッダーをタップ</strong>するとその日の全員のタイムライン一覧が確認できます。</div></li>
           <li><span class="step-num">4</span><div>内容が確定したら<strong>「確定」ボタン</strong>を押します。確定後に Excel / PDF エクスポートが可能になります。</div></li>
         </ul>
 
@@ -355,7 +360,7 @@
           <tbody>
             <tr>
               <td><i class="bi bi-check-lg text-success me-1"></i>確定</td>
-              <td>ボタンを押すと<strong>確認ダイアログ</strong>が表示されます。人員不足の日数・希望未提出のスタッフ数が一覧表示され、問題を把握したうえで確定できます。確定後はセルの編集がロックされます。</td>
+              <td>ボタンを押すと<strong>確認ダイアログ</strong>が表示されます。人員不足の日数・希望未提出のスタッフ数を確認したうえで確定できます。確定後はセルの編集がロックされます。</td>
             </tr>
             <tr>
               <td><i class="bi bi-lock-fill text-danger me-1"></i>確定解除</td>
@@ -365,40 +370,62 @@
         </table>
 
         <div class="sub-heading">Excel / PDF エクスポート</div>
-        <p style="font-size:.82rem">右上の <i class="bi bi-file-earmark-spreadsheet"></i> / <i class="bi bi-file-earmark-pdf"></i> ボタンからエクスポートできます。<br>
-        シフトが<strong>未確定の場合はボタンがグレーアウト</strong>されます。タップすると「確定」を促すメッセージが表示されます。</p>
+        <p style="font-size:.82rem">右上の<strong>「出力」ドロップダウン</strong>から「PDFプレビュー」「Excel出力」「PDF出力」を選択できます。<br>
+        Excel・PDF出力はシフトが<strong>確定済みの場合のみ</strong>有効になります。未確定の場合は選択肢がグレーアウトされます。</p>
 
         <div class="sub-heading">人員状況グリッド（ページ上部）</div>
-        <p class="mb-2">ページ上部の4マスのグリッドで、朝食ホール・朝食キッチン・ディナーホール・ディナーキッチン別の人員不足状況を一覧できます。タップすると不足している日付チップが展開されます。</p>
+        <p class="mb-2">ページ上部の4マスのグリッドで、朝食ホール・朝食キッチン・ディナーホール・ディナーキッチン別の人員不足状況を一覧できます。問題のあるマスをタップすると不足している日付が展開されます。担当を追加・削除するとリアルタイムで更新されます。</p>
         <div class="d-flex gap-2 flex-wrap mb-2" style="font-size:.8rem">
           <span style="background:#ef4444;color:white;border-radius:4px;padding:2px 8px;font-weight:600">赤：人員不足</span>
           <span style="background:#f59e0b;color:white;border-radius:4px;padding:2px 8px;font-weight:600">黄：リーダー不足</span>
           <span style="background:#22c55e;color:white;border-radius:4px;padding:2px 8px;font-weight:600">緑：充足</span>
         </div>
-        <p style="font-size:.82rem">日付ヘッダーにも同様の色でボーダーが付きます（赤：人員不足 / 黄：リーダー不足）。<br>
-        表の「予約」行には、現在表示中の時間帯（朝食 / ディナー）のその日の予約客数が表示されます。</p>
+        <p style="font-size:.82rem">日付ヘッダーにも同様の色でボーダーが付きます。各日には朝食・ディナーそれぞれの人員バッジが表示され、現在表示中のポジションに合わせて更新されます。</p>
 
-        <div class="sub-heading">勤務時間の変更・応援の追加</div>
-        <p class="mb-1">セルをタップして時間帯を指定できます。プリセット（全時間 / 早番 / 遅番）で素早く設定できます。ポジション選択は現在表示中のポジション（ホール / キッチン）が初期選択されます。<br>
-        希望シフトを提出済みのスタッフに時間を指定した場合は「<strong>時間を変更する</strong>」（希望時間からの短縮・延長）として<sup>変</sup>マークが付き、希望を提出していない日に出勤してもらう場合は「<strong>応援をお願いする</strong>」として<sup>応</sup>マークが付きます。</p>
+        <div class="sub-heading">担当の追加・変更</div>
+        <p class="mb-1" style="font-size:.82rem">セルをタップすると担当編集モーダルが開きます。</p>
+        <table class="table table-sm table-bordered mb-3" style="font-size:.82rem">
+          <thead class="table-light"><tr><th>操作</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>ポジション選択</td><td>ホール・キッチンを切り替えてアサインできます。</td></tr>
+            <tr>
+              <td>希望シフト通り</td>
+              <td>希望提出済みのスタッフに対して表示されます。希望時間のままアサインします。</td>
+            </tr>
+            <tr>
+              <td>時間を変更する<sup>変</sup></td>
+              <td>希望提出済みのスタッフの勤務時間を短縮・延長します。プリセット（全時間 / 前半 / 後半）で素早く設定できます。</td>
+            </tr>
+            <tr>
+              <td>応援をお願いする<sup>応</sup></td>
+              <td>希望を提出していない日に出勤してもらう場合。時間帯を指定してアサインします。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="tip-box">
+          <i class="bi bi-lightbulb-fill me-1"></i>
+          担当の追加・削除はページリロードなしで即時反映されます。人員バッジ・不足グリッドも自動で更新されます。
+        </div>
 
-        <div class="sub-heading">天気・気温の表示</div>
-        <p style="font-size:.82rem">日付ヘッダーに天気アイコンと最高 / 最低気温が表示されます（直近16日分。過去日も記録があれば表示されます）。<br>
-        表示するには「設定」ページで店舗の緯度・経度を登録してください。未設定の場合は天気は表示されません。</p>
+        <div class="sub-heading">シフトセルへのコメント</div>
+        <p style="font-size:.82rem">担当編集モーダル下部の「コメント（任意）」欄に補足メモを残せます（最大100文字）。コメントが入っているセルには <i class="bi bi-chat-fill"></i> アイコンと先頭8文字が表示されます。</p>
+
+        <div class="sub-heading">変更履歴</div>
+        <p style="font-size:.82rem">右上の <i class="bi bi-clock-history"></i> ボタンから手動変更履歴（直近60件）を確認できます。誰がいつ、どのスタッフの担当を追加・削除したかを記録しています。</p>
+
+        <div class="sub-heading">お知らせメモ（メモ1・メモ2）</div>
+        <p style="font-size:.82rem">表内の「メモ1」「メモ2」行は、日付ごとに自由にテキストを入力できる連絡用の行です。セルをタップして入力・編集します。<br>
+        メモ1はスタッフ全体向け、メモ2は社員向けの連絡事項として使い分けることを想定しています。Excel / PDF 出力にも反映されます。</p>
 
         <div class="sub-heading">予約客数のインライン編集</div>
         <p style="font-size:.82rem">「予約」行の各日のセルをタップすると、その場で朝食・ディナーの予約客数を編集できます。客数管理画面を開かずにシフト表から直接更新できます。</p>
 
-        <div class="sub-heading">お知らせメモ（メモ1・メモ2）</div>
-        <p style="font-size:.82rem">表の下部にある「メモ1」「メモ2」行は、日付ごとに自由にテキストを入力できる連絡用の行です。セルをタップして入力・編集します。<br>
-        メモ1はスタッフ全体向け、メモ2は社員向けの連絡事項として使い分けることを想定しています。入力内容はExcel / PDF出力にも反映されます。</p>
-
-        <div class="sub-heading">シフトセルへのコメント</div>
-        <p style="font-size:.82rem">スタッフのシフトセルを編集する際、「コメント（任意）」欄に補足メモを残せます。コメントが入っているセルには小さなアイコンが表示され、タップすると内容を確認できます。</p>
+        <div class="sub-heading">天気・気温の表示</div>
+        <p style="font-size:.82rem">日付ヘッダーに天気アイコンと最高 / 最低気温が表示されます（直近16日分）。「設定」ページで店舗の緯度・経度を登録してください。未設定の場合は表示されません。</p>
 
         <div class="tip-box">
           <i class="bi bi-lightbulb-fill me-1"></i>
-          今日の日付の列は青ヘッダーでハイライト表示されます。土曜は青背景・日曜は赤背景で表示されます。
+          今日の列は青ヘッダーでハイライト表示されます。土曜は青背景・日曜は赤背景で表示されます。
         </div>
 
       </div>
@@ -406,7 +433,7 @@
   </div>
 
   {# ── 客数管理 ── #}
-  {{ section('customer', 'bi-cup-hot-fill', '#fee2e2', '客数管理', 'body-customer') }}
+  {{ section('customer', 'bi-cup-hot-fill', 'rgba(14,165,233,.13)', '#0ea5e9', '客数管理', 'body-customer') }}
 
         <ul class="step-list">
           <li><span class="step-num">1</span><div>期間を選択して各日の<strong>予約客数（朝食・ディナー）</strong>を入力します。</div></li>
@@ -415,7 +442,7 @@
         </ul>
         <div class="tip-box">
           <i class="bi bi-lightbulb-fill me-1"></i>
-          予約客数を入力しておくと、自動生成時に閾値超過日は人数が自動増員されます。未入力の日は増員判定が無効になります。
+          予約客数を入力しておくと、自動生成時に閾値超過日は人数が自動増員されます。未入力の日は増員判定が無効になります。シフト表の「予約」行からも直接編集できます。
         </div>
 
         <div class="sub-heading">客数予測（β）</div>
@@ -427,15 +454,14 @@
         </div>
 
         <div class="sub-heading">過去客数データ入力（β）</div>
-        <p style="font-size:.82rem">客数予測（β）の精度向上のため、過去の実際の客数を月単位で入力できます。客数管理ページから「過去データ入力」を開き、月を切り替えながら朝食・ディナーの客数を入力します。<br>
-        Excelなどからのコピー＆ペーストで複数日分をまとめて入力することもできます。</p>
+        <p style="font-size:.82rem">客数予測（β）の精度向上のため、過去の実際の客数を月単位で入力できます。客数管理ページから「過去データ入力」を開き、月を切り替えながら朝食・ディナーの客数を入力します。Excelなどからのコピー＆ペーストで複数日分をまとめて入力することもできます。</p>
 
       </div>
     </div>
   </div>
 
   {# ── 設定 ── #}
-  {{ section('settings', 'bi-gear-fill', '#e2e8f0', '設定', 'body-settings') }}
+  {{ section('settings', 'bi-gear-fill', 'rgba(100,116,139,.13)', '#64748b', '設定', 'body-settings') }}
 
         <div class="sub-heading">シフト人員制約</div>
         <p style="font-size:.82rem">時間帯（朝食・ディナー）×ポジション（ホール・キッチン）ごとに人数の上限・下限を設定します。</p>
@@ -449,8 +475,7 @@
         </table>
 
         <div class="sub-heading">朝食バンド制約（開店準備 / 片付け）</div>
-        <p style="font-size:.82rem">朝食の「開店準備（5:45〜）」と「片付け（〜11:30）」に参加するスタッフ数の制約を設定します。<br>
-        スタッフ管理で「開店準備対応可」「片付け対応可」にチェックが入ったスタッフのみが対象になります。</p>
+        <p style="font-size:.82rem">朝食の「開店準備（5:45〜）」と「片付け（〜11:30）」に参加するスタッフ数の制約を設定します。スタッフ管理で「開店準備対応可」「片付け対応可」にチェックが入ったスタッフのみが対象になります。</p>
 
         <div class="sub-heading">社員デフォルト勤務時間</div>
         <p style="font-size:.82rem">正社員は希望シフトを提出しないため、シフト表・PDF・Excelに表示するデフォルトの勤務時間をポジション（ホール・キッチン）×時間帯（朝食・ディナー）別に設定します。</p>
@@ -475,16 +500,13 @@
         <p style="font-size:.82rem">個人昇給額はスタッフ管理画面でスタッフごとに設定します。正社員は人件費計算の対象外です。</p>
 
         <div class="sub-heading">ベータ機能</div>
-        <p style="font-size:.82rem">開発中の実験的な機能です。今後も順次追加されます。</p>
 
         <div class="mb-2"><strong>客数予測機能（β）</strong></div>
-        <p style="font-size:.82rem">過去の客数実績・曜日 / 祝日・気象データなどから朝食 / ディナーの客数を予測し、客数管理ページとダッシュボードに表示します。<br>
-        「客数予測機能を有効にする（β）」をオンにすると有効化されます。「店舗の緯度・経度」を設定すると、シフト表の天気表示にも使われる気象データを予測に利用できます（緯度・経度は任意ですが、未設定の場合シフト表に天気は表示されません）。<br>
-        予測精度を高めるには、客数管理画面で実績を入力し続けるか、過去客数データ入力ページから過去の実績を登録してください。</p>
+        <p style="font-size:.82rem">過去の客数実績・曜日 / 祝日・気象データなどから朝食 / ディナーの客数を予測し、客数管理ページとダッシュボードに表示します。「客数予測機能を有効にする（β）」をオンにすると有効化されます。「店舗の緯度・経度」を設定すると、シフト表の天気表示にも使われる気象データを予測に利用できます。</p>
 
         <div class="mb-2"><strong>Google フォーム連携機能（β）</strong></div>
         <p style="font-size:.82rem">Google Forms APIを利用して希望シフトの提出フォームを自動生成・配布し、回答結果を取り込める機能です。利用にはあらかじめGoogle Cloud ConsoleでOAuth 2.0クライアントを作成し、「Google OAuth Client ID」「Client Secret」を設定・保存してください（画面内に取得手順が表示されます）。<br>
-        設定保存後、「連携する」ボタンからGoogleアカウントと連携すると、各期間の希望シフト入力画面で「外部フォーム＆CSV連携（β）」パネルが利用できるようになります。「連携解除」でいつでも連携を解除できます。</p>
+        設定保存後、「連携する」ボタンからGoogleアカウントと連携すると、各期間の希望シフト入力画面で「外部フォーム＆CSV連携（β）」パネルが利用できるようになります。</p>
 
         <div class="sub-heading">バックアップ / リストア</div>
         <table class="table table-sm table-bordered mb-0" style="font-size:.82rem">
@@ -504,7 +526,7 @@
   </div>
 
   {# ── 更新履歴 ── #}
-  {{ section('changelog', 'bi-clock-history', '#cffafe', '更新履歴', 'body-changelog') }}
+  {{ section('changelog', 'bi-clock-history', 'rgba(100,116,139,.13)', '#64748b', '更新履歴', 'body-changelog') }}
 
         <p style="font-size:.82rem">直近の更新内容です（コミットログより自動表示）。</p>
         {% if commits is none %}
@@ -538,7 +560,7 @@
   </div>
 
   {# ── 既知の不具合 ── #}
-  {{ section('known-issues', 'bi-bug-fill', '#fecaca', '既知の不具合', 'body-known-issues') }}
+  {{ section('known-issues', 'bi-bug-fill', 'rgba(239,68,68,.13)', '#ef4444', '既知の不具合', 'body-known-issues') }}
 
         <p style="font-size:.82rem">現在報告されており、未対応の不具合です（GitHub Issuesより自動表示）。</p>
         {% if known_issues is none %}
@@ -571,7 +593,6 @@
     </div>
   </div>
 
-  <!-- フッター余白 -->
   <div style="height:1rem"></div>
 </div>
 {% endblock %}
@@ -595,9 +616,11 @@ function toggleCard(header, bodyId) {
   if (!section) return;
   const header = section.querySelector('.help-card-header');
   if (header) {
-    const bodyId = header.getAttribute('onclick').match(/'([^']+)'\s*\)/)[1];
-    toggleCard(header, bodyId);
-    setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    const m = header.getAttribute('onclick').match(/'([^']+)'\s*\)/);
+    if (m) {
+      toggleCard(header, m[1]);
+      setTimeout(() => section.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
   }
 })();
 </script>
