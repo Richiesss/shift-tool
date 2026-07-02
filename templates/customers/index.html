@@ -40,9 +40,15 @@
       </option>
       {% endfor %}
     </select>
-    <a href="{{ url_for('customers.history') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-clock-history me-1"></i>過去客数データ入力（β）
-    </a>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-info btn-sm" id="dow-autofill-btn"
+              onclick="applyDowAutofill()" title="過去期間の実績から曜日別平均を計算して未入力欄に反映します">
+        <i class="bi bi-calendar-week me-1"></i>曜日平均で自動入力（β）
+      </button>
+      <a href="{{ url_for('customers.history') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-clock-history me-1"></i>過去客数データ
+      </a>
+    </div>
   </div>
 
   {% if forecast_enabled %}
@@ -184,6 +190,46 @@ function applyForecast() {
       inputD.dispatchEvent(new Event('input', { bubbles: true }));
     }
   });
+}
+
+async function applyDowAutofill() {
+  const btn = document.getElementById('dow-autofill-btn');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>計算中…';
+  try {
+    const resp = await fetch('{{ url_for("customers.dow_autofill", period_id=period.id) }}');
+    const json = await resp.json();
+    if (json.error) { alert(json.error); return; }
+    if (!json.data || Object.keys(json.data).length === 0) {
+      alert('過去期間の客数データがまだありません。\n他の期間で客数を入力してください。'); return;
+    }
+    let filled = 0;
+    document.querySelectorAll('#cust-table tbody tr').forEach(tr => {
+      const inputB = tr.querySelector('input[name^="b_"]');
+      const inputD = tr.querySelector('input[name^="d_"]');
+      if (!inputB || !inputD) return;
+      const ds = inputB.name.slice(2);
+      const avg = json.data[ds];
+      if (!avg) return;
+      if (parseInt(inputB.value) === 0) {
+        inputB.value = avg.breakfast;
+        inputB.dispatchEvent(new Event('input', { bubbles: true }));
+        filled++;
+      }
+      if (parseInt(inputD.value) === 0) {
+        inputD.value = avg.dinner;
+        inputD.dispatchEvent(new Event('input', { bubbles: true }));
+        filled++;
+      }
+    });
+    if (filled === 0) alert('未入力欄がありません（すべて入力済みです）。');
+  } catch (e) {
+    alert('自動入力に失敗しました: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
 }
 </script>
 {% endblock %}

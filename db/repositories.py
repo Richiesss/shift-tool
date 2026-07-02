@@ -576,6 +576,37 @@ def save_reservation_count(period_id: int, date_str: str, breakfast: int, dinner
 
 # ── 客数予測（β）─────────────────────────────────────────────────────────
 
+def get_dow_reservation_averages(exclude_period_id: int | None = None) -> dict[int, dict]:
+    """過去の reservation_counts を曜日（0=月〜6=日）別に集計し {dow: {"breakfast": avg, "dinner": avg, "n": count}} を返す"""
+    conn = get_connection()
+    if exclude_period_id is not None:
+        rows = conn.execute(
+            "SELECT date, breakfast, dinner FROM reservation_counts WHERE period_id != ? AND (breakfast > 0 OR dinner > 0)",
+            (exclude_period_id,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT date, breakfast, dinner FROM reservation_counts WHERE breakfast > 0 OR dinner > 0"
+        ).fetchall()
+    conn.close()
+    from datetime import date as _date
+    buckets: dict[int, list] = {i: [] for i in range(7)}
+    for r in rows:
+        try:
+            d = _date.fromisoformat(r["date"])
+            buckets[d.weekday()].append((r["breakfast"], r["dinner"]))
+        except ValueError:
+            pass
+    result = {}
+    for dow, vals in buckets.items():
+        if vals:
+            result[dow] = {
+                "breakfast": round(sum(v[0] for v in vals) / len(vals)),
+                "dinner":    round(sum(v[1] for v in vals) / len(vals)),
+                "n":         len(vals),
+            }
+    return result
+
 def get_customer_count_history(year_month: str) -> dict[str, dict[str, int]]:
     """指定月（YYYY-MM）の過去客数（運用開始前の手入力分）を {date_str: {"breakfast": int, "dinner": int}} で返す"""
     conn = get_connection()
@@ -1150,6 +1181,35 @@ def get_multi_period_stats(period_ids: list[int]) -> dict:
         bp[pid]["cost"]   += cost
 
     return result
+
+
+# ── Web Push サブスクリプション ──────────────────────────────────────────
+
+def get_push_subscriptions() -> list[dict]:
+    """登録済みの管理者 Push サブスクリプションを全件返す"""
+    conn = get_connection()
+    rows = conn.execute("SELECT endpoint, p256dh, auth FROM push_subscriptions").fetchall()
+    conn.close()
+    return [{"endpoint": r["endpoint"], "p256dh": r["p256dh"], "auth": r["auth"]} for r in rows]
+
+
+def save_push_subscription(endpoint: str, p256dh: str, auth: str) -> None:
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO push_subscriptions (endpoint, p256dh, auth)
+           VALUES (?,?,?)
+           ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth""",
+        (endpoint, p256dh, auth)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_push_subscription(endpoint: str) -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
+    conn.commit()
+    conn.close()
 
 
 # ── Google API 連携 ───────────────────────────────────────────────────────

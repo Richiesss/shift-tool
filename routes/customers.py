@@ -1,6 +1,6 @@
 import calendar
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from cache import cache
 from db import repositories as repo
 from optimizer import forecast
@@ -148,3 +148,25 @@ def save_history():
     cache.delete_memoized(forecast.predict_customer_counts_cached)
     flash("過去客数データを保存しました", "success")
     return redirect(url_for("customers.history", ym=ym))
+
+
+# ── 曜日別平均自動入力（β）─────────────────────────────────────────────
+
+@bp.get("/<int:period_id>/dow-autofill")
+def dow_autofill(period_id):
+    """過去期間の reservation_counts を曜日別に平均し、対象期間の各日の推奨値を返す"""
+    period = repo.get_period(period_id)
+    if not period:
+        return jsonify({"error": "期間が見つかりません"}), 404
+    dow_avg = repo.get_dow_reservation_averages(exclude_period_id=period_id)
+    if not dow_avg:
+        return jsonify({"data": {}, "n_periods": 0})
+    dates = period.date_range()
+    result = {}
+    for d in dates:
+        dow = d.weekday()
+        avg = dow_avg.get(dow)
+        if avg:
+            result[d.isoformat()] = {"breakfast": avg["breakfast"], "dinner": avg["dinner"]}
+    n_samples = max((v["n"] for v in dow_avg.values()), default=0)
+    return jsonify({"data": result, "n_samples": n_samples})
