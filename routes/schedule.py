@@ -361,6 +361,15 @@ def index(period_id):
 
     needs_regen = repo.get_period_gen_status(period_id).get("needs_regen", False)
 
+    # ── 人件費シミュレーション ─────────────────────────────────────────
+    stats_data = repo.get_multi_period_stats([period_id])
+    period_labor_cost = round(sum(d["cost"] for d in stats_data.values()))
+    any_wage = any(
+        e.hourly_wage > 0 for e in all_employees
+        if e.employment_type != EmploymentType.FULL_TIME
+    )
+    base_hourly_wage = repo.get_app_setting("base_hourly_wage", "0")
+
     cell_notes    = repo.get_cell_notes(period_id)
     submitted_ids = {r.employee_id for r in shift_requests}
     unsubmitted_count = sum(1 for e in all_employees if e.id not in submitted_ids)
@@ -424,6 +433,9 @@ def index(period_id):
         weather_icon_label=forecast.weather_icon_label,
         TimeSlot=TimeSlot,
         Position=Position,
+        period_labor_cost=period_labor_cost,
+        any_wage=any_wage,
+        base_hourly_wage=base_hourly_wage,
     )
 
 
@@ -650,6 +662,14 @@ def confirm(period_id):
         period.status = "confirmed"
         repo.save_period(period)
         flash("シフトを確定しました", "success")
+        try:
+            from routes.push import _send_push_notification
+            _send_push_notification(
+                "シフト確定",
+                f"{period.start_date}〜{period.end_date} のシフトが確定されました",
+            )
+        except Exception:
+            pass
     return redirect(url_for("schedule.index", period_id=period_id))
 
 
