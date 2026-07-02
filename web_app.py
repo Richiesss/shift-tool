@@ -45,12 +45,13 @@ def create_app():
     CSRFProtect(app)
 
     # サーバーサイドセッション（ファイルストア）
-    # Flask-Session 0.8.x では SESSION_PERMANENT / SESSION_USE_SIGNER は廃止
-    os.makedirs("/tmp/flask_sessions", exist_ok=True)
+    # Flask-Session 0.8.x では SESSION_TYPE="cachelib" + SESSION_CACHELIB が推奨
+    from cachelib import FileSystemCache
+    session_dir = "/tmp/flask_sessions"
+    os.makedirs(session_dir, exist_ok=True)
     app.config.update(
-        SESSION_TYPE="filesystem",
-        SESSION_FILE_DIR="/tmp/flask_sessions",
-        SESSION_FILE_THRESHOLD=500,
+        SESSION_TYPE="cachelib",
+        SESSION_CACHELIB=FileSystemCache(cache_dir=session_dir, threshold=500),
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
         SESSION_COOKIE_SECURE=not is_dev,
         SESSION_COOKIE_HTTPONLY=True,
