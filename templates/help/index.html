@@ -555,6 +555,11 @@
   {{ section('known-issues','bi-bug-fill','rgba(239,68,68,.13)','#ef4444','既知の不具合','body-known-issues') }}
 
       <p style="font-size:.82rem">現在オープン中の未対応Issueです（GitHub Issuesより自動表示）。</p>
+      <div class="d-grid mb-2">
+        <a href="{{ url_for('feedback.index') }}" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-send-fill me-1"></i>不具合を報告する・要望を送る
+        </a>
+      </div>
       {% if known_issues is none %}
       <div class="info-box"><i class="bi bi-exclamation-circle-fill me-1"></i>一覧を取得できませんでした。</div>
       {% elif known_issues %}

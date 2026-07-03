@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}フィードバック - SDU-Shift{% endblock %}
+
+{% block head %}
+<style>
+  .fb-type-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: .9rem .5rem; border: 1.5px solid var(--border);
+    border-radius: 10px; cursor: pointer; font-size: .88rem; font-weight: 600;
+    color: var(--text-muted); transition: all var(--transition); user-select: none;
+    background: var(--bg-card); flex: 1;
+  }
+  .fb-type-btn i { font-size: 1.4rem; margin-bottom: .35rem; }
+  .fb-type-btn:hover { border-color: var(--text-muted); color: var(--text); }
+  [data-theme="light"] .fb-type-btn.selected { border-color: #ef4444; background: #fef2f2; color: #b91c1c; }
+  [data-theme="dark"]  .fb-type-btn.selected { border-color: #f87171; background: rgba(248,113,113,.12); color: #f87171; }
+  .fb-type-btn.selected.type-feature { border-color: #0ea5e9 !important; color: #0ea5e9 !important; }
+  [data-theme="light"] .fb-type-btn.selected.type-feature { background: #f0f9ff; }
+  [data-theme="dark"]  .fb-type-btn.selected.type-feature { background: rgba(14,165,233,.12); }
+
+  .fb-guide {
+    font-size: .8rem; color: var(--text-muted); background: rgba(148,163,184,.08);
+    border-left: 3px solid #0ea5e9; border-radius: 0 8px 8px 0; padding: .6rem .85rem;
+    margin: .5rem 0 .9rem; line-height: 1.6;
+  }
+  .fb-counter { font-size: .75rem; color: var(--text-muted); text-align: right; margin-top: .25rem; }
+  .fb-counter.short { color: #ef4444; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('help.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
+  <h1><i class="bi bi-chat-square-text me-2"></i>フィードバック</h1>
+</div>
+
+<div class="content">
+
+  <div class="d-flex align-items-start gap-2 mb-3 p-3 rounded-3"
+       style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid #0ea5e9">
+    <i class="bi bi-info-circle text-info mt-1" style="flex-shrink:0"></i>
+    <div style="font-size:.85rem;color:var(--text);line-height:1.6">
+      不具合報告・機能要望はこのフォームからGitHub Issueとして自動登録されます。<br>
+      対応をスムーズにするため、<strong>できるだけ具体的に</strong>状況をご記入ください。
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('feedback.submit') }}" data-dirty-form id="fb-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="type" id="fb-type-input" value="{{ form_type or 'bug' }}">
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <label class="form-label fw-semibold">種別</label>
+        <div class="d-flex gap-2 mb-1">
+          <div class="fb-type-btn type-bug {{ 'selected' if (form_type or 'bug') == 'bug' else '' }}"
+               id="fb-type-bug-btn" onclick="fbSelectType('bug')">
+            <i class="bi bi-bug-fill"></i>不具合報告
+          </div>
+          <div class="fb-type-btn type-feature {{ 'selected' if form_type == 'feature' else '' }}"
+               id="fb-type-feature-btn" onclick="fbSelectType('feature')">
+            <i class="bi bi-lightbulb-fill"></i>機能要望
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label fw-semibold">タイトル <span class="text-danger">*</span></label>
+          <input type="text" name="title" class="form-control" maxlength="120" required
+                 placeholder="例：シフト表画面で「確定」ボタンを押すと画面が白くなる"
+                 value="{{ form_title or '' }}">
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label fw-semibold">内容 <span class="text-danger">*</span></label>
+          <div class="fb-guide" id="fb-guide-bug" {{ 'style=display:none' if form_type == 'feature' else '' }}>
+            <i class="bi bi-bug-fill me-1"></i>
+            <strong>不具合報告の例：</strong><br>
+            ・どの画面で、何をしたら発生したか（再現手順）<br>
+            ・本来どうなるべきか（期待する動作）と、実際どうなったか<br>
+            ・毎回起きるのか、特定の条件でのみ起きるのか
+          </div>
+          <div class="fb-guide" id="fb-guide-feature" {{ '' if form_type == 'feature' else 'style=display:none' }}>
+            <i class="bi bi-lightbulb-fill me-1"></i>
+            <strong>機能要望の例：</strong><br>
+            ・どんな場面・業務で困っているか（背景）<br>
+            ・具体的にどう改善されると助かるか<br>
+            ・現状どう回避しているか（あれば）
+          </div>
+          <textarea name="detail" id="fb-detail" class="form-control" rows="7" required
+                    minlength="20" maxlength="4000"
+                    oninput="fbUpdateCounter()"
+                    placeholder="できるだけ詳しく状況をご記入ください">{{ form_detail or '' }}</textarea>
+          <div class="fb-counter" id="fb-counter">0 / 20文字以上</div>
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label fw-semibold">
+            報告者名 <span class="text-muted fw-normal small">（任意）</span>
+          </label>
+          <input type="text" name="reporter" class="form-control" maxlength="40"
+                 placeholder="例：山田（キッチン）"
+                 value="{{ form_reporter or '' }}">
+          <div class="form-text">確認事項がある場合の連絡先として、分かる範囲で構いません。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-grid gap-2">
+      <button type="submit" class="btn btn-primary btn-lg" data-loading="送信中…">
+        <i class="bi bi-send-fill me-1"></i>送信する
+      </button>
+      <a href="{{ url_for('help.index') }}" class="btn btn-outline-secondary">キャンセル</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fbSelectType(type) {
+  document.getElementById('fb-type-input').value = type;
+  document.getElementById('fb-type-bug-btn').classList.toggle('selected', type === 'bug');
+  document.getElementById('fb-type-feature-btn').classList.toggle('selected', type === 'feature');
+  document.getElementById('fb-guide-bug').style.display = (type === 'bug') ? '' : 'none';
+  document.getElementById('fb-guide-feature').style.display = (type === 'feature') ? '' : 'none';
+}
+
+function fbUpdateCounter() {
+  const len = document.getElementById('fb-detail').value.length;
+  const el = document.getElementById('fb-counter');
+  if (len < 20) {
+    el.textContent = `${len} / 20文字以上`;
+    el.classList.add('short');
+  } else {
+    el.textContent = `${len}文字`;
+    el.classList.remove('short');
+  }
+}
+fbUpdateCounter();
+</script>
+{% endblock %}

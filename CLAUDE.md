@@ -19,9 +19,9 @@ SDU-Shift は飲食店向けのシフト表自動生成ツール。Flask製のWe
 | `models/` | ドメインモデル（`Employee`, `ShiftRequest`, `ShiftAssignment`, `SchedulePeriod` などのdataclass） |
 | `optimizer/solver.py` | CP-SAT (OR-Tools) によるシフト最適化エンジン本体 |
 | `export/` | Excel (`openpyxl`) / PDF (`reportlab`) 出力 |
-| `routes/` | Flask Blueprint群（employees, shifts, generate, schedule, customers, settings, export, dashboard, auth, help） |
+| `routes/` | Flask Blueprint群（employees, shifts, generate, schedule, customers, settings, export, dashboard, auth, help, feedback） |
 | `templates/`, `static/` | テンプレート・静的ファイル |
-| `utils/` | 共通定数（`constants.py`）、シフトパターン定義（`shift_patterns.py`）、祝日判定、バージョン、ソルバーログなど |
+| `utils/` | 共通定数（`constants.py`）、シフトパターン定義（`shift_patterns.py`）、祝日判定、バージョン、ソルバーログ、GitHub連携（`changelog.py`＝Issues/コミット取得、`github_issues.py`＝Issue作成）など |
 | `scripts/seed_test_data.py` | 動作確認用のテストデータ投入スクリプト |
 | `scripts/ShiftFormGenerator.gs` | 希望シフト収集用Google Formsと連携するApps Script |
 
@@ -72,7 +72,7 @@ python scripts/migrate_to_supabase.py --pg-url "postgresql://postgres.[username]
   - `APP_PASSWORD` — Web版の共有パスワード認証。空文字なら認証自体が無効になる
   - `SECRET_KEY` — Flaskセッション用シークレット
   - `SOLVER_LOG_PATH` — ソルバーのログ出力先（`utils/solver_logger.py`）
-  - `GITHUB_TOKEN` — ヘルプ画面「既知の不具合」取得（`utils/changelog.py`）用。未設定時はGitHub APIの匿名レート制限（60回/時間）が適用される
+  - `GITHUB_TOKEN` — ヘルプ画面「既知の不具合」取得（`utils/changelog.py`）と「フィードバック」フォームからのIssue作成（`utils/github_issues.py`）に使用。Issue作成にはrepo権限を持つトークンが必須（未設定だとフィードバック送信が常に失敗する）。未設定でも一覧取得は動くが匿名レート制限（60回/時間）が適用される
 - **デプロイ先が2系統ある**: HuggingFace Spaces（Docker、SQLite前提）とGitHub→Render（PostgreSQL）。DB方言に依存する変更は両方で動作確認する。
 - **コメント・docstring・コミットメッセージは日本語**で統一する。
 - **自動テストスイートは無し**。`scripts/seed_test_data.py` でテストデータを投入し、Web版で手動確認する。

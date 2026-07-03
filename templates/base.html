@@ -421,6 +421,7 @@
     ('employees.index',       'bi-people-fill',    'スタッフ管理'),
     ('settings.index',        'bi-gear-fill',      '設定'),
     ('help.index',            'bi-question-circle','ヘルプ'),
+    ('feedback.index',        'bi-chat-square-text','フィードバック'),
   ] %}
   {% for endpoint, icon, label in nav_items %}
   {% set active = (request.endpoint == endpoint) if endpoint == 'schedule.stats_multi'
@@ -456,6 +457,7 @@
     request.endpoint.startswith('employees') or
     request.endpoint.startswith('settings') or
     request.endpoint.startswith('help') or
+    request.endpoint.startswith('feedback') or
     request.endpoint == 'schedule.stats_multi'
 ) %}
 <div class="bottom-nav">
@@ -489,6 +491,7 @@
     ('employees.index',        'bi-people-fill',     'スタッフ管理','スタッフの登録・編集'),
     ('settings.index',         'bi-gear-fill',       '設定',        'シフト制約・アプリ設定'),
     ('help.index',             'bi-question-circle', 'ヘルプ',      '各機能の使い方'),
+    ('feedback.index',         'bi-chat-square-text','フィードバック','不具合報告・機能要望を送る'),
   ] %}
   {% set active = (request.endpoint == endpoint) if endpoint == 'schedule.stats_multi'
                   else (request.endpoint and request.endpoint.startswith(endpoint.split('.')[0])) %}
