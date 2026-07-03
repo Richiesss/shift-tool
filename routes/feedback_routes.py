@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 
+from cache import cache
+from utils.changelog import get_known_issues
 from utils.github_issues import create_issue, GitHubIssueError
 
 bp = Blueprint("feedback", __name__, url_prefix="/feedback")
@@ -60,6 +62,9 @@ def submit():
             "feedback/index.html", type_info=TYPE_INFO,
             form_type=feedback_type, form_title=title, form_detail=detail, form_reporter=reporter,
         ), 502
+
+    # ヘルプ画面「既知の不具合」に新しいissueがすぐ反映されるようキャッシュを破棄する
+    cache.delete_memoized(get_known_issues)
 
     flash(f"送信しました。ご報告ありがとうございます（Issue #{result['number']}）。", "success")
     return redirect(url_for("feedback.index"))
