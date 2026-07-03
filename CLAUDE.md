@@ -73,7 +73,7 @@ python scripts/migrate_to_supabase.py --pg-url "postgresql://postgres.[username]
   - `SECRET_KEY` — Flaskセッション用シークレット
   - `SOLVER_LOG_PATH` — ソルバーのログ出力先（`utils/solver_logger.py`）
   - `GITHUB_TOKEN` — ヘルプ画面「既知の不具合」取得（`utils/changelog.py`）と「フィードバック」フォームからのIssue作成（`utils/github_issues.py`）に使用。Issue作成にはrepo権限を持つトークンが必須（未設定だとフィードバック送信が常に失敗する）。未設定でも一覧取得は動くが匿名レート制限（60回/時間）が適用される
-- **デプロイ先が2系統ある**: HuggingFace Spaces（Docker、SQLite前提）とGitHub→Render（PostgreSQL）。DB方言に依存する変更は両方で動作確認する。
+- **本番環境は現状HF Spacesのみ**: `render.yaml`はRenderへのデプロイ設定として残っているが、2026-07-03時点でRender側は未使用（サービス自体が存在しない・`DATABASE_URL`も未設定）。実際に稼働しているのはHuggingFace Spaces（Docker、SQLite、Persistent Storage有効）のみ。DBはPostgreSQL/SQLite両対応のまま残しているため、将来Renderを使う場合はDB方言に依存する変更を両方で動作確認すること。
 - **コメント・docstring・コミットメッセージは日本語**で統一する。
 - **自動テストスイートは無し**。`scripts/seed_test_data.py` でテストデータを投入し、Web版で手動確認する。
 - **ソルバー変更時**: `optimizer/solver.py` の優先度は `SolverConfig` と `PRIORITY_SCALE`（低=0.1/中=1.0/高=10.0）で調整する。`utils/solver_logger.py` がスタッフ別の割当根拠・ペナルティ内訳をログ出力するため、制約変更後は必ずログで影響を確認する。
