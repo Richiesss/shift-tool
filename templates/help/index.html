@@ -45,6 +45,29 @@
   }
   [data-theme="dark"] .step-num { color: #0f172a; }
 
+  /* 更新履歴タイムライン */
+  .changelog-timeline { position: relative; padding-left: 1rem; margin: 0; }
+  .changelog-timeline::before {
+    content: ''; position: absolute; left: 3px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--border);
+  }
+  .changelog-group { position: relative; margin-bottom: 1.1rem; }
+  .changelog-group:last-child { margin-bottom: 0; }
+  .changelog-date {
+    position: relative; display: inline-block;
+    font-size: .72rem; font-weight: 700; color: var(--text-muted);
+    font-family: monospace; letter-spacing: .02em; margin: 0 0 .35rem;
+  }
+  .changelog-date::before {
+    content: ''; position: absolute; left: -1rem; top: 50%; transform: translateY(-50%);
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #64748b; box-shadow: 0 0 0 3px var(--bg-card);
+  }
+  .changelog-items { list-style: none; margin: 0; padding: 0; }
+  .changelog-items li {
+    font-size: .82rem; padding: .2rem 0; color: var(--text); border-bottom: none;
+  }
+
   .tip-box, .warn-box, .info-box {
     border-radius: 0 8px 8px 0; padding: .6rem .85rem; font-size: .82rem; margin-top: .75rem;
   }
@@ -502,15 +525,19 @@
       <p style="font-size:.82rem">直近の更新内容です（コミットログより自動表示）。</p>
       {% if commits is none %}
       <div class="info-box"><i class="bi bi-exclamation-circle-fill me-1"></i>更新履歴を取得できませんでした。</div>
-      {% elif commits %}
-      <ul class="step-list" style="font-size:.82rem">
-        {% for c in commits %}
-        <li>
-          <span class="step-num" style="background:#64748b;width:auto;min-width:22px;padding:0 6px;font-size:.68rem;font-family:monospace">{{ c.date }}</span>
-          <div>{{ c.subject }}</div>
-        </li>
+      {% elif changelog_groups %}
+      <div class="changelog-timeline">
+        {% for group in changelog_groups %}
+        <div class="changelog-group">
+          <div class="changelog-date">{{ group.date }}</div>
+          <ul class="changelog-items">
+            {% for subject in group.subjects %}
+            <li>{{ subject }}</li>
+            {% endfor %}
+          </ul>
+        </div>
         {% endfor %}
-      </ul>
+      </div>
       {% else %}
       <div class="info-box"><i class="bi bi-info-circle-fill me-1"></i>更新履歴がありません。</div>
       {% endif %}
@@ -527,7 +554,7 @@
   {# ── 既知の不具合 ── #}
   {{ section('known-issues','bi-bug-fill','rgba(239,68,68,.13)','#ef4444','既知の不具合','body-known-issues') }}
 
-      <p style="font-size:.82rem">現在報告されており、未対応の不具合です（GitHub Issuesより自動表示）。</p>
+      <p style="font-size:.82rem">現在オープン中の未対応Issueです（GitHub Issuesより自動表示）。</p>
       {% if known_issues is none %}
       <div class="info-box"><i class="bi bi-exclamation-circle-fill me-1"></i>一覧を取得できませんでした。</div>
       {% elif known_issues %}
@@ -543,7 +570,7 @@
       <div class="info-box"><i class="bi bi-check-circle-fill me-1"></i>現在報告されている不具合はありません。</div>
       {% endif %}
       <div class="text-end mt-2">
-        <a href="https://github.com/Richiesss/shift-tool/issues?q=is%3Aopen+is%3Aissue+label%3Abug" target="_blank" rel="noopener" style="font-size:.8rem">
+        <a href="https://github.com/Richiesss/shift-tool/issues?q=is%3Aopen+is%3Aissue" target="_blank" rel="noopener" style="font-size:.8rem">
           GitHubで確認する <i class="bi bi-box-arrow-up-right"></i>
         </a>
       </div>

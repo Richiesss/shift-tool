@@ -38,12 +38,13 @@ def get_commit_log(limit: int = 30) -> list[dict] | None:
 
 @cache.memoize(timeout=1800)
 def get_known_issues() -> list[dict] | None:
-    """GitHub Issues から label:bug かつ state:open の一覧を取得する（既知の不具合表示用）。
+    """GitHub Issues から state:open の一覧を取得する（既知の不具合表示用）。
 
-    通信エラー時は None を返す。"""
+    ラベルによる絞り込みは行わない（bugラベルが付いていない未対応issueも
+    表示対象とするため）。通信エラー時は None を返す。"""
     api_url = (
         f"https://api.github.com/repos/{REPO}/issues"
-        "?state=open&labels=bug&per_page=50&sort=created&direction=desc"
+        "?state=open&per_page=50&sort=created&direction=desc"
     )
     headers = {"User-Agent": "SDU-Shift-IssueChecker", "Accept": "application/vnd.github+json"}
     github_token = os.environ.get("GITHUB_TOKEN")
