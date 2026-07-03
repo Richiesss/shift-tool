@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -44,11 +45,13 @@ def get_known_issues() -> list[dict] | None:
         f"https://api.github.com/repos/{REPO}/issues"
         "?state=open&labels=bug&per_page=50&sort=created&direction=desc"
     )
+    headers = {"User-Agent": "SDU-Shift-IssueChecker", "Accept": "application/vnd.github+json"}
+    github_token = os.environ.get("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
     try:
-        req = urllib.request.Request(
-            api_url,
-            headers={"User-Agent": "SDU-Shift-IssueChecker", "Accept": "application/vnd.github+json"},
-        )
+        req = urllib.request.Request(api_url, headers=headers)
         with urllib.request.urlopen(req, timeout=6) as resp:
             data = json.loads(resp.read())
     except Exception:
