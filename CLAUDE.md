@@ -61,6 +61,27 @@ python scripts/migrate_to_supabase.py --pg-url "postgresql://postgres.[username]
 ### Dockerビルド（HuggingFace Spaces向け）
 `Dockerfile` を使用、`app_port: 8080`。
 
+### Cloud Run デプロイ（本番環境）
+```bash
+gcloud run deploy shift-tool \
+  --source . \
+  --region us-east1 \
+  --min-instances 0 \
+  --max-instances 1 \
+  --cpu 4 \
+  --memory 2Gi \
+  --timeout 300 \
+  --allow-unauthenticated \
+  --set-env-vars SOLVER_WORKERS=4,DISABLE_STATEMENT_TIMEOUT=true \
+  --set-secrets SECRET_KEY=shift-tool-secret-key:latest,DATABASE_URL=shift-tool-db-url:latest,APP_PASSWORD=shift-tool-app-password:latest,GITHUB_TOKEN=shift-tool-github-token:latest
+```
+- GCPプロジェクト: `shift-tool-1d0b52`（リージョン `us-east1`、無料枠対象）
+- 公開URL: `https://sdu-shift.duckdns.org`（Cloud Runのドメインマッピング機能で紐付け。DNSはDuckDNSで管理、A/AAAAレコードをGoogle指定のIPに設定）
+- 各シークレットはSecret Managerで管理（`shift-tool-secret-key` / `shift-tool-db-url` / `shift-tool-app-password` / `shift-tool-github-token`）。値を更新した場合は `gcloud secrets versions add <name> --data-file=-` で新バージョンを追加した後、上記デプロイコマンドを再実行しないと反映されない（`:latest`はデプロイ時点のバージョンに固定されるため）
+- `--max-instances 1`: `cache.py`の`SimpleCache`がプロセスローカルなため、複数インスタンス化によるキャッシュ不整合を避ける暫定策
+- `.gcloudignore`で`#!include:.gitignore`のみを指定し、`.git`ディレクトリをあえて除外していない。`utils/changelog.py`の「更新履歴」表示が`git log`コマンドに依存しているため（gcloudがデフォルト生成する`.gcloudignore`は`.git`を自動除外してしまい、更新履歴が空になる）
+- DBはSupabase (PostgreSQL)。移行手順は後述の「SQLite から Supabase へのデータ移行」を参照
+
 ---
 
 ## コーディング規約・注意点
@@ -73,7 +94,7 @@ python scripts/migrate_to_supabase.py --pg-url "postgresql://postgres.[username]
   - `SECRET_KEY` — Flaskセッション用シークレット
   - `SOLVER_LOG_PATH` — ソルバーのログ出力先（`utils/solver_logger.py`）
   - `GITHUB_TOKEN` — ヘルプ画面「既知の不具合」取得（`utils/changelog.py`）と「フィードバック」フォームからのIssue作成（`utils/github_issues.py`）に使用。Issue作成にはrepo権限を持つトークンが必須（未設定だとフィードバック送信が常に失敗する）。未設定でも一覧取得は動くが匿名レート制限（60回/時間）が適用される
-- **本番環境は現状HF Spacesのみ**: `render.yaml`はRenderへのデプロイ設定として残っているが、2026-07-03時点でRender側は未使用（サービス自体が存在しない・`DATABASE_URL`も未設定）。実際に稼働しているのはHuggingFace Spaces（Docker、SQLite、Persistent Storage有効）のみ。DBはPostgreSQL/SQLite両対応のまま残しているため、将来Renderを使う場合はDB方言に依存する変更を両方で動作確認すること。
+- **本番環境は2026-07-04時点でCloud Runに移行済み**（`https://sdu-shift.duckdns.org`、DBはSupabase）。レスポンス速度改善のためHF Spacesから移行した。HF Spacesは当面Pause状態で残し、問題があればすぐ切り戻せるようにしている（完全停止・Persistent Storage解約は運用が安定してから）。`render.yaml`はRenderへのデプロイ設定として残っているが未使用（サービス自体が存在しない）。DBはPostgreSQL/SQLite両対応のまま残しているため、DB方言に依存する変更を行う場合は注意すること。
 - **コメント・docstring・コミットメッセージは日本語**で統一する。
 - **自動テストスイートは無し**。`scripts/seed_test_data.py` でテストデータを投入し、Web版で手動確認する。
 - **ソルバー変更時**: `optimizer/solver.py` の優先度は `SolverConfig` と `PRIORITY_SCALE`（低=0.1/中=1.0/高=10.0）で調整する。`utils/solver_logger.py` がスタッフ別の割当根拠・ペナルティ内訳をログ出力するため、制約変更後は必ずログで影響を確認する。

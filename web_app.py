@@ -7,7 +7,6 @@ import logging
 from datetime import timedelta
 from flask import Flask, g, session, redirect, url_for, request, flash, jsonify
 from flask_compress import Compress
-from flask_session import Session as FlaskSession
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from cache import cache
 from db.database import initialize_db
@@ -31,7 +30,10 @@ def create_app():
             import secrets
             logger.warning(
                 "SECRET_KEY が未設定のため、ランダムなキーを自動生成しました。"
-                "サーバーの再起動ごとにセッションが失われるため、本番環境では必ず環境変数 SECRET_KEY を設定してください。"
+                "サーバーの再起動ごとにセッションが失われるほか、"
+                "Cloud Run等で複数インスタンスが起動する環境ではインスタンスごとに異なる鍵になり、"
+                "別インスタンスに振られた際にセッションCookieの検証が失敗してログアウトされる。"
+                "本番環境では必ず環境変数 SECRET_KEY を固定値で設定すること。"
             )
             secret_key = secrets.token_hex(32)
         else:
@@ -44,20 +46,18 @@ def create_app():
     app.config["WTF_CSRF_TIME_LIMIT"] = None
     CSRFProtect(app)
 
-    # サーバーサイドセッション（ファイルストア）
-    # Flask-Session 0.8.x では SESSION_TYPE="cachelib" + SESSION_CACHELIB が推奨
-    from cachelib import FileSystemCache
-    session_dir = "/tmp/flask_sessions"
-    os.makedirs(session_dir, exist_ok=True)
+    # セッションはFlask標準の署名付きCookieを使用する（サーバー側にファイルを持たない）。
+    # Cloud Run等インスタンスが使い捨て・複数起動されうる環境でも、
+    # ローカルディスク依存のセッションストアだと別インスタンスに振られた際に
+    # ログアウトされてしまうため、SECRET_KEYで署名したCookieに統一する。
+    # 保存内容はauthenticated/svフラグとGoogle OAuthの一時状態のみで小さいため、
+    # Cookieの4KB制限にも問題なく収まる。
     app.config.update(
-        SESSION_TYPE="cachelib",
-        SESSION_CACHELIB=FileSystemCache(cache_dir=session_dir, threshold=500),
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),
         SESSION_COOKIE_SECURE=not is_dev,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
     )
-    FlaskSession(app)
 
     initialize_db()
 
