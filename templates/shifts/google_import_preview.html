@@ -2,7 +2,7 @@
 {% block title %}Googleフォーム同期プレビュー - SDU-Shift{% endblock %}
 {% block content %}
 <div class="page-header">
-  <a href="{{ url_for('shifts.input', period_id=period.id) }}" class="text-white me-2">
+  <a href="{{ url_for('shifts.input', period_id=period.id) }}" class="text-white me-2" aria-label="戻る" style="padding:.5rem;margin:-.5rem 0">
     <i class="bi bi-arrow-left"></i>
   </a>
   <h1 class="fs-6"><i class="bi bi-search me-1"></i>Googleフォーム同期プレビュー</h1>

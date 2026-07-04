@@ -2,7 +2,7 @@
 {% block title %}月次集計 - SDU-Shift{% endblock %}
 {% block content %}
 <div class="page-header">
-  <a href="{{ url_for('schedule.index', period_id=period.id) }}" class="text-white me-2">
+  <a href="{{ url_for('schedule.index', period_id=period.id) }}" class="text-white me-2" aria-label="戻る" style="padding:.5rem;margin:-.5rem 0">
     <i class="bi bi-arrow-left"></i>
   </a>
   <h1 class="fs-6"><i class="bi bi-bar-chart-fill me-1"></i>月次集計</h1>

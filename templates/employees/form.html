@@ -50,7 +50,7 @@
 
 {% block content %}
 <div class="page-header">
-  <a href="{{ url_for('employees.index') }}" class="text-white me-2"><i class="bi bi-arrow-left"></i></a>
+  <a href="{{ url_for('employees.index') }}" class="text-white me-2" aria-label="戻る" style="padding:.5rem;margin:-.5rem 0"><i class="bi bi-arrow-left"></i></a>
   <h1>{{ '従業員編集' if emp else '新規登録' }}</h1>
 </div>
 
