@@ -425,6 +425,27 @@ def initialize_db():
         except Exception:
             pass
 
+    # SQLite → PostgreSQL移行(scripts/migrate_to_supabase.py)は行を元のidを指定して
+    # コピーするため、SERIALシーケンスがずれたままだと新規INSERT時にnextval()が
+    # 既存の(他行の)idと衝突しUniqueViolationになる（ON CONFLICTの対象は
+    # (period_id, date)等の別カラムのため、id側の衝突は防げない）。
+    # 起動のたびに実データの最大idへ同期しておくことで、移行スクリプト側の
+    # シーケンス同期が失敗していても自己修復する。
+    if conn.backend == "postgres":
+        for table in (
+            "employees", "schedule_periods", "shift_requests", "shift_assignments",
+            "schedule_notes", "staff_notes", "reservation_counts", "assignment_log",
+            "cell_notes",
+        ):
+            try:
+                conn.execute(
+                    f"SELECT setval(pg_get_serial_sequence('{table}', 'id'),"
+                    f" coalesce((SELECT MAX(id) FROM {table}), 1),"
+                    f" (SELECT MAX(id) FROM {table}) IS NOT NULL)"
+                )
+            except Exception:
+                pass
+
     if conn.backend == "postgres":
         conn._conn.autocommit = False
 
