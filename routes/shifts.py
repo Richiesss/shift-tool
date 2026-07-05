@@ -1,6 +1,6 @@
 import calendar
 from datetime import date, timedelta
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from db import repositories as repo
 from models.schedule import SchedulePeriod, ShiftRequest
 from utils.shift_patterns import ALL_PATTERNS, PATTERN_MAP
@@ -450,6 +450,7 @@ def google_create_form(period_id):
         
         flash("Google フォームを自動作成しました！回答URLを配布してシフトを収集してください。", "success")
     except Exception as e:
+        current_app.logger.exception(f"Google フォーム作成失敗 (period_id={period_id})")
         flash(f"Google フォームの作成に失敗しました: {e}", "error")
 
     return redirect(url_for("shifts.input", period_id=period_id))
@@ -493,6 +494,7 @@ def google_update_form(period_id):
         )
         flash("Google フォームの内容を最新の状態に更新しました！", "success")
     except Exception as e:
+        current_app.logger.exception(f"Google フォーム更新失敗 (period_id={period_id})")
         flash(f"Google フォームの更新に失敗しました: {e}", "error")
 
     return redirect(url_for("shifts.input", period_id=period_id))
