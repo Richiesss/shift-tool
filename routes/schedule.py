@@ -43,14 +43,19 @@ def _compute_staffing(assignments, employees, dates, constraints,
         for slot in TimeSlot:
             for pos in Position:
                 c     = constraints.get((slot, pos), {})
-                min_s = c.get("min", 0)
                 min_l = c.get("min_leader", 0)
-                # 予約客数による動的増員（ソルバーと同じ判定）
+                # 予約客数による動的増員（ソルバーと同じ判定）。
+                # 増員がある日はmaxもminに合わせて引き上げる（増員後の人数が「過剰」誤判定にならないように）。
                 if slot == TimeSlot.BREAKFAST:
-                    min_s += tiered_extra(b_count, tiers_b)
+                    extra = tiered_extra(b_count, tiers_b)
                 elif slot == TimeSlot.DINNER:
-                    min_s += tiered_extra(d_count, tiers_d)
+                    extra = tiered_extra(d_count, tiers_d)
+                else:
+                    extra = 0
+                min_s = c.get("min", 0) + extra
                 max_s = c.get("max", 0)
+                if extra:
+                    max_s = max(max_s, min_s)
                 cnt  = count_map[(ds, slot.value, pos.value)]
                 ldrs = leader_map[(ds, slot.value, pos.value)]
                 result[(ds, slot.value, pos.value)] = {
