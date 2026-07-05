@@ -4,10 +4,15 @@
 <style>
   .sched-grid {
     overflow: auto;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100dvh - 200px);
     -webkit-overflow-scrolling: touch;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
+  }
+  /* スマホではJSでビューポート残り高さぴったりに再計算する（fitSchedGrid）。
+     これはJS実行前・無効時のフォールバック値。 */
+  @media (max-width: 767px) {
+    .sched-grid { max-height: calc(100dvh - 260px); }
   }
   .sched-grid table { min-width: max-content; font-size: .82rem; }
   .sched-grid th, .sched-grid td { white-space: nowrap; padding: .4rem .5rem; vertical-align: middle; min-width: 62px; }
@@ -49,11 +54,10 @@
   .count-leader { background: #f59e0b; color: white; }
 
   /* ── 人員状況グリッド（4区分） ── */
+  /* スマホでも2カラムのまま（各セルは閉じた状態では最小限の内容のため縦積みにする必要がない。
+     縦積みだとスマホでこの4枚だけで画面の大半を占有し、シフト表まで無駄なスクロールが必要になる） */
   .shortage-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  }
-  @media (max-width: 767px) {
-    .shortage-grid { grid-template-columns: 1fr; }
   }
   .sg-cell {
     background: var(--glass-bg);
@@ -530,8 +534,8 @@
     {% endfor %}
   </div>
 
-  <!-- コンパクト凡例 -->
-  <div class="d-flex gap-3 mb-1 small text-muted flex-wrap">
+  <!-- コンパクト凡例（スマホでは非表示にしてシフト表までのスクロール距離を短縮。内容は下部凡例と合わせて参照可能） -->
+  <div class="d-none d-md-flex gap-3 mb-1 small text-muted flex-wrap">
     <span><i class="bi bi-sunrise me-1"></i>上段＝朝食　<i class="bi bi-moon-stars ms-1 me-1"></i>下段＝ディナー</span>
     <span><span class="chip-hall px-1">H</span> ホール</span>
     <span><span class="chip-kitchen px-1">K</span> キッチン</span>
@@ -829,6 +833,22 @@ const TL_ASGN = {
   },
   {% endfor %}
 };
+
+// スマホ：ページ本体のスクロールとグリッド内スクロールが二重にならないよう、
+// グリッドの高さをヘッダー・バナー類の実際の高さを差し引いたビューポート残り分にJSで再計算する
+function fitSchedGrid() {
+  const grid = document.querySelector('.sched-grid');
+  if (!grid) return;
+  if (window.innerWidth >= 768) { grid.style.maxHeight = ''; return; }
+  const top = grid.getBoundingClientRect().top;
+  const bottomNav = document.querySelector('.bottom-nav');
+  const navH = (bottomNav && getComputedStyle(bottomNav).display !== 'none') ? bottomNav.offsetHeight : 0;
+  const available = window.innerHeight - top - navH - 8;
+  grid.style.maxHeight = Math.max(240, available) + 'px';
+}
+fitSchedGrid();
+window.addEventListener('resize', fitSchedGrid);
+window.addEventListener('orientationchange', fitSchedGrid);
 
 // スクロール復元 or 今日の列へ自動スクロール
 {
