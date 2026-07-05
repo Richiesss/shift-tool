@@ -167,6 +167,11 @@
 
   /* 正社員の希望休：赤塗りつぶし */
   .ft-off { background-color: rgba(239, 68, 68, 0.25) !important; color: #ef4444 !important; }
+  /* 有給希望：黄塗りつぶし（未アサインの「+」と区別するため） */
+  .leave-day { background-color: rgba(234, 179, 8, 0.25) !important; color: #a16207 !important; }
+  .chip-leave { font-size: .65rem; font-weight: 600; color: #a16207; }
+  [data-theme="dark"] .leave-day { color: #facc15 !important; }
+  [data-theme="dark"] .chip-leave { color: #facc15; }
   /* スタッフ個別コメント表示 */
   .cell-note-badge {
     display: block; font-size: .6rem; line-height: 1.2;
@@ -265,8 +270,9 @@
   {% set is_holiday = ds in holidays %}
   {% set is_ft = emp.employment_type.value == 'full_time' %}
   {% set is_ft_off = (emp.id, ds) in ft_off_dates %}
+  {% set is_leave = (emp.id, ds) in leave_dates %}
   {% set cell_note = cell_notes.get((emp.id, ds), '') %}
-  <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} {{ 'ft-off' if is_ft_off else '' }}">
+  <td class="text-center {{ 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' }} {{ 'today-col' if ds == today else '' }} {{ 'ft-off' if is_ft_off else 'leave-day' if is_leave else '' }}">
     {% for sk in ['breakfast', 'dinner'] %}
     {% if emp.id in slot_ids[sk] %}
     {% set day_assignments = asgn_map.get(ds, {}).get(sk, []) %}
@@ -300,6 +306,8 @@
       {% elif is_unassigned_request %}
         <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
         {% if req_time %}<div style="font-size:.6rem;color:#94a3b8;line-height:1.15">{{ req_time }}</div>{% endif %}
+      {% elif is_leave %}
+        <span class="chip-leave" title="有給希望">有給</span>
       {% else %}
         <span class="chip-empty">+</span>
       {% endif %}
@@ -540,6 +548,7 @@
     <span><span class="chip-hall px-1">H</span> ホール</span>
     <span><span class="chip-kitchen px-1">K</span> キッチン</span>
     <span><span class="chip-unassigned px-1">希</span> 希望提出・未アサイン</span>
+    <span><span class="chip-leave px-1">有給</span> 有給希望</span>
     <span class="text-secondary">— 対象外</span>
   </div>
 

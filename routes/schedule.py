@@ -406,6 +406,13 @@ def index(period_id):
         and emp_map[r.employee_id].employment_type.value == 'full_time'
     }
 
+    # 有給希望セット（雇用形態を問わず対象。未アサインの「+」と区別してシフト表に表示するため）
+    leave_dates = {
+        (r.employee_id, r.date)
+        for r in shift_requests
+        if r.pattern_id == 'paid_leave'
+    }
+
     holidays = holiday_set(dates)
 
     # シフト表ヘッダーに表示する気象情報（店舗の緯度経度が未設定なら空）
@@ -450,6 +457,7 @@ def index(period_id):
         unsubmitted_count=unsubmitted_count,
         reservation_counts=reservation_counts,
         ft_off_dates=ft_off_dates,
+        leave_dates=leave_dates,
         cell_notes=cell_notes,
         export_emp_order=export_emp_order,
         today=today,
