@@ -9,10 +9,11 @@ from utils.holidays import holiday_set
 from utils.submission import submitted_employee_ids
 
 PAT_CATS = {
-    'b_short': 'b', 'b_std': 'b', 'b_long': 'b', 'b_half': 'b',
+    'b_early': 'b', 'b_long': 'b', 'b_mini': 'b', 'b_short': 'b',
+    'b_open': 'b', 'b_half': 'b', 'b_short3': 'b', 'b_short2': 'b', 'b_std': 'b',
     'd_full1': 'd', 'd_full2': 'd',
-    'd_std1': 'd', 'd_std2': 'd', 'd_std3': 'd',
-    'd_s1': 'd', 'd_s2': 'd', 'd_s3': 'd',
+    'd_s1': 'd', 'd_std1': 'd', 'd_long': 'd', 'd_std4': 'd', 'd_std2': 'd',
+    'd_s3': 'd', 'd_std5': 'd', 'd_std3': 'd',
     'double': 'db',
     'custom': 'cust',
 }

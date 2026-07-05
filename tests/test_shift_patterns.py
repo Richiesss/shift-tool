@@ -171,13 +171,13 @@ class TestIsLongBreakfastPattern:
         # 5:45-14:45 → 朝食カバー・終了14.75 >= 14.0
         assert is_long_breakfast_pattern("b_long") is True
 
-    def test_b_8h_is_long(self):
-        # 6:00-14:00 → 終了14.0 >= 14.0
-        assert is_long_breakfast_pattern("b_8h") is True
-
     def test_b_half_is_long(self):
-        # 6:30-15:30 → 終了15.5 >= 14.0
+        # 6:00-15:00 → 終了15.0 >= 14.0
         assert is_long_breakfast_pattern("b_half") is True
+
+    def test_b_open_not_long(self):
+        # 6:00-11:30 → 終了11.5 < 14.0
+        assert is_long_breakfast_pattern("b_open") is False
 
     def test_b_std_not_long(self):
         # 6:30-11:30 → 終了11.5 < 14.0

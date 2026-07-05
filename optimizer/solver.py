@@ -585,7 +585,7 @@ def solve(
         for ds in date_strs:
             # FIX③+Issue #61拡張: 実際に開店準備（5:45〜6:30）に参加できるスタッフのみ対象
             # FT社員・おまかせPTは常時可能。提出シフトがある場合は開始時刻6:00以前のもののみ。
-            # b_std/b_half（6:30開始）は5:45〜6:30の開店準備に間に合わないため除外する
+            # b_std（6:30開始）は5:45〜6:30の開店準備に間に合わないため除外する
             can_open_req = [
                 emp for emp in active_employees
                 if emp.can_open and (
