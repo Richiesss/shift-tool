@@ -208,6 +208,9 @@ def input(period_id):
 
 @bp.post("/<int:period_id>/deadline")
 def set_deadline(period_id):
+    # ダッシュボードからも設定できるよう、遷移元に応じて戻り先を切り替える
+    # （任意のURLを受け取らず既知の2画面のみに限定してオープンリダイレクトを防ぐ）
+    return_to = "dashboard.index" if request.form.get("next") == "dashboard" else "shifts.input"
     period = repo.get_period(period_id)
     if not period:
         flash("期間が見つかりません", "error")
@@ -216,6 +219,8 @@ def set_deadline(period_id):
     period.submission_deadline = deadline or None
     repo.save_period(period)
     flash("提出期日を設定しました" if deadline else "提出期日を解除しました", "success")
+    if return_to == "dashboard.index":
+        return redirect(url_for("dashboard.index"))
     return redirect(url_for("shifts.input", period_id=period_id))
 
 

@@ -159,6 +159,24 @@
   .days-left-chip.dl-over { background: rgba(239,68,68,.15); color: #f87171; border-color: rgba(239,68,68,.15); }
   .days-left-chip.dl-soon { background: rgba(245,158,11,.15); color: #f59e0b; border-color: rgba(245,158,11,.1); }
 
+  .deadline-form {
+    display: inline-flex; align-items: center; gap: 6px; margin-left: .5rem;
+  }
+  .deadline-form input[type="date"] {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
+    color: #f8fafc; border-radius: 6px; padding: 3px 8px; font-size: .78rem;
+    color-scheme: dark; width: 142px;
+  }
+  .deadline-form input[type="date"]:focus {
+    outline: none; border-color: rgba(56,189,248,.6);
+  }
+  .deadline-form button {
+    background: rgba(56,189,248,.15); border: 1px solid rgba(56,189,248,.3);
+    color: #38bdf8; border-radius: 6px; padding: 3px 10px; font-size: .75rem; font-weight: 700;
+    cursor: pointer;
+  }
+  .deadline-form button:hover { background: rgba(56,189,248,.25); }
+
   /* ── アラート詳細 ── */
   .alert-section { margin-bottom: .85rem; }
   .alert-card {
@@ -342,22 +360,25 @@
       <span style="color:#475569;font-size:.72rem;margin-left:.5rem">終了</span>
       {% endif %}
     </div>
-    {% if period_info.deadline %}
-    {% set dl = period_info.deadline %}
-    <div class="period-meta" style="margin-top:.35rem">
+    <div class="period-meta" style="margin-top:.35rem;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
       <i class="bi bi-flag-fill" style="color:#f59e0b"></i>
-      提出期日 <strong>{{ dl.date }}</strong>
+      提出期日
+      {% if period_info.deadline %}
+      {% set dl = period_info.deadline %}
+      <strong>{{ dl.date }}</strong>
       <span class="days-left-chip {{ 'dl-over' if dl.level == 'over' else 'dl-soon' if dl.level == 'soon' else '' }}">
         {% if dl.level == 'over' %}期日超過{% elif dl.days_left == 0 %}本日締切{% else %}あと{{ dl.days_left }}日{% endif %}
       </span>
+      {% else %}
+      <span style="color:#64748b">未設定</span>
+      {% endif %}
+      <form method="post" action="{{ url_for('shifts.set_deadline', period_id=p.id) }}" class="deadline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="dashboard">
+        <input type="date" name="deadline" value="{{ period_info.deadline.date if period_info.deadline else '' }}">
+        <button type="submit">{{ '更新' if period_info.deadline else '設定' }}</button>
+      </form>
     </div>
-    {% else %}
-    <div class="period-meta" style="margin-top:.35rem">
-      <a href="{{ url_for('shifts.input', period_id=p.id) }}" style="color:#64748b;font-size:.75rem;text-decoration:none">
-        <i class="bi bi-flag me-1"></i>提出期日を設定する
-      </a>
-    </div>
-    {% endif %}
     <div style="margin-top:.55rem;font-size:.78rem;color:#64748b">
       希望提出 <strong style="color:#e2e8f0">{{ period_info.request_count }}</strong> /
       <strong style="color:#e2e8f0">{{ staff_count }}</strong> 名
