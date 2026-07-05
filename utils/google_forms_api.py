@@ -50,6 +50,43 @@ def get_credentials_from_json(credentials_json_str: str) -> Credentials:
 
 DOW_LABELS = ["月", "火", "水", "木", "金", "土", "日"]
 
+
+def _fmt_time(t: str) -> str:
+    """「05:45」→「5:45」（表示用に先頭の0を削る）"""
+    h, m = t.split(":")
+    return f"{int(h)}:{m}"
+
+
+def _build_checkbox_options() -> list[dict]:
+    """
+    出勤希望チェックボックスの選択肢を構築する。
+    「朝食早出」「ロング」などのパターン呼称はシフト作成側の内部管理用の名称で
+    入力するスタッフには馴染みがないため表示せず、時間帯のみを開始時刻順に並べる。
+    """
+    def _sort_key(p):
+        return (p.start_hour(), p.end_hour())
+
+    breakfast = sorted(
+        (p for p in ALL_PATTERNS
+         if p.id not in ("custom", "double") and p.start and p.end and p.covers_breakfast()),
+        key=_sort_key,
+    )
+    dinner = sorted(
+        (p for p in ALL_PATTERNS
+         if p.id not in ("custom", "double") and p.start and p.end and p.covers_dinner()),
+        key=_sort_key,
+    )
+
+    options = [{"value": "休み（出勤不可）"}, {"value": "有給"}]
+    options += [
+        {"value": f"朝食: {_fmt_time(p.start)}〜{_fmt_time(p.end)}"} for p in breakfast
+    ]
+    options += [
+        {"value": f"ディナー: {_fmt_time(p.start)}〜{_fmt_time(p.end)}"} for p in dinner
+    ]
+    options.append({"value": "その他（備考欄に時刻を記入）"})
+    return options
+
 # 各日設問の共通ヒント（設問下に表示される短い説明）
 DATE_QUESTION_HINT = (
     "出勤できる時間帯にチェック（朝食・ディナー両方可なら両方チェック）。"
@@ -189,16 +226,7 @@ def create_google_form(
     holidays = holiday_set(dates)
 
     # チェックボックス用の選択肢リストを作成
-    checkbox_options = [{"value": "休み（出勤不可）"}, {"value": "有給"}]
-    for p in ALL_PATTERNS:
-        if p.id not in ("custom", "double") and p.start and p.end:
-            label = p.label
-            if p.covers_breakfast():
-                checkbox_options.append({"value": f"朝食: {label}"})
-            if p.covers_dinner():
-                checkbox_options.append({"value": f"ディナー: {label}"})
-
-    checkbox_options.append({"value": "その他（備考欄に時刻を記入）"})
+    checkbox_options = _build_checkbox_options()
 
     idx = 1
     for w_i, chunk in enumerate(_week_chunks(dates)):
@@ -337,15 +365,7 @@ def update_google_form(
     emp_names = [e.name for e in employees]
 
     # チェックボックス用の選択肢リストを作成
-    checkbox_options = [{"value": "休み（出勤不可）"}, {"value": "有給"}]
-    for p in ALL_PATTERNS:
-        if p.id not in ("custom", "double") and p.start and p.end:
-            label = p.label
-            if p.covers_breakfast():
-                checkbox_options.append({"value": f"朝食: {label}"})
-            if p.covers_dinner():
-                checkbox_options.append({"value": f"ディナー: {label}"})
-    checkbox_options.append({"value": "その他（備考欄に時刻を記入）"})
+    checkbox_options = _build_checkbox_options()
 
     # 日付ごとのタイトル判定用（(month, day) → 新形式タイトル）
     dates = list(period.date_range())

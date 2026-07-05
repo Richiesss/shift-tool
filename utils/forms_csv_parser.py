@@ -632,17 +632,33 @@ def _process_checkbox_fmt(
 ) -> "Optional[ShiftRequest]":
     """チェックボックス形式の複数選択の回答から ShiftRequest を構築する。"""
     val = row.get(col_name, "").strip()
-    if not val or "休み" in val:
-        # 空、または「休み」が選択されている場合は休み扱い
+    if not val:
         return ShiftRequest(
             employee_id=emp.id, date=date_str,
             pattern_id=None, custom_start=None, custom_end=None, note=note,
         )
 
+    # 「有給」は「休み」など他の選択肢と誤って同時に選ばれていても最優先で扱う。
+    # フォームのヒント文で「その項目のみ選択してください」と案内してはいるが、
+    # 実際には両方選ばれてしまうケースがあり、「休み」判定を先に行うと有給の指定が
+    # 黙って消えて通常の休み扱いになってしまう不具合があったため、判定順を入れ替えた。
     if "有給" in val:
+        selections = [s.strip() for s in val.split(",")]
+        if len(selections) > 1:
+            result.warnings.append(
+                f"「{name}」{date_str}: 「有給」と他の選択肢が同時に選ばれていたため、"
+                f"「有給」を優先して取り込みました（回答: 「{val}」）"
+            )
         return ShiftRequest(
             employee_id=emp.id, date=date_str,
             pattern_id="paid_leave", custom_start=None, custom_end=None, note=note,
+        )
+
+    if "休み" in val:
+        # 「休み」が選択されている場合は休み扱い
+        return ShiftRequest(
+            employee_id=emp.id, date=date_str,
+            pattern_id=None, custom_start=None, custom_end=None, note=note,
         )
 
     # 選択肢のカンマ区切りを配列にパース
