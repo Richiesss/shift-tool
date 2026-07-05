@@ -75,6 +75,16 @@ gcloud run deploy shift-tool \
   --set-env-vars SOLVER_WORKERS=4,DISABLE_STATEMENT_TIMEOUT=true \
   --set-secrets SECRET_KEY=shift-tool-secret-key:latest,DATABASE_URL=shift-tool-db-url:latest,APP_PASSWORD=shift-tool-app-password:latest,GITHUB_TOKEN=shift-tool-github-token:latest
 ```
+**デプロイ後は必ずトラフィックの昇格を確認・実行すること**:
+```bash
+gcloud run services update-traffic shift-tool --region=us-east1 --to-latest
+```
+`--max-instances 1` の制約下では、旧リビジョンのインスタンスが起動したままだと新リビジョンが
+起動に必要なインスタンス枠を確保できず、`gcloud run deploy` がビルド成功のログを出しても
+実際のトラフィックが旧リビジョンに残ったままになることがある（2026-07-05に発生、`gcloud run
+services describe shift-tool --region=us-east1 --format="yaml(status.traffic,status.latestReadyRevisionName)"`
+で`traffic`と`latestReadyRevisionName`が一致しているか必ず確認する）。上記コマンドで明示的に
+最新リビジョンへ昇格させることで解消できる。
 - GCPプロジェクト: `shift-tool-1d0b52`（リージョン `us-east1`、無料枠対象）
 - 公開URL: `https://sdu-shift.duckdns.org`（Cloud Runのドメインマッピング機能で紐付け。DNSはDuckDNSで管理、A/AAAAレコードをGoogle指定のIPに設定）
 - 各シークレットはSecret Managerで管理（`shift-tool-secret-key` / `shift-tool-db-url` / `shift-tool-app-password` / `shift-tool-github-token`）。値を更新した場合は `gcloud secrets versions add <name> --data-file=-` で新バージョンを追加した後、上記デプロイコマンドを再実行しないと反映されない（`:latest`はデプロイ時点のバージョンに固定されるため）
