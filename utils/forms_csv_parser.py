@@ -671,16 +671,20 @@ def _process_checkbox_fmt(
             pattern_id=None, custom_start=None, custom_end=None, note=note,
         )
 
-    # 「有給」は「休み」など他の選択肢と誤って同時に選ばれていても最優先で扱う。
-    # フォームのヒント文で「その項目のみ選択してください」と案内してはいるが、
-    # 実際には両方選ばれてしまうケースがあり、「休み」判定を先に行うと有給の指定が
-    # 黙って消えて通常の休み扱いになってしまう不具合があったため、判定順を入れ替えた。
+    # 「有給」は他の選択肢と同時に選ばれていない（単独選択の）場合のみ有効とする。
+    # フォームのヒント文で「その項目のみ選択してください」と案内しているが、実際には
+    # 他の選択肢と同時に選ばれてしまうケースがある。どちらの意図か判別できないため、
+    # 給与・勤怠上リスクのある「有給」を安易に確定させず、安全側（休み扱い）に倒す方針とする。
     if "有給" in val:
         selections = [s.strip() for s in val.split(",")]
         if len(selections) > 1:
             result.warnings.append(
                 f"「{name}」{date_str}: 「有給」と他の選択肢が同時に選ばれていたため、"
-                f"「有給」を優先して取り込みました（回答: 「{val}」）"
+                f"判断できず休み扱いで取り込みました（回答: 「{val}」）"
+            )
+            return ShiftRequest(
+                employee_id=emp.id, date=date_str,
+                pattern_id=None, custom_start=None, custom_end=None, note=note,
             )
         return ShiftRequest(
             employee_id=emp.id, date=date_str,
