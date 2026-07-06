@@ -537,6 +537,9 @@
       {% elif cur_pid == 'pm_only' %}<i class="bi bi-sunset me-1"></i>14:00〜23:00
       {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
     {% endset %}
+  {% elif cur_pid == 'paid_leave' %}
+    {% set btn_cls = 'pat-leave' %}
+    {% set btn_html %}<i class="bi bi-calendar-check me-1"></i>有給{% endset %}
   {% else %}
     {% set pcat = PAT_CATS.get(cur_pid, 'off') %}
     {% set btn_cls = 'pat-' + pcat %}
