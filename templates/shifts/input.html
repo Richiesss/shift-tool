@@ -284,164 +284,6 @@
 </div>
 {% endif %}
 
-{# ── 外部フォーム・CSV連携（β） ── #}
-<div class="px-3 mb-3">
-  <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, var(--bg-card) 0%, var(--card-bg-hover) 100%); border: 1px solid var(--border) !important;">
-    <div class="card-body p-3">
-      <div class="d-flex align-items-center justify-content-between">
-        <h6 class="card-title mb-0 d-flex align-items-center gap-2" style="font-size: 0.85rem; font-weight: 700; color: var(--text);">
-          <i class="bi bi-google text-primary"></i> 外部フォーム ＆ CSV連携（β）
-        </h6>
-        <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" id="integration-toggle" data-bs-toggle="collapse" data-bs-target="#integrationPanel" aria-expanded="false" style="font-size: 0.7rem; border-radius: 4px;">
-          <i class="bi bi-chevron-down" id="integration-toggle-icon"></i> <span id="integration-toggle-label">開く</span>
-        </button>
-      </div>
-      
-      <div class="collapse" id="integrationPanel">
-        <div class="border-top pt-3 mt-3" style="border-color: var(--border) !important;">
-          <div class="row g-3">
-            
-            {% if google_forms_enabled %}
-            <!-- Google フォーム連携 -->
-            <div class="col-md-7 pe-md-3" style="border-right: 1.5px solid var(--border);">
-              <div class="fw-bold small mb-2"><i class="bi bi-google me-1"></i>Google Forms 連携（API自動）</div>
-
-              {% if not is_google_linked %}
-                <div class="p-3 rounded-2 text-center" style="background-color: rgba(0,0,0,0.02); border: 1px dashed var(--border);">
-                  <div class="small text-muted mb-2">Googleアカウントと連携されていません。</div>
-                  <a href="{{ url_for('settings.index') }}" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem;">
-                    設定画面で連携する
-                  </a>
-                </div>
-              {% else %}
-                {% if not period.google_form_id %}
-                  <!-- フォーム未作成 -->
-                  <div class="small text-muted mb-2">
-                    この期間用のシフト提出フォームがまだ作成されていません。
-                  </div>
-                  <form method="post" action="{{ url_for('shifts.google_create_form', period_id=period.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-primary">
-                      <i class="bi bi-plus-circle me-1"></i>フォームを自動作成
-                    </button>
-                  </form>
-                {% else %}
-                  <!-- フォーム作成済み -->
-                  <div class="mb-3">
-                    <label class="form-label small fw-semibold mb-1">シフト回収用URL（配布用）</label>
-                    <div class="input-group input-group-sm">
-                      <input type="text" id="google-form-url" class="form-control" readonly 
-                             value="https://docs.google.com/forms/d/{{ period.google_form_id }}/viewform">
-                      <button class="btn btn-outline-secondary" type="button" onclick="copyFormUrl()">
-                        <i class="bi bi-copy"></i>
-                      </button>
-                    </div>
-                    <div class="text-success small mt-1" id="copy-success-msg" style="display: none;">
-                      URLをコピーしました！
-                    </div>
-                  </div>
-
-                  <!-- フォーム編集フォーム -->
-                  <div class="mb-3 rounded p-2" style="background: rgba(0,0,0,0.02); border: 1px solid var(--border);">
-                    <div class="d-flex align-items-center justify-content-between mb-0">
-                      <span class="small fw-semibold text-muted" style="font-size: 0.75rem;"><i class="bi bi-pencil-square me-1"></i>フォーム内容・選択肢の更新</span>
-                      <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" data-bs-toggle="collapse" data-bs-target="#editFormPanel" style="font-size: 0.65rem; border-radius: 4px;">
-                        編集フォームを開く
-                      </button>
-                    </div>
-                    <div class="collapse" id="editFormPanel">
-                      <form method="post" action="{{ url_for('shifts.google_update_form', period_id=period.id) }}" class="mt-2 pt-2 border-top" style="border-color: var(--border) !important;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="mb-2">
-                          <label class="form-label mb-1" style="font-size: 0.75rem;">タイトル</label>
-                          <input type="text" name="title" class="form-control form-control-sm" placeholder="変更する場合のみ入力（空欄でデフォルト）" style="font-size: 0.75rem;">
-                        </div>
-                        <div class="mb-2">
-                          <label class="form-label mb-1" style="font-size: 0.75rem;">説明（注意事項）</label>
-                          <textarea name="description" rows="3" class="form-control form-control-sm" style="font-size: 0.75rem;" placeholder="変更する場合のみ入力（空欄でデフォルトの注意事項）"></textarea>
-                        </div>
-                        <div class="text-end">
-                          <button type="submit" class="btn btn-sm btn-primary py-1 px-2" style="font-size: 0.7rem; border-radius: 4px;">
-                            <i class="bi bi-send me-1"></i>フォームに反映する
-                          </button>
-                        </div>
-                      </form>
-                      <div class="small text-muted mt-2" style="font-size: 0.65rem; line-height: 1.25;">
-                        ※ 反映すると、現在のスタッフ名リストや最新のシフトパターン定義も自動的にフォームの選択肢に再適用されます。
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 回答受付の締切管理 -->
-                  <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                    <span class="small text-muted">回答受付:</span>
-                    <span id="accepting-badge" class="badge bg-secondary">確認中…</span>
-                    <form method="post" action="{{ url_for('shifts.google_set_accepting', period_id=period.id) }}" class="ms-auto d-flex gap-1">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" name="accepting" value="0" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.7rem"
-                              onclick="confirmAction('回答の受付を締め切りますか？\n以降スタッフはフォームに回答できなくなります。', () => this.form.requestSubmit(this)); return false;">
-                        <i class="bi bi-stop-circle me-1"></i>締め切る
-                      </button>
-                      <button type="submit" name="accepting" value="1" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.7rem">
-                        <i class="bi bi-play-circle me-1"></i>再開する
-                      </button>
-                    </form>
-                  </div>
-                  <script>
-                  // 受付状態を非同期で取得してバッジに反映
-                  fetch("{{ url_for('shifts.google_accepting_status', period_id=period.id) }}")
-                    .then(r => r.json())
-                    .then(d => {
-                      const b = document.getElementById('accepting-badge');
-                      if (!b) return;
-                      if (d.ok && d.accepting === true)  { b.className = 'badge bg-success';  b.textContent = '受付中'; }
-                      else if (d.ok && d.accepting === false) { b.className = 'badge bg-danger'; b.textContent = '締切済み'; }
-                      else { b.className = 'badge bg-secondary'; b.textContent = '不明'; }
-                    })
-                    .catch(() => {
-                      const b = document.getElementById('accepting-badge');
-                      if (b) { b.className = 'badge bg-secondary'; b.textContent = '不明'; }
-                    });
-                  </script>
-
-                  <form method="post" action="{{ url_for('shifts.google_sync', period_id=period.id) }}" class="d-flex align-items-center gap-2 flex-wrap">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="form-check form-check-inline mb-0">
-                      <input class="form-check-input" type="radio" name="merge" value="fill" id="g-fill" checked>
-                      <label class="form-check-label small" for="g-fill">未入力のみ追加</label>
-                    </div>
-                    <div class="form-check form-check-inline mb-0">
-                      <input class="form-check-input" type="radio" name="merge" value="overwrite" id="g-over">
-                      <label class="form-check-label small" for="g-over">全て上書き</label>
-                    </div>
-                    <button type="submit" class="btn btn-sm btn-success ms-auto">
-                      <i class="bi bi-arrow-repeat me-1"></i>回答データを同期
-                    </button>
-                  </form>
-                {% endif %}
-              {% endif %}
-            </div>
-            {% endif %}
-
-            <!-- CSV手動インポート -->
-            <div class="col-md-{{ '5 ps-md-3' if google_forms_enabled else '12' }}">
-              <div class="fw-bold small mb-2"><i class="bi bi-filetype-csv me-1"></i>CSVファイル手動取り込み</div>
-              <p class="small text-muted mb-3">
-                APIを使わず、手動でエクスポートしたGoogleフォーム等のCSVファイルを読み込みます。
-              </p>
-              <a href="{{ url_for('shifts.import_csv_form', period_id=period.id) }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-upload me-1"></i>CSVインポート画面へ
-              </a>
-            </div>
-            
-          </div>
-        </div>
-      </div>
-      
-    </div>
-  </div>
-</div>
-
 {% if current_emp %}
 {% if cur_omakase_breakfast or cur_omakase_dinner %}
 <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
@@ -668,6 +510,164 @@
   スタッフが登録されていません
 </div>
 {% endif %}
+
+{# ── 外部フォーム・CSV連携（β）：日々の入力フローを妨げないよう入力フォームの下に配置 ── #}
+<div class="px-3 mb-3">
+  <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, var(--bg-card) 0%, var(--card-bg-hover) 100%); border: 1px solid var(--border) !important;">
+    <div class="card-body p-3">
+      <div class="d-flex align-items-center justify-content-between">
+        <h6 class="card-title mb-0 d-flex align-items-center gap-2" style="font-size: 0.85rem; font-weight: 700; color: var(--text);">
+          <i class="bi bi-google text-primary"></i> 外部フォーム ＆ CSV連携（β）
+        </h6>
+        <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" id="integration-toggle" data-bs-toggle="collapse" data-bs-target="#integrationPanel" aria-expanded="false" style="font-size: 0.7rem; border-radius: 4px;">
+          <i class="bi bi-chevron-down" id="integration-toggle-icon"></i> <span id="integration-toggle-label">開く</span>
+        </button>
+      </div>
+
+      <div class="collapse" id="integrationPanel">
+        <div class="border-top pt-3 mt-3" style="border-color: var(--border) !important;">
+          <div class="row g-3">
+
+            {% if google_forms_enabled %}
+            <!-- Google フォーム連携 -->
+            <div class="col-md-7 pe-md-3" style="border-right: 1.5px solid var(--border);">
+              <div class="fw-bold small mb-2"><i class="bi bi-google me-1"></i>Google Forms 連携（API自動）</div>
+
+              {% if not is_google_linked %}
+                <div class="p-3 rounded-2 text-center" style="background-color: rgba(0,0,0,0.02); border: 1px dashed var(--border);">
+                  <div class="small text-muted mb-2">Googleアカウントと連携されていません。</div>
+                  <a href="{{ url_for('settings.index') }}" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem;">
+                    設定画面で連携する
+                  </a>
+                </div>
+              {% else %}
+                {% if not period.google_form_id %}
+                  <!-- フォーム未作成 -->
+                  <div class="small text-muted mb-2">
+                    この期間用のシフト提出フォームがまだ作成されていません。
+                  </div>
+                  <form method="post" action="{{ url_for('shifts.google_create_form', period_id=period.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                      <i class="bi bi-plus-circle me-1"></i>フォームを自動作成
+                    </button>
+                  </form>
+                {% else %}
+                  <!-- フォーム作成済み -->
+                  <div class="mb-3">
+                    <label class="form-label small fw-semibold mb-1">シフト回収用URL（配布用）</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" id="google-form-url" class="form-control" readonly
+                             value="https://docs.google.com/forms/d/{{ period.google_form_id }}/viewform">
+                      <button class="btn btn-outline-secondary" type="button" onclick="copyFormUrl()">
+                        <i class="bi bi-copy"></i>
+                      </button>
+                    </div>
+                    <div class="text-success small mt-1" id="copy-success-msg" style="display: none;">
+                      URLをコピーしました！
+                    </div>
+                  </div>
+
+                  <!-- フォーム編集フォーム -->
+                  <div class="mb-3 rounded p-2" style="background: rgba(0,0,0,0.02); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between mb-0">
+                      <span class="small fw-semibold text-muted" style="font-size: 0.75rem;"><i class="bi bi-pencil-square me-1"></i>フォーム内容・選択肢の更新</span>
+                      <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" data-bs-toggle="collapse" data-bs-target="#editFormPanel" style="font-size: 0.65rem; border-radius: 4px;">
+                        編集フォームを開く
+                      </button>
+                    </div>
+                    <div class="collapse" id="editFormPanel">
+                      <form method="post" action="{{ url_for('shifts.google_update_form', period_id=period.id) }}" class="mt-2 pt-2 border-top" style="border-color: var(--border) !important;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-2">
+                          <label class="form-label mb-1" style="font-size: 0.75rem;">タイトル</label>
+                          <input type="text" name="title" class="form-control form-control-sm" placeholder="変更する場合のみ入力（空欄でデフォルト）" style="font-size: 0.75rem;">
+                        </div>
+                        <div class="mb-2">
+                          <label class="form-label mb-1" style="font-size: 0.75rem;">説明（注意事項）</label>
+                          <textarea name="description" rows="3" class="form-control form-control-sm" style="font-size: 0.75rem;" placeholder="変更する場合のみ入力（空欄でデフォルトの注意事項）"></textarea>
+                        </div>
+                        <div class="text-end">
+                          <button type="submit" class="btn btn-sm btn-primary py-1 px-2" style="font-size: 0.7rem; border-radius: 4px;">
+                            <i class="bi bi-send me-1"></i>フォームに反映する
+                          </button>
+                        </div>
+                      </form>
+                      <div class="small text-muted mt-2" style="font-size: 0.65rem; line-height: 1.25;">
+                        ※ 反映すると、現在のスタッフ名リストや最新のシフトパターン定義も自動的にフォームの選択肢に再適用されます。
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 回答受付の締切管理 -->
+                  <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                    <span class="small text-muted">回答受付:</span>
+                    <span id="accepting-badge" class="badge bg-secondary">確認中…</span>
+                    <form method="post" action="{{ url_for('shifts.google_set_accepting', period_id=period.id) }}" class="ms-auto d-flex gap-1">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" name="accepting" value="0" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.7rem"
+                              onclick="confirmAction('回答の受付を締め切りますか？\n以降スタッフはフォームに回答できなくなります。', () => this.form.requestSubmit(this)); return false;">
+                        <i class="bi bi-stop-circle me-1"></i>締め切る
+                      </button>
+                      <button type="submit" name="accepting" value="1" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.7rem">
+                        <i class="bi bi-play-circle me-1"></i>再開する
+                      </button>
+                    </form>
+                  </div>
+                  <script>
+                  // 受付状態を非同期で取得してバッジに反映
+                  fetch("{{ url_for('shifts.google_accepting_status', period_id=period.id) }}")
+                    .then(r => r.json())
+                    .then(d => {
+                      const b = document.getElementById('accepting-badge');
+                      if (!b) return;
+                      if (d.ok && d.accepting === true)  { b.className = 'badge bg-success';  b.textContent = '受付中'; }
+                      else if (d.ok && d.accepting === false) { b.className = 'badge bg-danger'; b.textContent = '締切済み'; }
+                      else { b.className = 'badge bg-secondary'; b.textContent = '不明'; }
+                    })
+                    .catch(() => {
+                      const b = document.getElementById('accepting-badge');
+                      if (b) { b.className = 'badge bg-secondary'; b.textContent = '不明'; }
+                    });
+                  </script>
+
+                  <form method="post" action="{{ url_for('shifts.google_sync', period_id=period.id) }}" class="d-flex align-items-center gap-2 flex-wrap">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-check form-check-inline mb-0">
+                      <input class="form-check-input" type="radio" name="merge" value="fill" id="g-fill" checked>
+                      <label class="form-check-label small" for="g-fill">未入力のみ追加</label>
+                    </div>
+                    <div class="form-check form-check-inline mb-0">
+                      <input class="form-check-input" type="radio" name="merge" value="overwrite" id="g-over">
+                      <label class="form-check-label small" for="g-over">全て上書き</label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-success ms-auto">
+                      <i class="bi bi-arrow-repeat me-1"></i>回答データを同期
+                    </button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- CSV手動インポート -->
+            <div class="col-md-{{ '5 ps-md-3' if google_forms_enabled else '12' }}">
+              <div class="fw-bold small mb-2"><i class="bi bi-filetype-csv me-1"></i>CSVファイル手動取り込み</div>
+              <p class="small text-muted mb-3">
+                APIを使わず、手動でエクスポートしたGoogleフォーム等のCSVファイルを読み込みます。
+              </p>
+              <a href="{{ url_for('shifts.import_csv_form', period_id=period.id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-upload me-1"></i>CSVインポート画面へ
+              </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 {% endblock %}
 

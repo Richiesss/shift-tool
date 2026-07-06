@@ -269,7 +269,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="/static/vendor/chartjs/chart.umd.min.js"></script>
 <script>
 const EMPLOYEES = {{ employees | map(attribute='name') | list | tojson }};
 const STATS     = {{ stats_data | tojson }};

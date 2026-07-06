@@ -9,6 +9,10 @@ const SHELL = [
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",
   "/static/icons/apple-touch-icon.png",
+  "/static/vendor/bootstrap/css/bootstrap.min.css",
+  "/static/vendor/bootstrap/js/bootstrap.bundle.min.js",
+  "/static/vendor/bootstrap-icons/bootstrap-icons.css",
+  "/static/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2",
 ];
 
 self.addEventListener("install", e => {
