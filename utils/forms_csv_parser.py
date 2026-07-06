@@ -101,6 +101,39 @@ def _time_range_to_pattern(time_str: str) -> tuple[Optional[str], Optional[str],
     return "custom", start, end
 
 
+def _merge_time_ranges(vals: list[str]) -> Optional[str]:
+    """
+    同一カテゴリ（朝食 or ディナー）内で複数の「HH:MM〜HH:MM」が選択された場合に、
+    最も早い開始時刻〜最も遅い終了時刻の範囲へ統合した文字列を返す。
+    解析できない値が混ざっている場合は先頭の値をそのまま返す（フォールバック）。
+    """
+    if not vals:
+        return None
+    if len(vals) == 1:
+        return vals[0]
+
+    import unicodedata
+    starts, ends = [], []
+    for v in vals:
+        s = unicodedata.normalize('NFKC', v.strip())
+        m = re.match(r'^(\d{1,2}:\d{2})\s*[~〜～\-–—]+\s*(\d{1,2}:\d{2})$', s)
+        if not m:
+            continue
+        starts.append(m.group(1))
+        ends.append(m.group(2))
+
+    if not starts or not ends:
+        return vals[0]
+
+    def _to_minutes(t: str) -> int:
+        h, mn = t.split(':')
+        return int(h) * 60 + int(mn)
+
+    earliest = min(starts, key=_to_minutes)
+    latest = max(ends, key=_to_minutes)
+    return f"{earliest}〜{latest}"
+
+
 def _parse_custom_times(raw: str, period: SchedulePeriod) -> dict[str, tuple[str, str]]:
     """
     「4/1: 10:00〜16:00, 4/5: 11:00〜20:00」などを解析して
@@ -666,9 +699,9 @@ def _process_checkbox_fmt(
 
     has_breakfast = False
     has_dinner = False
-    selected_b_val = None
-    selected_d_val = None
     has_custom = False
+    breakfast_vals: list[str] = []
+    dinner_vals: list[str] = []
 
     for sel in selections:
         if "その他" in sel:
@@ -677,11 +710,27 @@ def _process_checkbox_fmt(
             has_breakfast = True
             # 例 "朝食: 6:00〜10:00" -> "6:00〜10:00" を取得
             parts = sel.split(":", 1)
-            selected_b_val = parts[1].strip() if len(parts) > 1 else sel
+            breakfast_vals.append(parts[1].strip() if len(parts) > 1 else sel)
         elif "ディナー" in sel or "晩" in sel:
             has_dinner = True
             parts = sel.split(":", 1)
-            selected_d_val = parts[1].strip() if len(parts) > 1 else sel
+            dinner_vals.append(parts[1].strip() if len(parts) > 1 else sel)
+
+    # 同一カテゴリ内で複数の時間帯が選択された場合（フォームでは「1つだけ選択」を案内しているが、
+    # 実際には複数選択されるケースがある）は、最も早い開始〜最も遅い終了の範囲へ統合する。
+    # 開始・終了どちらの希望にも応えられるよう「早い開始」と「長い勤務可能時間」を両立させる。
+    selected_b_val = _merge_time_ranges(breakfast_vals)
+    selected_d_val = _merge_time_ranges(dinner_vals)
+    if len(breakfast_vals) > 1:
+        result.warnings.append(
+            f"「{name}」{date_str}: 朝食の時間帯が複数選択されています"
+            f"（{', '.join(breakfast_vals)} → 「{selected_b_val}」に統合して取り込みました）"
+        )
+    if len(dinner_vals) > 1:
+        result.warnings.append(
+            f"「{name}」{date_str}: ディナーの時間帯が複数選択されています"
+            f"（{', '.join(dinner_vals)} → 「{selected_d_val}」に統合して取り込みました）"
+        )
 
     if has_custom:
         cs = custom_times.get(date_str)
