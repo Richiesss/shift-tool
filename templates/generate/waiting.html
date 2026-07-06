@@ -46,11 +46,49 @@
   }
 
   /* 待ち時間Tips */
-  #tip-text {
-    transition: opacity .4s ease;
+  .tip-card {
+    border: none;
+    background: linear-gradient(135deg, rgba(14,165,233,.07), rgba(139,92,246,.07));
+    position: relative;
+    overflow: hidden;
   }
-  #tip-text.tip-fade {
+  .tip-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--border);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .tip-icon-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    transition: background .35s ease, color .35s ease;
+  }
+  .tip-body {
+    flex: 1;
+    min-width: 0;
+    transition: opacity .35s ease, transform .35s ease;
+  }
+  .tip-body.tip-fade {
     opacity: 0;
+    transform: translateY(4px);
+  }
+  #tip-text {
+    font-size: .84rem;
+    line-height: 1.55;
+  }
+  #tip-author {
+    font-size: .72rem;
+    color: var(--text-muted);
+    margin-top: .3rem;
+    text-align: right;
   }
 </style>
 {% endblock %}
@@ -105,11 +143,16 @@
   </div>
 
   <!-- 待ち時間Tips -->
-  <div class="card mx-auto mt-3" style="max-width:560px">
+  <div class="card tip-card mx-auto mt-3" style="max-width:560px">
     <div class="card-body py-3 px-3">
-      <div class="d-flex align-items-start small text-muted">
-        <i class="bi bi-lightbulb me-2 text-warning" style="flex-shrink:0;margin-top:.1rem"></i>
-        <div id="tip-text"></div>
+      <div class="d-flex align-items-center gap-2">
+        <div class="tip-icon-badge" id="tip-icon-wrap">
+          <i class="bi bi-lightbulb-fill" id="tip-icon"></i>
+        </div>
+        <div class="tip-body" id="tip-body">
+          <div id="tip-text"></div>
+          <div id="tip-author" style="display:none"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -118,29 +161,111 @@
 <script>
 (function () {
   // ── 待ち時間Tips ──────────────────────────────────────────────────────
+  const TIP_STYLE = {
+    tip:   { icon: 'bi-lightbulb-fill',    color: '#f59e0b' },
+    rest:  { icon: 'bi-cup-hot-fill',      color: '#38bdf8' },
+    quote: { icon: 'bi-chat-quote-fill',   color: '#a78bfa' },
+  };
+
   const TIPS = [
-    '正社員が希望した枠は必ず優先的に充当され、残りをアルバイトの希望を考慮しながら補完します。',
-    '各時間帯・ポジションには「リーダー」の最低人数を設定しており、経験豊富なスタッフが必ず配置されるよう計算しています。',
-    'ホール専任・キッチン専任の設定がある従業員は、生成時にその専任ポジション以外へは配置されません。',
-    '自動生成はあくまで下書きです。生成後もシフト表画面で個別に手動修正できます。',
-    'シフト表はPDF・Excel形式でエクスポートできます（従業員×日付のマトリクス形式）。',
-    '従業員データや希望シフトはJSON形式でバックアップ・復元が可能です。',
-    '特定のスタッフに残業や深夜勤務が偏らないよう配慮しながら人員配置を計算しています。',
-    '制約を満たす解が見つからない場合は、一部の制約を緩和して実行可能な案を再構築しています。',
-    '画面はダークモードにも対応しており、OSの設定に合わせて自動で切り替わります。',
-    '不具合や要望はヘルプ画面の「不具合を報告する・要望を送る」から送信できます。',
+    // ── 機能Tips ──
+    { type: 'tip', text: '正社員が希望した枠は必ず優先的に充当され、残りをアルバイトの希望を考慮しながら補完します。' },
+    { type: 'tip', text: '各時間帯・ポジションには「リーダー」の最低人数を設定しており、経験豊富なスタッフが必ず配置されるよう計算しています。' },
+    { type: 'tip', text: 'ホール専任・キッチン専任の設定がある従業員は、生成時にその専任ポジション以外へは配置されません。' },
+    { type: 'tip', text: '自動生成はあくまで下書きです。生成後もシフト表画面で個別に手動修正できます。' },
+    { type: 'tip', text: 'シフト表はPDF・Excel形式でエクスポートできます（従業員×日付のマトリクス形式）。' },
+    { type: 'tip', text: '従業員データや希望シフトはJSON形式でバックアップ・復元が可能です。' },
+    { type: 'tip', text: '特定のスタッフに残業や深夜勤務が偏らないよう配慮しながら人員配置を計算しています。' },
+    { type: 'tip', text: '制約を満たす解が見つからない場合は、一部の制約を緩和して実行可能な案を再構築しています。' },
+    { type: 'tip', text: '画面はダークモードにも対応しており、OSの設定に合わせて自動で切り替わります。' },
+    { type: 'tip', text: '不具合や要望はヘルプ画面の「不具合を報告する・要望を送る」から送信できます。' },
+    { type: 'tip', text: '希望シフトは14種類のパターンから選ぶだけでなく、カスタム時刻でも入力できます。' },
+    { type: 'tip', text: 'ホール・キッチンそれぞれの習熟度（リーダー/ベテラン/一般/新人）を登録しておくと、より現実的な配置に反映されます。' },
+    { type: 'tip', text: 'アルバイトは2週間単位で希望シフトを入力する仕組みになっています。' },
+    { type: 'tip', text: 'シフト表は朝食・ディナーのタブ切り替えで確認でき、他時間帯専任メンバーの表示もワンタッチで切り替えられます。' },
+    { type: 'tip', text: '優先度設定（低・中・高）を調整すると、コストやアルバイトの希望反映度のバランスを変えられます。' },
+    { type: 'tip', text: 'ヘルプ画面では更新履歴や既知の不具合も確認できます。' },
+
+    // ── ひと息つける一言 ──
+    { type: 'rest', text: '少し肩の力を抜いて、深呼吸してみましょう。' },
+    { type: 'rest', text: 'ここでひと休み。温かい飲み物でもいかがですか。' },
+    { type: 'rest', text: '画面から少し目を離して、遠くを見てみましょう。' },
+    { type: 'rest', text: '背伸びをして、体をほぐしてみませんか。' },
+    { type: 'rest', text: 'もうすぐ完成します。ゆっくりお待ちください。' },
+    { type: 'rest', text: '一息ついて、肩を回してみましょう。' },
+    { type: 'rest', text: '水分補給も忘れずに。' },
+    { type: 'rest', text: '少しだけ席を立って、伸びをしてみませんか。' },
+    { type: 'rest', text: '焦らなくて大丈夫。計算はしっかり進んでいます。' },
+    { type: 'rest', text: '目を閉じて、数秒だけ休ませてあげましょう。' },
+    { type: 'rest', text: '姿勢を正して、深呼吸を一つ。' },
+    { type: 'rest', text: 'お茶を一杯淹れて、少し待ってみませんか。' },
+    { type: 'rest', text: 'ゆっくりでいいので、今日一日お疲れさまです。' },
+    { type: 'rest', text: '完成まであと少し。コーヒーブレイクにちょうど良い時間です。' },
+
+    // ── 偉人の名言・格言 ──
+    { type: 'quote', text: '千里の道も一歩から。', author: '老子' },
+    { type: 'quote', text: '継続は力なり。', author: '住岡夜晃' },
+    { type: 'quote', text: '為せば成る、為さねば成らぬ何事も。', author: '上杉鷹山' },
+    { type: 'quote', text: '石の上にも三年。', author: 'ことわざ' },
+    { type: 'quote', text: '雨垂れ石を穿つ。', author: 'ことわざ' },
+    { type: 'quote', text: '急がば回れ。', author: 'ことわざ' },
+    { type: 'quote', text: '明日は明日の風が吹く。', author: 'ことわざ' },
+    { type: 'quote', text: '準備に失敗するとは、失敗の準備をするようなものだ。', author: 'ベンジャミン・フランクリン' },
+    { type: 'quote', text: '小さな一歩が、人類にとって大きな飛躍となる。', author: 'ニール・アームストロング' },
+    { type: 'quote', text: '失敗は成功のもと。', author: 'ことわざ' },
+    { type: 'quote', text: '楽観主義者は、あらゆる困難の中に好機を見出す。', author: 'ウィンストン・チャーチル' },
+    { type: 'quote', text: '成功とは、失敗から失敗へと情熱を失わずに進んでいくことである。', author: 'ウィンストン・チャーチル' },
+    { type: 'quote', text: '困難の中にこそ、機会がある。', author: 'アルベルト・アインシュタイン' },
+    { type: 'quote', text: '人生で大切なのは、成功よりもそこから何を学ぶかである。', author: 'サミュエル・スマイルズ' },
+    { type: 'quote', text: '誠実こそ最良の策である。', author: 'ベンジャミン・フランクリン' },
+    { type: 'quote', text: '塵も積もれば山となる。', author: 'ことわざ' },
+    { type: 'quote', text: '継続する者だけが、頂上にたどり着く。', author: '格言' },
+    { type: 'quote', text: '焦らず、腐らず、諦めず。', author: '格言' },
+    { type: 'quote', text: '為すべきをなし、待つべきを待つ。', author: '勝海舟' },
+    { type: 'quote', text: 'Success is the sum of small efforts, repeated day in and day out.', author: 'ロバート・コリアー' },
   ];
-  const tipText = document.getElementById('tip-text');
-  let tipIndex = Math.floor(Math.random() * TIPS.length);
-  tipText.textContent = TIPS[tipIndex];
+
+  const tipIconWrap = document.getElementById('tip-icon-wrap');
+  const tipIcon     = document.getElementById('tip-icon');
+  const tipBody     = document.getElementById('tip-body');
+  const tipTextEl   = document.getElementById('tip-text');
+  const tipAuthorEl = document.getElementById('tip-author');
+
+  let lastTipIndex = -1;
+  function pickTipIndex() {
+    if (TIPS.length <= 1) return 0;
+    let i;
+    do { i = Math.floor(Math.random() * TIPS.length); } while (i === lastTipIndex);
+    return i;
+  }
+
+  function renderTip(i) {
+    const t = TIPS[i];
+    const style = TIP_STYLE[t.type] || TIP_STYLE.tip;
+    tipIconWrap.style.background = style.color + '22';
+    tipIcon.style.color = style.color;
+    tipIcon.className = 'bi ' + style.icon;
+    tipTextEl.textContent = t.text;
+    if (t.author) {
+      tipAuthorEl.textContent = '— ' + t.author;
+      tipAuthorEl.style.display = '';
+    } else {
+      tipAuthorEl.style.display = 'none';
+    }
+  }
+
+  let tipIndex = pickTipIndex();
+  lastTipIndex = tipIndex;
+  renderTip(tipIndex);
 
   function rotateTip() {
-    tipText.classList.add('tip-fade');
+    tipBody.classList.add('tip-fade');
     setTimeout(() => {
-      tipIndex = (tipIndex + 1) % TIPS.length;
-      tipText.textContent = TIPS[tipIndex];
-      tipText.classList.remove('tip-fade');
-    }, 400);
+      tipIndex = pickTipIndex();
+      lastTipIndex = tipIndex;
+      renderTip(tipIndex);
+      tipBody.classList.remove('tip-fade');
+    }, 350);
   }
   setInterval(rotateTip, 5000);
 
