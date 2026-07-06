@@ -35,3 +35,6 @@ desktop.ini
 # ログ
 *.log
 .claude/
+
+# PDF（シフト表出力ファイルなど）
+*.pdf
