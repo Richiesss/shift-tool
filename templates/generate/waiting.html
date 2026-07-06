@@ -207,59 +207,60 @@
     const newPhase = data.phase || 1;
 
     if (newPhase === 2 && currentPhase === 1) {
-      // フェーズ切り替え
+      // フェーズ切り替え（表示の切り替えは初回のみ）
       currentPhase = 2;
       phase2Start = Date.now();
       phaseLabel.innerHTML =
         '<i class="bi bi-arrow-repeat me-1"></i>ステップ 2/2: ベストエフォートで再構築中';
       phaseLabel.classList.remove('text-primary');
       phaseLabel.classList.add('text-warning');
-      
+
       statusIcon.classList.remove('text-primary');
       statusIcon.classList.add('text-warning');
-      
+
       bar.classList.remove('bg-primary');
       bar.classList.add('bg-warning');
-      
-      statusMsg.innerHTML =
-        '<span class="text-warning small">制約を緩和して実行可能なシフトを生成しています…</span>';
-      solutionLabel.textContent = '';
-      scoreRow.style.display = 'none';
-      return;
     }
 
-    if (newPhase === 1) {
+    if (currentPhase === 1) {
       lastServerElapsed = data.elapsed || 0;
       lastServerAt = Date.now();
+    }
 
-      const n = data.solutions || 0;
+    // 解の発見数・メッセージ（フェーズ1・2とも継続して更新する）
+    const n = data.solutions || 0;
+    if (currentPhase === 1) {
       if (n > 0) {
         solutionLabel.textContent = '解 ' + n + ' 件発見';
-        if (n === 1) {
-          statusMsg.innerHTML =
-            '<span class="text-primary small fw-semibold">初期解を発見 — より良い解を探索中…</span>';
-        } else {
-          statusMsg.innerHTML =
-            '<span class="text-primary small fw-semibold">解を改善中（' + n + ' 回更新）</span>';
-        }
+        statusMsg.innerHTML = (n === 1)
+          ? '<span class="text-primary small fw-semibold">初期解を発見 — より良い解を探索中…</span>'
+          : '<span class="text-primary small fw-semibold">解を改善中（' + n + ' 回更新）</span>';
       } else {
+        solutionLabel.textContent = '';
         statusMsg.innerHTML =
           '<span class="text-muted small">制約を満たす初期解を探索中…</span>';
       }
+    } else {
+      solutionLabel.textContent = n > 0 ? '解 ' + n + ' 件発見' : '';
+      statusMsg.innerHTML =
+        '<span class="text-warning small">制約を緩和して実行可能なシフトを生成しています' +
+        (n > 0 ? '（' + n + ' 回更新）' : '…') + '</span>';
+    }
 
-      // スコア表示
-      const obj = data.obj;
-      if (obj !== undefined && obj >= 0) {
-        scoreRow.style.display = '';
-        scoreLabel.textContent = obj.toLocaleString();
-        if (prevObj !== null && obj < prevObj) {
-          const diff = prevObj - obj;
-          scoreHint.textContent = '(▼' + diff.toLocaleString() + ' 改善)';
-        } else {
-          scoreHint.textContent = '';
-        }
-        prevObj = obj;
+    // スコア表示（フェーズ1・2共通）
+    const obj = data.obj;
+    if (obj !== undefined && obj >= 0) {
+      scoreRow.style.display = '';
+      scoreLabel.textContent = obj.toLocaleString();
+      if (prevObj !== null && obj < prevObj) {
+        const diff = prevObj - obj;
+        scoreHint.textContent = '(▼' + diff.toLocaleString() + ' 改善)';
+      } else {
+        scoreHint.textContent = '';
       }
+      prevObj = obj;
+    } else {
+      scoreRow.style.display = 'none';
     }
   }
 
