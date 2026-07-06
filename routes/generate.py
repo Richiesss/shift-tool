@@ -132,7 +132,15 @@ def run():
 @bp.get("/wait/<int:period_id>")
 def wait(period_id):
     period = repo.get_period(period_id)
-    return render_template("generate/waiting.html", period=period)
+    active_employees = repo.get_all_employees(active_only=True)
+    requests_list = repo.get_shift_requests(period_id)
+    filled = len(submitted_employee_ids(active_employees, requests_list))
+    return render_template(
+        "generate/waiting.html",
+        period=period,
+        employees_count=len(active_employees),
+        filled_count=filled,
+    )
 
 
 @bp.get("/status/<int:period_id>")
