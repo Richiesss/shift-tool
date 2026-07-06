@@ -26,6 +26,13 @@
     }
     .form-control:focus { background: #0f172a; color: white;
                           border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.2); }
+    .input-group .btn-outline-secondary {
+      background: #0f172a; border-color: #334155; color: #94a3b8;
+    }
+    .input-group .btn-outline-secondary:hover,
+    .input-group .btn-outline-secondary:focus { background: #1e293b; color: white; border-color: #334155; }
+    .input-group:focus-within .form-control,
+    .input-group:focus-within .btn-outline-secondary { border-color: #38bdf8; }
     .btn-login {
       background: #0ea5e9; border: none; border-radius: 10px;
       padding: .75rem; font-weight: 600; width: 100%; font-size: 1rem;
@@ -61,8 +68,13 @@
     {% endif %}
     <div class="mb-3">
       <label class="form-label small text-muted">アクセスパスワード</label>
-      <input type="password" name="password" id="pwInput" class="form-control"
-             placeholder="パスワードを入力" autofocus autocomplete="current-password">
+      <div class="input-group">
+        <input type="password" name="password" id="pwInput" class="form-control"
+               placeholder="パスワードを入力" autofocus autocomplete="current-password">
+        <button type="button" class="btn btn-outline-secondary" id="pwToggle" tabindex="-1" aria-label="パスワードを表示">
+          <i class="bi bi-eye"></i>
+        </button>
+      </div>
     </div>
     <button type="submit" id="loginBtn" class="btn btn-login text-white">
       <i class="bi bi-box-arrow-in-right me-1" id="btnIcon"></i>
@@ -72,6 +84,16 @@
 </div>
 
 <script>
+  // パスワード表示/非表示切り替え
+  document.getElementById('pwToggle').addEventListener('click', function() {
+    var input = document.getElementById('pwInput');
+    var icon = this.querySelector('i');
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    this.setAttribute('aria-label', show ? 'パスワードを隠す' : 'パスワードを表示');
+  });
+
   // フォーム送信時にローディング状態を表示
   document.getElementById('loginForm').addEventListener('submit', function(e) {
     var btn = document.getElementById('loginBtn');

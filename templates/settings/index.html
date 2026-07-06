@@ -370,7 +370,8 @@
             {% if is_google_linked %}
               <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>連携中</span>
               <span class="small text-muted">Googleアカウントと接続されています。</span>
-              <a href="{{ url_for('settings.google_disconnect') }}" class="btn btn-danger btn-sm ms-auto" onclick="return confirm('Googleアカウントとの連携を解除しますか？')">
+              <a href="{{ url_for('settings.google_disconnect') }}" class="btn btn-danger btn-sm ms-auto"
+                 onclick="confirmAction('Googleアカウントとの連携を解除しますか？', () => location.href=this.href); return false;">
                 連携解除
               </a>
             {% else %}
@@ -477,8 +478,8 @@
         <i class="bi bi-cloud-download me-1"></i>バックアップをダウンロード（JSON）
       </a>
       <form method="post" action="{{ url_for('settings.restore') }}"
-            enctype="multipart/form-data"
-            onsubmit="return confirm('現在のデータは全て置き換えられます。続けますか？')">
+            enctype="multipart/form-data" id="restore-form"
+            onsubmit="if (!this.dataset.confirmed) { confirmAction('現在のデータは全て置き換えられます。続けますか？', () => { this.dataset.confirmed = '1'; this.submit(); }, 'リストアする'); return false; }">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="d-flex gap-2 mobile-stack">
           <input type="file" name="backup_file" accept=".json" class="form-control form-control-sm" required>

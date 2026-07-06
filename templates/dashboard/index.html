@@ -232,7 +232,7 @@
 
 {% block content %}
 <div class="page-header">
-  <div class="fs-6 fw-semibold"><i class="bi bi-house-fill me-1"></i>ホーム</div>
+  <h1 class="fs-6 fw-semibold"><i class="bi bi-house-fill me-1"></i>ホーム</h1>
 </div>
 
 <div class="content" style="max-width:480px;margin:0 auto">
@@ -297,7 +297,7 @@
         <div class="slot-row">
       {% endif %}
           {% set cnt = today_staff.get((slot_v, pos_v), 0) %}
-          <div class="slot-cell {{ 'short' if today_short and (slot_v+'/'+pos_l+'（') in today_short|join('') else '' }}">
+          <div class="slot-cell {{ 'short' if today_short and (slot_l+'/'+pos_l+'（') in today_short|join('') else '' }}">
             <span class="pos-lbl">{{ pos_l }}</span>
             <span class="pos-cnt">{{ cnt }}<small>名</small></span>
           </div>
@@ -316,7 +316,7 @@
         <div class="slot-row">
       {% endif %}
           {% set cnt = today_staff.get((slot_v, pos_v), 0) %}
-          <div class="slot-cell {{ 'short' if today_short and (slot_v+'/'+pos_l+'（') in today_short|join('') else '' }}">
+          <div class="slot-cell {{ 'short' if today_short and (slot_l+'/'+pos_l+'（') in today_short|join('') else '' }}">
             <span class="pos-lbl">{{ pos_l }}</span>
             <span class="pos-cnt">{{ cnt }}<small>名</small></span>
           </div>

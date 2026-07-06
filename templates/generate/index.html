@@ -122,7 +122,9 @@
               <input type="radio" name="{{ key }}" value="{{ v }}"
                      class="btn-check" autocomplete="off"
                      {{ 'checked' if v == '中' else '' }}>
-              <span class="btn {{ v_cls }} btn-sm w-100">{{ v }}</span>
+              <span class="btn {{ v_cls }} btn-sm w-100 lh-sm py-1" style="font-size:.8rem">
+                {{ v }}<br><small class="opacity-75" style="font-size:.68rem">{{ v_label.split('　')[1] }}</small>
+              </span>
             </label>
             {% endfor %}
           </div>

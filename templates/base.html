@@ -142,7 +142,6 @@
       .page-header { flex-wrap: wrap; min-height: auto; gap: .4rem; }
       .page-header .ms-auto { margin-left: auto !important; }
       input, select, textarea { font-size: 16px !important; }
-      input.form-control-sm, select.form-select-sm { font-size: 14px !important; }
     }
 
     /* ── カード ──────────────────────────────────────── */
@@ -537,6 +536,22 @@
   </div>
 </div>
 
+<!-- 汎用確認モーダル（全ページ共通・window.confirmAction() から使用） -->
+<div class="modal fade" id="genericConfirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body p-4 text-center">
+        <i class="bi bi-question-circle-fill text-warning d-block mb-2" style="font-size:2.2rem"></i>
+        <div class="fw-semibold mb-1" id="generic-confirm-message" style="white-space:pre-line"></div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-danger flex-grow-1" id="generic-confirm-proceed-btn">実行する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Flash Messages -->
 <div class="toast-container">
   {% for cat, msg in get_flashed_messages(with_categories=true) %}
@@ -619,6 +634,7 @@
   })();
 
   document.querySelectorAll('.toast').forEach(t => {
+    if (t.classList.contains('text-bg-danger')) return; // エラーは見逃し防止のため手動で閉じるまで表示
     const len = t.querySelector('.toast-body')?.textContent.length || 0;
     setTimeout(() => bootstrap.Toast.getOrCreateInstance(t).hide(),
                Math.min(7000, Math.max(5000, len * 50)));
@@ -645,6 +661,20 @@
     a.appendChild(img);
     hdr.insertBefore(a, hdr.firstChild);
   })();
+
+  // ── 汎用確認モーダル（window.confirm() の代わりに使用） ──────────────
+  // 使い方: confirmAction('本当に実行しますか？', () => { ...実行処理... })
+  window.confirmAction = function(message, onConfirm, proceedLabel) {
+    const modalEl = document.getElementById('genericConfirmModal');
+    document.getElementById('generic-confirm-message').textContent = message;
+    const oldBtn = document.getElementById('generic-confirm-proceed-btn');
+    const btn = oldBtn.cloneNode(true); // 前回登録したリスナーを確実に破棄する
+    btn.textContent = proceedLabel || '実行する';
+    oldBtn.parentNode.replaceChild(btn, oldBtn);
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    btn.addEventListener('click', () => { modal.hide(); onConfirm(); });
+    modal.show();
+  };
 
   // ── 未保存離脱ガード（全ページ共通） ────────────────────────────
   (function() {

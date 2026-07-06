@@ -302,7 +302,7 @@
               {% if emp_asgn.is_reinforcement %}title="希望にない応援"{% elif has_custom_time %}title="希望時間から変更"{% endif %}>
           {{ pos_label_s }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% elif has_custom_time %}<sup style="font-size:.6rem">変</sup>{% endif %}
         </span>
-        {% if t %}<div style="font-size:.6rem;color:#475569;line-height:1.15">{{ t }}</div>{% endif %}
+        {% if t %}<div style="font-size:.6rem;color:var(--text-muted);line-height:1.15">{{ t }}</div>{% endif %}
       {% elif is_unassigned_request %}
         <span class="chip-unassigned" title="希望提出済み（{{ req_time }}）ですが、アサインされていません">希</span>
         {% if req_time %}<div style="font-size:.6rem;color:#94a3b8;line-height:1.15">{{ req_time }}</div>{% endif %}
@@ -330,7 +330,7 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <div class="fs-6 fw-semibold"><i class="bi bi-calendar3 me-1"></i>シフト表</div>
+    <h1 class="fs-6 fw-semibold"><i class="bi bi-calendar3 me-1"></i>シフト表</h1>
     {% if period %}
     <div style="font-size:.72rem;color:#94a3b8;line-height:1.2">
       {{ period.start_date }} 〜 {{ period.end_date }}
@@ -425,7 +425,8 @@
       <span class="badge bg-success flex-shrink-0"><i class="bi bi-lock-fill me-1"></i>確定済</span>
       <form id="unconfirm-form" method="post" action="{{ url_for('schedule.unconfirm', period_id=period.id) }}" class="flex-shrink-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-outline-danger btn-sm">
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                onclick="new bootstrap.Modal(document.getElementById('unconfirmDialog')).show()">
           <i class="bi bi-lock-fill me-1"></i>確定解除
         </button>
       </form>
@@ -444,6 +445,23 @@
                 onclick="switchPos('kitchen')">
           <i class="bi bi-egg-fried me-1"></i>キッチン
         </button>
+      </div>
+      <!-- スマホ用凡例トグル（デスクトップはコンパクト凡例が常時表示のため不要） -->
+      <button type="button" class="btn btn-outline-secondary btn-sm d-md-none" data-bs-toggle="collapse" data-bs-target="#mobile-legend" aria-expanded="false">
+        <i class="bi bi-info-circle me-1"></i>凡例
+      </button>
+    </div>
+    <!-- スマホ用凡例（折りたたみ・タップで開くまで場所を取らない） -->
+    <div class="collapse d-md-none" id="mobile-legend">
+      <div class="d-flex gap-3 flex-wrap small text-muted pt-1">
+        <span><i class="bi bi-sunrise me-1"></i>上段＝朝食　<i class="bi bi-moon-stars ms-1 me-1"></i>下段＝ディナー</span>
+        <span><span class="chip-hall px-1">H</span> ホール</span>
+        <span><span class="chip-kitchen px-1">K</span> キッチン</span>
+        <span><span class="chip-unassigned px-1">希</span> 希望提出・未アサイン</span>
+        <span><span class="chip-leave px-1">有給</span> 有給希望</span>
+        <span><span class="chip-hall">H<sup style="font-size:.6rem">変</sup></span> 希望時間から変更</span>
+        <span><span class="chip-hall opacity-75">H<sup style="font-size:.6rem">応</sup></span> 希望にない応援</span>
+        <span class="text-secondary">— 対象外</span>
       </div>
     </div>
   </div>
@@ -775,6 +793,13 @@ const CELL_NOTES = {
 // ── ポジション切替 ────────────────────────────────────────────
 let CURRENT_POS = {{ pos | tojson }};
 const STAFFING_DATA = {{ staffing_js | tojson }};
+
+// 前回この期間で表示していたポジションを復元（URLに?posの指定がない場合のみ）
+(function() {
+  if (new URLSearchParams(location.search).has('pos')) return;
+  const saved = sessionStorage.getItem('schedPos_' + PERIOD_ID);
+  if (saved && saved !== CURRENT_POS) switchPos(saved);
+})();
 
 function switchPos(newPos) {
   if (CURRENT_POS === newPos) return;
@@ -1203,7 +1228,7 @@ function _updateCellChip(cell, payload) {
     const sup       = is_reinforcement ? '<sup style="font-size:.6rem">応</sup>' : hasCustom ? '<sup style="font-size:.6rem">変</sup>' : '';
 
     let html = `<span class="${chipCls}${is_reinforcement ? ' opacity-75' : ''}" ${titleAttr}>${posLabel}${sup}</span>`;
-    if (shiftTime) html += `<div style="font-size:.6rem;color:#475569;line-height:1.15">${shiftTime}</div>`;
+    if (shiftTime) html += `<div style="font-size:.6rem;color:var(--text-muted);line-height:1.15">${shiftTime}</div>`;
     cell.innerHTML = html;
     cell.classList.remove('has-unassigned-request');
 
@@ -1284,10 +1309,13 @@ function showToast(msg, type) {
   if (!tc) return;
   const el = document.createElement('div');
   el.className = `toast show align-items-center text-bg-${type} border-0`;
+  el.setAttribute('role', 'alert');
   el.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div>
     <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
   tc.appendChild(el);
-  setTimeout(() => bootstrap.Toast.getOrCreateInstance(el).hide(), 4000);
+  if (type !== 'danger') { // エラーは見逃し防止のため手動で閉じるまで表示
+    setTimeout(() => bootstrap.Toast.getOrCreateInstance(el).hide(), 4000);
+  }
 }
 
 /* ── 変更履歴 ── */
@@ -1344,24 +1372,30 @@ function editReservation(el) {
   let saved = false;
   function save() {
     if (saved) return; saved = true;
+    const prevB = curB || '0', prevD = curD || '0';
     const b = parseInt(inB.value || '0', 10) || 0;
     const d = parseInt(inD.value || '0', 10) || 0;
     el.dataset.b = b; el.dataset.d = d;
     el.innerHTML = `
       <div><i class="bi bi-sunrise"></i> <span class="res-b">${b || '—'}</span></div>
       <div><i class="bi bi-moon-stars"></i> <span class="res-d">${d || '—'}</span></div>`;
+    function revert() {
+      el.dataset.b = prevB; el.dataset.d = prevD;
+      el.innerHTML = `
+        <div><i class="bi bi-sunrise"></i> <span class="res-b">${prevB !== '0' ? prevB : '—'}</span></div>
+        <div><i class="bi bi-moon-stars"></i> <span class="res-d">${prevD !== '0' ? prevD : '—'}</span></div>`;
+      showToast('予約客数の保存に失敗しました。元の値に戻しました', 'danger');
+    }
     fetch(`/schedule/${PERIOD_ID}/reservation`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({date, breakfast: b, dinner: d})
     }).then(r => {
+      if (!r.ok) { revert(); return; }
       el.style.transition = 'background .15s';
-      el.style.background = r.ok ? '#bbf7d0' : '#fecaca';
+      el.style.background = '#bbf7d0';
       setTimeout(() => { el.style.background = ''; }, 800);
-    }).catch(() => {
-      el.style.background = '#fecaca';
-      setTimeout(() => { el.style.background = ''; }, 1500);
-    });
+    }).catch(revert);
   }
   function cancelIfOutside(ev) {
     if (!el.contains(ev.relatedTarget)) save();
@@ -1395,18 +1429,20 @@ function editNote(el) {
     span.onkeydown = function(e){ if(e.key==='Enter') editNote(this); };
     span.textContent = note;
     input.replaceWith(span);
+    function revert() {
+      span.textContent = current;
+      showToast('メモの保存に失敗しました。元の内容に戻しました', 'danger');
+    }
     fetch(`/schedule/${periodId}/${endpoint}`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({date, note})
-    }).then(() => {
+    }).then(r => {
+      if (!r.ok) { revert(); return; }
       span.style.transition = 'background .15s';
       span.style.background = '#bbf7d0';
       setTimeout(() => { span.style.background = ''; }, 800);
-    }).catch(() => {
-      span.style.background = '#fecaca';
-      setTimeout(() => { span.style.background = ''; }, 1500);
-    });
+    }).catch(revert);
   }
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
