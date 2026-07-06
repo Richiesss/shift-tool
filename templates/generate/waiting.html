@@ -117,21 +117,21 @@
     </div>
   </div>
 
-  <!-- ソルバーログパネル -->
+  <!-- 詳細ログパネル（開発者・トラブルシューティング向け／既定は折りたたみ） -->
   <div class="card mx-auto mt-3" style="max-width:560px">
     <div class="card-body p-0">
       <div class="d-flex align-items-center justify-content-between px-3 py-2 log-panel-header"
            style="cursor:pointer;border-radius:.375rem .375rem 0 0"
            id="log-header" onclick="toggleLog()">
         <span class="small fw-semibold text-muted">
-          <i class="bi bi-terminal me-1"></i>ソルバーログ
+          <i class="bi bi-terminal me-1"></i>詳細ログ（開発者向け）
         </span>
-        <i class="bi bi-chevron-up small text-muted" id="log-chevron"></i>
+        <i class="bi bi-chevron-down small text-muted" id="log-chevron"></i>
       </div>
-      <div id="log-body">
+      <div id="log-body" style="display:none">
         <pre id="log-pre"
              style="background:#0a0f1a;color:#94a3b8;font-size:.72rem;line-height:1.5;
-                    margin:0;padding:.75rem;max-height:220px;overflow-y:auto;
+                    margin:0;padding:.75rem;max-height:220px;overflow-y:auto;scroll-behavior:smooth;
                     border-radius:0 0 .375rem .375rem;white-space:pre-wrap;word-break:break-all"
         >ログを取得中…</pre>
       </div>
@@ -169,7 +169,8 @@
   let currentPhase = 1;
   let prevObj = null;
   let rafId = null;
-  let logVisible = true;
+  let logVisible = false;
+  let logStarted = false;
 
   // ── バー描画 ──────────────────────────────────────────────────────────
   function setBar(pct) {
@@ -329,6 +330,7 @@
 
   // ── ログパネル（1秒ポーリング） ────────────────────────────────────────
   let logTimer = null;
+  let lastLogText = null;
 
   function fetchLog() {
     fetch(logUrl)
@@ -336,8 +338,15 @@
       .then(data => {
         const pre = document.getElementById('log-pre');
         if (!pre) return;
-        pre.textContent = data.log || '(ログなし)';
-        pre.scrollTop = pre.scrollHeight;
+        const text = data.log || '(ログなし)';
+        if (text === lastLogText) return;   // 変化がなければ再描画・再スクロールしない
+        lastLogText = text;
+
+        // ユーザーが最下部を見ていた場合だけ自動スクロールを追従させる
+        // （途中を読んでいる最中にカクッと最下部へ引き戻されるのを防ぐ）
+        const wasAtBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+        pre.textContent = text;
+        if (wasAtBottom) pre.scrollTop = pre.scrollHeight;
       })
       .catch(() => {});
   }
@@ -356,6 +365,16 @@
     document.getElementById('log-body').style.display = logVisible ? '' : 'none';
     document.getElementById('log-chevron').className =
       (logVisible ? 'bi bi-chevron-up' : 'bi bi-chevron-down') + ' small text-muted';
+
+    if (logVisible) {
+      if (!logStarted) {
+        logStarted = true;
+        startLogStream();
+      }
+    } else {
+      stopLogPolling();
+      logStarted = false;
+    }
   }
 
   function showTimeout() {
@@ -393,7 +412,6 @@
       .catch(() => setTimeout(poll, 3000));
   }
 
-  startLogStream();
   setTimeout(poll, 1500);
 })();
 </script>
