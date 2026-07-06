@@ -44,7 +44,14 @@
     background: linear-gradient(90deg, #ef4444 0%, #f87171 100%) !important;
     box-shadow: 0 2px 4px rgba(239,68,68,0.25);
   }
-  
+
+  /* 待ち時間Tips */
+  #tip-text {
+    transition: opacity .4s ease;
+  }
+  #tip-text.tip-fade {
+    opacity: 0;
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -96,10 +103,47 @@
       </div>
     </div>
   </div>
+
+  <!-- 待ち時間Tips -->
+  <div class="card mx-auto mt-3" style="max-width:560px">
+    <div class="card-body py-3 px-3">
+      <div class="d-flex align-items-start small text-muted">
+        <i class="bi bi-lightbulb me-2 text-warning" style="flex-shrink:0;margin-top:.1rem"></i>
+        <div id="tip-text"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 (function () {
+  // ── 待ち時間Tips ──────────────────────────────────────────────────────
+  const TIPS = [
+    '正社員が希望した枠は必ず優先的に充当され、残りをアルバイトの希望を考慮しながら補完します。',
+    '各時間帯・ポジションには「リーダー」の最低人数を設定しており、経験豊富なスタッフが必ず配置されるよう計算しています。',
+    'ホール専任・キッチン専任の設定がある従業員は、生成時にその専任ポジション以外へは配置されません。',
+    '自動生成はあくまで下書きです。生成後もシフト表画面で個別に手動修正できます。',
+    'シフト表はPDF・Excel形式でエクスポートできます（従業員×日付のマトリクス形式）。',
+    '従業員データや希望シフトはJSON形式でバックアップ・復元が可能です。',
+    '特定のスタッフに残業や深夜勤務が偏らないよう配慮しながら人員配置を計算しています。',
+    '制約を満たす解が見つからない場合は、一部の制約を緩和して実行可能な案を再構築しています。',
+    '画面はダークモードにも対応しており、OSの設定に合わせて自動で切り替わります。',
+    '不具合や要望はヘルプ画面の「不具合を報告する・要望を送る」から送信できます。',
+  ];
+  const tipText = document.getElementById('tip-text');
+  let tipIndex = Math.floor(Math.random() * TIPS.length);
+  tipText.textContent = TIPS[tipIndex];
+
+  function rotateTip() {
+    tipText.classList.add('tip-fade');
+    setTimeout(() => {
+      tipIndex = (tipIndex + 1) % TIPS.length;
+      tipText.textContent = TIPS[tipIndex];
+      tipText.classList.remove('tip-fade');
+    }, 400);
+  }
+  setInterval(rotateTip, 5000);
+
   // ── 定数 ──────────────────────────────────────────────────────────────
   const MAX_SEC_P1 = 25.0;   // フェーズ1の最大秒数
   const MAX_SEC_P2 = 45.0;   // フェーズ2の最大秒数
