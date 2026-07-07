@@ -313,138 +313,161 @@
 </div>
 {% endif %}
 
-<form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
-  {% if next_idx is not none %}
-  <input type="hidden" name="next_emp_idx" value="{{ next_idx }}">
-  {% endif %}
+<div class="row g-3">
+  <div class="col-lg-8">
+    <form id="shift-form" method="post" action="{{ url_for('shifts.save', period_id=period.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="save_emp_id" value="{{ current_emp.id }}">
+      {% if next_idx is not none %}
+      <input type="hidden" name="next_emp_idx" value="{{ next_idx }}">
+      {% endif %}
 
-  {# ── 一括ボタン ── #}
-  <div class="bulk-bar">
-    {% if current_emp.employment_type.value == 'full_time' %}
-    <span class="label">一括：</span>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkFull('')">
-      <i class="bi bi-check2 me-1"></i>出勤
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkFull('off_request')">
-      <i class="bi bi-x-circle me-1"></i>休希望
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-warning" onclick="bulkFull('paid_leave')">
-      <i class="bi bi-calendar-check me-1"></i>有休
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('am_only')">
-      <i class="bi bi-sunrise me-1"></i>6:00〜15:00
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('pm_only')">
-      <i class="bi bi-sunset me-1"></i>14:00〜23:00
-    </button>
-    {% else %}
-    <span class="label">全日：</span>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkPart('')">
-      全日休み
-    </button>
-    {% for pid, cnt, cs, ce in top_patterns[:3] %}
-    {% set p = PATTERN_MAP.get(pid) %}
-    {% if p %}
-    {% set label = (cs ~ '〜' ~ ce) if pid == 'custom' and cs and ce else p.label %}
-    <button type="button" class="btn btn-sm btn-outline-primary"
-            onclick="bulkPart('{{ pid }}', '{{ cs or '' }}', '{{ ce or '' }}')">
-      {{ label }}
-    </button>
-    {% endif %}
-    {% endfor %}
-    {% endif %}
+      {# ── 一括ボタン ── #}
+      <div class="bulk-bar">
+        {% if current_emp.employment_type.value == 'full_time' %}
+        <span class="label">一括：</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkFull('')">
+          <i class="bi bi-check2 me-1"></i>出勤
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkFull('off_request')">
+          <i class="bi bi-x-circle me-1"></i>休希望
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-warning" onclick="bulkFull('paid_leave')">
+          <i class="bi bi-calendar-check me-1"></i>有休
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('am_only')">
+          <i class="bi bi-sunrise me-1"></i>6:00〜15:00
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-info" onclick="bulkFull('pm_only')">
+          <i class="bi bi-sunset me-1"></i>14:00〜23:00
+        </button>
+        {% else %}
+        <span class="label">全日：</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkPart('')">
+          全日休み
+        </button>
+        {% for pid, cnt, cs, ce in top_patterns[:3] %}
+        {% set p = PATTERN_MAP.get(pid) %}
+        {% if p %}
+        {% set label = (cs ~ '〜' ~ ce) if pid == 'custom' and cs and ce else p.label %}
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                onclick="bulkPart('{{ pid }}', '{{ cs or '' }}', '{{ ce or '' }}')">
+          {{ label }}
+        </button>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+      </div>
+
+      {# ── 日付行 ── #}
+      {% for d in dates %}
+      {% set req = req_map.get((current_emp.id, d|string)) %}
+      {% set dow = d.weekday() %}
+      {% set is_holiday = (d|string) in holidays %}
+      {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
+      {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
+
+      {% if current_emp.employment_type.value == 'full_time' %}
+        {% set btn_cls = 'pat-work' if cur_pid == ''
+                    else 'pat-ofr' if cur_pid == 'off_request'
+                    else 'pat-leave' if cur_pid == 'paid_leave'
+                    else 'pat-am' if cur_pid == 'am_only'
+                    else 'pat-pm' if cur_pid == 'pm_only'
+                    else 'pat-work' %}
+        {% set btn_html %}
+          {% if cur_pid == 'off_request' %}<i class="bi bi-x-circle me-1"></i>休希望
+          {% elif cur_pid == 'paid_leave' %}<i class="bi bi-calendar-check me-1"></i>有休
+          {% elif cur_pid == 'am_only' %}<i class="bi bi-sunrise me-1"></i>6:00〜15:00
+          {% elif cur_pid == 'pm_only' %}<i class="bi bi-sunset me-1"></i>14:00〜23:00
+          {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
+        {% endset %}
+      {% elif cur_pid == 'paid_leave' %}
+        {% set btn_cls = 'pat-leave' %}
+        {% set btn_html %}<i class="bi bi-calendar-check me-1"></i>有給{% endset %}
+      {% else %}
+        {% set pcat = PAT_CATS.get(cur_pid, 'off') %}
+        {% set btn_cls = 'pat-' + pcat %}
+        {% set btn_html = PATTERN_MAP[cur_pid].label if cur_pid in PATTERN_MAP else '（休み）' %}
+      {% endif %}
+
+      <div class="day-row {{ day_cls }}">
+        <div class="day-label">
+          <div class="dt">{{ d.strftime('%m/%d') }}</div>
+          <div class="dw">{{ DAY_JP[dow] }}{{ '(祝)' if is_holiday else '' }}</div>
+        </div>
+
+        <input type="hidden"
+               name="pattern_{{ current_emp.id }}_{{ d }}"
+               id="hid_{{ current_emp.id }}_{{ d }}"
+               value="{{ cur_pid }}">
+
+        {% if current_emp.employment_type.value == 'full_time' %}
+        <button type="button"
+                class="pat-btn {{ btn_cls }}"
+                data-emp="{{ current_emp.id }}"
+                data-date="{{ d }}"
+                data-mode="full"
+                onclick="cycleOff(this)">
+          {{ btn_html }}
+        </button>
+        {% else %}
+        <button type="button"
+                class="pat-btn {{ btn_cls }}"
+                data-emp="{{ current_emp.id }}"
+                data-date="{{ d }}"
+                data-mode="part"
+                onclick="cyclePart('{{ current_emp.id }}', '{{ d }}', {{ dow }})">
+          {{ btn_html }}
+        </button>
+        <button type="button" class="pat-expand"
+                onclick="openPatternSheet('{{ current_emp.id }}', '{{ d }}', '{{ d.strftime('%m/%d') }}（{{ DAY_JP[dow] }}）')"
+                aria-label="他の候補からパターンを選ぶ">
+          他の候補 <i class="bi bi-chevron-right"></i>
+        </button>
+        {% endif %}
+      </div>
+
+      {% if current_emp.employment_type.value != 'full_time' %}
+      <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
+           style="{{ 'display:flex' if cur_pid == 'custom' else '' }}">
+        <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
+               value="{{ req.custom_start if req and req.custom_start else '' }}"
+               class="form-control form-control-sm">
+        <span class="small text-muted">〜</span>
+        <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
+               value="{{ req.custom_end if req and req.custom_end else '' }}"
+               class="form-control form-control-sm">
+      </div>
+      {% endif %}
+      {% endfor %}
+
+      <div class="save-bar">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-floppy-fill me-1"></i>保存{% if next_idx is not none %} して次へ →{% endif %}
+        </button>
+      </div>
+    </form>
   </div>
-
-  {# ── 日付行 ── #}
-  {% for d in dates %}
-  {% set req = req_map.get((current_emp.id, d|string)) %}
-  {% set dow = d.weekday() %}
-  {% set is_holiday = (d|string) in holidays %}
-  {% set day_cls = 'sun' if (dow == 6 or is_holiday) else 'sat' if dow == 5 else '' %}
-  {% set cur_pid = req.pattern_id if req and req.pattern_id else '' %}
-
-  {% if current_emp.employment_type.value == 'full_time' %}
-    {% set btn_cls = 'pat-work' if cur_pid == ''
-                else 'pat-ofr' if cur_pid == 'off_request'
-                else 'pat-leave' if cur_pid == 'paid_leave'
-                else 'pat-am' if cur_pid == 'am_only'
-                else 'pat-pm' if cur_pid == 'pm_only'
-                else 'pat-work' %}
-    {% set btn_html %}
-      {% if cur_pid == 'off_request' %}<i class="bi bi-x-circle me-1"></i>休希望
-      {% elif cur_pid == 'paid_leave' %}<i class="bi bi-calendar-check me-1"></i>有休
-      {% elif cur_pid == 'am_only' %}<i class="bi bi-sunrise me-1"></i>6:00〜15:00
-      {% elif cur_pid == 'pm_only' %}<i class="bi bi-sunset me-1"></i>14:00〜23:00
-      {% else %}<i class="bi bi-check2 me-1"></i>出勤予定{% endif %}
-    {% endset %}
-  {% elif cur_pid == 'paid_leave' %}
-    {% set btn_cls = 'pat-leave' %}
-    {% set btn_html %}<i class="bi bi-calendar-check me-1"></i>有給{% endset %}
-  {% else %}
-    {% set pcat = PAT_CATS.get(cur_pid, 'off') %}
-    {% set btn_cls = 'pat-' + pcat %}
-    {% set btn_html = PATTERN_MAP[cur_pid].label if cur_pid in PATTERN_MAP else '（休み）' %}
-  {% endif %}
-
-  <div class="day-row {{ day_cls }}">
-    <div class="day-label">
-      <div class="dt">{{ d.strftime('%m/%d') }}</div>
-      <div class="dw">{{ DAY_JP[dow] }}{{ '(祝)' if is_holiday else '' }}</div>
+  
+  <!-- デスクトップ用パターン凡例 (原則6: 再生より再認) -->
+  <div class="col-lg-4 d-none d-lg-block">
+    <div class="card position-sticky" style="top: 80px;">
+      <div class="card-body py-3 px-3">
+        <h6 class="card-title text-muted mb-3" style="font-size: 0.85rem; font-weight: 700;">
+          <i class="bi bi-info-circle me-1 text-primary"></i>希望シフト パターン一覧
+        </h6>
+        <div class="d-flex flex-column gap-2" style="max-height: 520px; overflow-y: auto; padding-right: 2px;">
+          {% for p in patterns %}
+          <div class="p-2 rounded border d-flex justify-content-between align-items-center" style="background: var(--bg-card); border-color: var(--border) !important; font-size: 0.78rem;">
+            <span class="fw-semibold text-muted">{{ p.label.split(' (')[0] }}</span>
+            <span class="font-monospace text-primary small">{{ p.time_range_label() }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
-
-    <input type="hidden"
-           name="pattern_{{ current_emp.id }}_{{ d }}"
-           id="hid_{{ current_emp.id }}_{{ d }}"
-           value="{{ cur_pid }}">
-
-    {% if current_emp.employment_type.value == 'full_time' %}
-    <button type="button"
-            class="pat-btn {{ btn_cls }}"
-            data-emp="{{ current_emp.id }}"
-            data-date="{{ d }}"
-            data-mode="full"
-            onclick="cycleOff(this)">
-      {{ btn_html }}
-    </button>
-    {% else %}
-    <button type="button"
-            class="pat-btn {{ btn_cls }}"
-            data-emp="{{ current_emp.id }}"
-            data-date="{{ d }}"
-            data-mode="part"
-            onclick="cyclePart('{{ current_emp.id }}', '{{ d }}', {{ dow }})">
-      {{ btn_html }}
-    </button>
-    <button type="button" class="pat-expand"
-            onclick="openPatternSheet('{{ current_emp.id }}', '{{ d }}', '{{ d.strftime('%m/%d') }}（{{ DAY_JP[dow] }}）')"
-            aria-label="他の候補からパターンを選ぶ">
-      他の候補 <i class="bi bi-chevron-right"></i>
-    </button>
-    {% endif %}
   </div>
-
-  {% if current_emp.employment_type.value != 'full_time' %}
-  <div id="custom_{{ current_emp.id }}_{{ d }}" class="custom-time"
-       style="{{ 'display:flex' if cur_pid == 'custom' else '' }}">
-    <input type="time" name="custom_start_{{ current_emp.id }}_{{ d }}"
-           value="{{ req.custom_start if req and req.custom_start else '' }}"
-           class="form-control form-control-sm">
-    <span class="small text-muted">〜</span>
-    <input type="time" name="custom_end_{{ current_emp.id }}_{{ d }}"
-           value="{{ req.custom_end if req and req.custom_end else '' }}"
-           class="form-control form-control-sm">
-  </div>
-  {% endif %}
-  {% endfor %}
-
-  <div class="save-bar">
-    <button type="submit" class="btn btn-primary w-100">
-      <i class="bi bi-floppy-fill me-1"></i>保存{% if next_idx is not none %} して次へ →{% endif %}
-    </button>
-  </div>
-</form>
+</div>
 
 {% if current_emp.employment_type.value != 'full_time' %}
 {# ── パターン選択ボトムシート（全日で共有・開いたタイミングでJSが対象日をセット） ── #}

@@ -103,6 +103,13 @@ def run():
                 logger.info(f"[THREAD START] period_id={period_id}  log={log_path()}")
                 cb = SolveProgressCallback(period_id, max_time=25.0)
                 result = solve(period, employees, requests_list, config, progress_callback=cb, period_id=period_id)
+                
+                # スレッド実行中にユーザーによって中止されたかチェック
+                current_gen = repo.get_period_gen_status(period_id)
+                if current_gen["status"] != "generating":
+                    logger.info(f"[THREAD ABORTED] period_id={period_id} - status changed to {current_gen['status']}")
+                    return
+
                 if result.status in ("optimal", "feasible"):
                     repo.save_assignments(period_id, result.assignments)
                     msg = f"{result.status},{result.solve_time_sec:.1f}"
@@ -121,7 +128,10 @@ def run():
                 logger.error(f"[THREAD EXCEPTION] period_id={period_id}  {e}")
                 logger.error(traceback.format_exc())
                 try:
-                    repo.update_period_gen_status(period_id, "failed", str(e))
+                    # 既にユーザー中止されている場合はステータスを上書きしない
+                    current_gen = repo.get_period_gen_status(period_id)
+                    if current_gen["status"] == "generating":
+                        repo.update_period_gen_status(period_id, "failed", str(e))
                 except Exception:
                     pass
 
@@ -241,3 +251,10 @@ def diag(period_id):
     except Exception as e:
         import traceback
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
+
+@bp.post("/cancel/<int:period_id>")
+def cancel(period_id):
+    repo.update_period_gen_status(period_id, "idle", "ユーザーによって生成が中止されました")
+    flash("シフトの自動生成を中止しました。", "info")
+    return redirect(url_for("generate.index"))

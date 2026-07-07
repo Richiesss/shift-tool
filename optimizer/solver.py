@@ -126,6 +126,17 @@ class SolveProgressCallback(_StallTrackingCallback):
         super().on_solution_callback()
         self._n += 1
         elapsed = self.WallTime()
+        
+        # 中止チェック
+        try:
+            from db import repositories as repo
+            current_status = repo.get_period_gen_status(self._period_id)
+            if current_status["status"] != "generating":
+                self.StopSearch()
+                return
+        except Exception:
+            pass
+
         if elapsed - self._last_update < 3.0:
             return
         self._last_update = elapsed
@@ -158,6 +169,18 @@ class Phase2ProgressCallback(_StallTrackingCallback):
         super().on_solution_callback()
         self._n += 1
         elapsed = self.WallTime()
+
+        # 中止チェック
+        if self._period_id is not None:
+            try:
+                from db import repositories as repo
+                current_status = repo.get_period_gen_status(self._period_id)
+                if current_status["status"] != "generating":
+                    self.StopSearch()
+                    return
+            except Exception:
+                pass
+
         if elapsed - self._last_update < 3.0:
             return
         self._last_update = elapsed
