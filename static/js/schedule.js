@@ -422,7 +422,8 @@ function _updateCellChip(cell, payload) {
     const titleAttr = is_reinforcement ? 'title="希望にない応援"' : hasCustom ? 'title="希望時間から変更"' : '';
     const sup       = is_reinforcement ? '<sup style="font-size:.6rem">応</sup>' : hasCustom ? '<sup style="font-size:.6rem">変</sup>' : '';
 
-    let html = `<span class="${chipCls}${is_reinforcement ? ' opacity-75' : ''}" ${titleAttr}>${posLabel}${sup}</span>`;
+    let html = `<button type="button" class="btn-quick-remove" onclick="quickRemove(event, this)" title="担当を外す"><i class="bi bi-x"></i></button>`;
+    html += `<span class="${chipCls}${is_reinforcement ? ' opacity-75' : ''}" ${titleAttr}>${posLabel}${sup}</span>`;
     if (shiftTime) html += `<div style="font-size:.6rem;color:var(--text-muted);line-height:1.15">${shiftTime}</div>`;
     cell.innerHTML = html;
     cell.classList.remove('has-unassigned-request');
@@ -641,4 +642,31 @@ function editNote(el) {
   }
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => { if(e.key==='Enter') input.blur(); });
+}
+
+function quickRemove(event, el) {
+  event.stopPropagation(); // セルクリック時のアサインモーダル表示を防ぐ
+  if (IS_CONFIRMED) {
+    new bootstrap.Modal(document.getElementById('unconfirmDialog')).show();
+    return;
+  }
+  
+  const cell = el.closest('.cell-half');
+  if (!cell) return;
+  
+  const d = cell.dataset;
+  
+  // 一時的にローディング状態にする
+  el.disabled = true;
+  el.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:8px;height:8px;border-width:1px;"></span>';
+  
+  _cell = cell; // callAssign 内で _cell を参照するためセット
+  
+  callAssign({ 
+    employee_id: +d.empId, 
+    date: d.date, 
+    time_slot: d.slot, 
+    position: d.pos, 
+    action: 'remove' 
+  });
 }

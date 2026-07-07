@@ -31,14 +31,20 @@
     transform: translateY(-2px);
   }
   .db-card-dark {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    border: 1px solid rgba(255,255,255,.08);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(30, 41, 59, 0.85) 100%);
+    border: 1.5px solid rgba(255,255,255,0.08);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
     padding: 1.25rem 1.4rem;
     margin-bottom: .85rem;
     color: #f8fafc;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     transition: all var(--transition);
+  }
+  [data-theme="light"] .db-card-dark {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-color: rgba(255, 255, 255, 0.1);
   }
   .db-card-dark:hover {
     box-shadow: var(--shadow-lg);

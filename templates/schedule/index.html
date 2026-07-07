@@ -157,9 +157,20 @@
   /* 希望提出済みだが未アサイン */
   .chip-unassigned { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border-radius: 4px; padding: 1px 5px; font-size: .75rem; }
   /* 1セル内に朝食・ディナーを上下に並べて表示 */
-  .cell-half { display: block; padding: 4px; cursor: pointer; border-radius: 4px; transition: background var(--transition); min-height: 26px; }
+  .cell-half { display: block; padding: 4px; cursor: pointer; border-radius: 4px; transition: background var(--transition); min-height: 26px; position: relative; }
   .cell-half:hover { background: rgba(148, 163, 184, 0.08); }
   .cell-half + .cell-half { border-top: 1px dashed var(--border); margin-top: 2px; padding-top: 2px; border-radius: 0 0 4px 4px; }
+  /* クイック削除ボタン */
+  .btn-quick-remove {
+    position: absolute; top: -3px; right: -3px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #ef4444; color: white; border: none;
+    font-size: 8px; line-height: 14px; text-align: center;
+    display: none; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: var(--shadow-sm); z-index: 10;
+    padding: 0;
+  }
+  .cell-half:hover .btn-quick-remove { display: flex; }
   .cell-half-na { color: var(--text-muted); cursor: default; font-size: .7rem; }
 
   [data-theme="light"] .cell-half.has-unassigned-request { background-color: #f1f5f9; }
@@ -298,6 +309,7 @@
       {% if emp_asgn %}
         {% set has_custom_time = emp_asgn.reinf_start and emp_asgn.reinf_end %}
         {% set t = (emp_asgn.reinf_start + '〜' + emp_asgn.reinf_end) if has_custom_time else display_time %}
+        <button type="button" class="btn-quick-remove" onclick="quickRemove(event, this)" title="担当を外す"><i class="bi bi-x"></i></button>
         <span class="{{ chip_cls }}{% if emp_asgn.is_reinforcement %} opacity-75{% endif %}"
               {% if emp_asgn.is_reinforcement %}title="希望にない応援"{% elif has_custom_time %}title="希望時間から変更"{% endif %}>
           {{ pos_label_s }}{% if emp_asgn.is_reinforcement %}<sup style="font-size:.6rem">応</sup>{% elif has_custom_time %}<sup style="font-size:.6rem">変</sup>{% endif %}
