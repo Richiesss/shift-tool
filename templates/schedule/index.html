@@ -171,6 +171,10 @@
     padding: 0;
   }
   .cell-half:hover .btn-quick-remove { display: flex; }
+  /* ペイントモード用のセルホバー＆アクティブ時のスタイル */
+  .paint-mode-hall .cell-half:hover { background: rgba(14, 165, 233, 0.15) !important; outline: 1px dashed rgba(14, 165, 233, 0.4); }
+  .paint-mode-kitchen .cell-half:hover { background: rgba(34, 197, 94, 0.15) !important; outline: 1px dashed rgba(34, 197, 94, 0.4); }
+  .paint-mode-remove .cell-half:hover { background: rgba(239, 68, 68, 0.15) !important; outline: 1px dashed rgba(239, 68, 68, 0.4); }
   .cell-half-na { color: var(--text-muted); cursor: default; font-size: .7rem; }
 
   [data-theme="light"] .cell-half.has-unassigned-request { background-color: #f1f5f9; }
@@ -458,8 +462,26 @@
           <i class="bi bi-egg-fried me-1"></i>キッチン
         </button>
       </div>
+      <!-- 操作ツール（スマホ片手ペイント編集機能：原則7） -->
+      <div class="d-flex gap-1 align-items-center ms-auto ms-sm-2 flex-wrap">
+        <span class="small text-muted d-none d-sm-inline" style="font-size: .72rem; font-weight: 600;"><i class="bi bi-pencil-fill me-1"></i>ツール:</span>
+        <div class="btn-group btn-group-sm" id="edit-tool-group">
+          <button type="button" class="btn btn-outline-light active" id="tool-select" onclick="setEditTool('select')" title="通常選択（タップで詳細モーダル）">
+            <i class="bi bi-cursor-fill me-1"></i>選択
+          </button>
+          <button type="button" class="btn btn-outline-primary" id="tool-hall" onclick="setEditTool('hall')" title="タップでホールを配置">
+            <i class="bi bi-people-fill me-1"></i>ホール
+          </button>
+          <button type="button" class="btn btn-outline-success" id="tool-kitchen" onclick="setEditTool('kitchen')" title="タップでキッチンを配置">
+            <i class="bi bi-egg-fried me-1"></i>キッチン
+          </button>
+          <button type="button" class="btn btn-outline-danger" id="tool-remove" onclick="setEditTool('remove')" title="タップで担当を消去">
+            <i class="bi bi-eraser-fill me-1"></i>消しゴム
+          </button>
+        </div>
+      </div>
       <!-- スマホ用凡例トグル（デスクトップはコンパクト凡例が常時表示のため不要） -->
-      <button type="button" class="btn btn-outline-secondary btn-sm d-md-none" data-bs-toggle="collapse" data-bs-target="#mobile-legend" aria-expanded="false">
+      <button type="button" class="btn btn-outline-secondary btn-sm d-md-none ms-1" data-bs-toggle="collapse" data-bs-target="#mobile-legend" aria-expanded="false">
         <i class="bi bi-info-circle me-1"></i>凡例
       </button>
     </div>
