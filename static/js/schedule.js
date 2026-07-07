@@ -6,7 +6,6 @@ const UNSUBMITTED_COUNT = _D.unsubmittedCount;
 const PERIOD_ID         = _D.periodId;
 const EXPORT_EMP_ORDER  = _D.exportEmpOrder;
 const CELL_NOTES        = _D.cellNotes;
-let editTool = 'select';
 
 // ── ポジション切替 ────────────────────────────────────────────
 let CURRENT_POS = _D.pos;
@@ -242,10 +241,6 @@ function openConfirmDialog() {
 function openAssignModal(cell) {
   if (IS_CONFIRMED) {
     new bootstrap.Modal(document.getElementById('unconfirmDialog')).show();
-    return;
-  }
-  if (editTool !== 'select') {
-    quickPaint(cell, editTool);
     return;
   }
   _cell = cell;
@@ -674,56 +669,4 @@ function quickRemove(event, el) {
     position: d.pos, 
     action: 'remove' 
   });
-}
-
-function setEditTool(tool) {
-  editTool = tool;
-  document.querySelectorAll('#edit-tool-group button').forEach(btn => {
-    const isSelf = btn.id === 'tool-' + tool;
-    if (tool === 'select') {
-      btn.className = `btn btn-sm btn-outline-light ${isSelf ? 'active' : ''}`;
-    } else {
-      const colorCls = tool === 'hall' ? 'btn-outline-primary' : tool === 'kitchen' ? 'btn-outline-success' : 'btn-outline-danger';
-      btn.className = `btn btn-sm ${colorCls} ${isSelf ? 'active' : ''}`;
-    }
-  });
-  
-  const grid = document.querySelector('.sched-grid');
-  if (grid) {
-    grid.classList.remove('paint-mode-hall', 'paint-mode-kitchen', 'paint-mode-remove');
-    if (tool !== 'select') {
-      grid.classList.add('paint-mode-' + tool);
-    }
-  }
-}
-
-async function quickPaint(cell, tool) {
-  const d = cell.dataset;
-  if (tool === 'remove' && d.assigned !== 'true') return;
-  if (tool === 'hall' && d.assigned === 'true' && d.pos === 'hall') return;
-  if (tool === 'kitchen' && d.assigned === 'true' && d.pos === 'kitchen') return;
-  
-  cell.style.opacity = '0.5';
-  _cell = cell;
-  
-  if (tool === 'remove') {
-    await callAssign({ 
-      employee_id: +d.empId, 
-      date: d.date, 
-      time_slot: d.slot, 
-      position: d.pos, 
-      action: 'remove' 
-    });
-  } else {
-    const isReinf = d.hasRequest !== 'true';
-    await callAssign({
-      employee_id: +d.empId,
-      date: d.date,
-      time_slot: d.slot,
-      position: tool,
-      action: 'add',
-      is_reinforcement: isReinf
-    });
-  }
-  cell.style.opacity = '';
 }
